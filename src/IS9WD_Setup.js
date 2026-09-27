@@ -99,7 +99,7 @@ var IS9WD_DIR_CHECK_FORMULA_ =
   'IF($C{row}="","No name yet",' +
   'IF($E{row}="","No email yet",' +
   'IF(AND($F{row}=TRUE,INDEX(IS9WD_DIR_CAROUSEL,{off})=""),' +
-  '"On the carousel with no slide number: ask before changing this",' +
+  '"On the carousel with no slide number: untick it, or ask before adding a slide",' +
   'IF(AND(INDEX(IS9WD_DIR_CAROUSEL,{off})<>"",' +
   'COUNTIF(IS9WD_DIR_CAROUSEL,INDEX(IS9WD_DIR_CAROUSEL,{off}))>1),' +
   '"Two rows share one slide number",' +
