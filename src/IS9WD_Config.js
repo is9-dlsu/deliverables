@@ -152,8 +152,13 @@ var IS9WD_ROLE = {
   CARD_BAND_FG: IS9WD_CLR.PAPER,
   CARD_BODY_BG: IS9WD_CLR.PAPER,
   CARD_BORDER: IS9WD_CLR.SAGE,
+  // Cream is the one signal this workbook cannot afford to blur: it means a cell is
+  // Ethan's to type into. Banding used it as its alternate row, which painted cream
+  // across calculated rows on three blocks and made the signal meaningless. Both band
+  // rows are the paper white now, so gridlines carry the row rhythm, which is what
+  // they are on for.
   BAND_ROW_A: IS9WD_CLR.PAPER,
-  BAND_ROW_B: IS9WD_CLR.CREAM
+  BAND_ROW_B: IS9WD_CLR.PAPER
 };
 
 // The palette holds exactly seven colours that are not the page background, so the
