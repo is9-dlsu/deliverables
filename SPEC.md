@@ -18,7 +18,7 @@ Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet acces
 
 ## 2. The pieces
 
-- **A Google Sheet** on Ethan's DLSU account, five tabs: `00 | Configuration`, `01 | Canva Feed`, `02 | Deliverables`, `03 | Archive`, `04 | Log` (hidden).
+- **A Google Sheet** on Ethan's DLSU account, seven tabs: `00 | Configuration`, `01 | Canva Feed`, `02 | Deliverables`, `03 | Statistics`, `04 | Officer Tables`, `05 | Archive`, `06 | Log` (hidden). The two middle ones are views: `03 | Statistics` is the KPIs Ethan can act on, and `04 | Officer Tables` is one table per officer, all fourteen of them, with every item that officer currently holds. Both are formulas over the data tab, the Archive and Configuration, so neither is a new source of truth and neither is ever typed into. The feed stays tab 2, because a truncated Drive read must lose the Archive and the Log before it loses a contract string.
 - **A container-bound Apps Script project**: the JSON endpoint, the emails, the hourly job, and the setup that builds and repairs the workbook.
 - **A React app** in `app/`, built to static files, hosted free on GitHub Pages under `github.com/is9-dlsu`. The repo is public, because a free organization cannot publish Pages from a private repo.
 - **One hourly trigger** that runs every scheduled job.
@@ -46,9 +46,11 @@ Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet acces
 
 **The endpoint is public, so it is hostile until proven otherwise.** Every request is a POST with `Content-Type: text/plain` carrying JSON, because that is what works cross-origin (measured 2026-09-27: a JSON content type and any custom header both fail). No request does anything before its token is validated.
 
+**A view never gates the run.** `03 | Statistics` and `04 | Officer Tables` are computed views, and `Ready for Canva` stays exactly seven gates, all of them read from the feed. A broken formula on either view fails the self test and appears in the Sunday brief, and it does nothing else. The reverse would make the carousel hostage to a statistics formula. The statistics tab does carry a second reading of those seven gates, because the feed publishes the verdict and not the reason, and one cell compares the two readings and fails the self test when they disagree: that is the only thing that can tell a stale copy of the gate list from a correct one. Neither view is read by the weekly Canva run, so losing either one on a Sunday costs nothing.
+
 ## 4. The Canva feed contract
 
-The strings are v1's, word for word, and they do not change without Ethan's approval:
+Unchanged by the two views, and worth saying so: neither one writes a Canva string, neither one is read by the weekly run, and the feed stays tab 2. The strings are v1's, word for word, and they do not change without Ethan's approval:
 
 | Field | Example |
 |---|---|
@@ -109,6 +111,9 @@ Ownership transfers inside the DLSU domain, so the next president inherits the S
 - Settings live in `00 | Configuration` and are read through named ranges, never hardcoded, never by cell address.
 - Setup is idempotent: re-running creates what is missing and repairs formatting and validation, and never touches an item, a token, an archive row or a log row.
 - No em dashes in anything a person reads.
-- The workbook is Poppins throughout, with gridlines on and a frozen header row on every tab. Colors come from the IS9 palette only: `#085040`, `#58756a`, `#5d4170`, `#8a64a9`, `#8b74a1`, `#724485`, `#e9ebd4`, `#F8FBFD`. Dark text is `#085040`. `#1C2120` never appears in the workbook, and survives only as the number text hex the Canva feed prints.
+- The workbook is Poppins throughout, with gridlines on, a frozen header row on every tab and **no frozen column on any tab**. Ethan ruled on 2026-09-27 that columns are not frozen, and it is applied workbook-wide: the earlier allowance for freezing the key column on a wide tab is withdrawn. The cost is real on `02 | Deliverables`, `05 | Archive` and `06 | Log`, where scrolling right now loses the row's identity, and it is zero on the two views, which are sized to fit a laptop screen without horizontal scroll. With no frozen column, column order carries the weight instead: on both views the leftmost columns hold the identifier and the verdict, and detail runs right.
+- Colors come from the IS9 palette only: `#085040`, `#58756a`, `#5d4170`, `#8a64a9`, `#8b74a1`, `#724485`, `#e9ebd4`, `#F8FBFD`. Dark text is `#085040`. `#1C2120` never appears in the workbook, and survives only as the number text hex the Canva feed prints. The seven tab colors are now the palette exactly, minus the page background: an eighth tab forces a reuse decision.
+- Nothing in the workbook is merged. The Drive connector renders a merged cell as a repeated `[merged]` value, and every tab is inside the same read, so a bar of text across a filled span is column width, type scale and overflow wrap and never a merge.
+- There is no green and no red in the palette, so a good state is not a color. Good is **no treatment at all**; a number worth the eye that is not a fault is `#8a64a9`; a blocking or overdue state is bold `#724485` on `#e9ebd4`; something superseded or not applicable is `#8b74a1`; a broken lookup is the literal `!ERR`, flagged and counted. The restraint is the design: a tab is calm by default and only an exception is decorated.
 - Asia/Manila everywhere, in the spreadsheet and in `appsscript.json`.
 - `IS9WD` prefixes functions and named ranges, matching Ethan's other sistemas.

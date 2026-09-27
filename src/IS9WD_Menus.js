@@ -81,7 +81,7 @@ var IS9WD_ACTION = {
     fn: 'IS9WD_retireAccomplished_', from: 'IS9WD_Archive.js', lock: true,
     label: 'Retire accomplished items',
     confirm: 'This moves accomplished items off the data tab and into ' +
-      '03 | Archive. Name a version first: File > Version history > ' +
+      'the archive tab. Name a version first: File > Version history > ' +
       'Name current version.\n\nRun it now?'
   },
   MAIL_PREFLIGHT: {
@@ -401,7 +401,7 @@ function IS9WD_menuToggleTestMode() {
   }
 }
 
-// 04 | Log is hidden because nobody types into it, not as a security boundary:
+// The log tab is hidden because nobody types into it, not as a security boundary:
 // the Canva reader can read every cell of every tab, which is why no token is
 // ever in one (2.5). Unhiding it is therefore safe, and the next repair re-hides
 // it.
@@ -483,8 +483,8 @@ function IS9WD_menuSelfTest() {
   var report = IS9WD_do_(ui, IS9WD_ACTION.SELFTEST, [], { quiet: true });
   if (report === null) return;
   IS9WD_showReport_(ui, IS9WD_ACTION.SELFTEST.label, IS9WD_lines_(report),
-    'Every line is also in 04 | Log, and the summary is in Configuration under ' +
-    'Last self test result.');
+    'Every line is also in ' + IS9WD_TAB.LOG + ', and the summary is in ' +
+    'Configuration under Last self test result.');
 }
 
 function IS9WD_menuCheckTerms() {

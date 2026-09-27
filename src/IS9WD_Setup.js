@@ -33,10 +33,14 @@
  *
  *  WHAT THIS FILE PAINTS, AND WHAT IT ASKS FOR. It owns 00 | Configuration whole,
  *  every block in section 4, and the two append only tabs. It owns no cell on the
- *  other two: IS9WD_Items.js builds 02 | Deliverables and IS9WD_Feed.js builds
- *  01 | Canva Feed, each one sizing, styling and writing its own tab, and this file
- *  calls them. A tab painted by two modules is two versions of one section of the
+ *  other four: IS9WD_Items.js builds 02 | Deliverables, IS9WD_Feed.js builds
+ *  01 | Canva Feed, and IS9WD_Stats.js builds both 03 | Statistics and
+ *  04 | Officer Tables, each one sizing, styling and writing its own tab, and this
+ *  file calls them. A tab painted by two modules is two versions of one section of the
  *  reference that agree until the day one of them is edited.
+ *
+ *  Both new tabs are wholly script owned, so neither adds a range to the write
+ *  ownership snapshot and `user cells changed: 0` still means what it meant.
  *
  *  Also here, because IS9WD_Menus.js names this file for both: IS9WD_applyGuards_
  *  and IS9WD_listProtections_, the warning only protections of 5.6.
@@ -55,8 +59,27 @@ var IS9WD_SETUP_SOURCE_ = 'Setup';
 var IS9WD_SETUP_ACTION_ = 'Build or repair';
 
 // A freshly created spreadsheet ships one blank tab. Renaming it is the difference
-// between five tabs and six, and 13.3 counts them (section 3).
+// between seven tabs and eight, and 13.3 counts them (section 3).
 var IS9WD_SETUP_DEFAULT_TAB_ = /^sheet\s*1$/i;
+
+// A tab name this project wrote: two digits, a space, a pipe, a space. It is how setup
+// tells a tab it renumbered itself from a tab Ethan renamed by hand, which is the one
+// distinction the Archive and Log renumbering turns on (section 3).
+// The only names this project has ever given a tab and then renumbered. A regex
+// over the NN | Name shape would also match a name Ethan chose himself, say
+// "03 | Archive backup", and rename it back to canonical on the next build.
+var IS9WD_SETUP_FORMER_NAMES_ = {
+  ARCHIVE: ['03 | Archive'],
+  LOG: ['04 | Log']
+};
+
+function IS9WD_setupWasOurName_(key, current) {
+  var list = IS9WD_SETUP_FORMER_NAMES_[key] || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] === current) return true;
+  }
+  return false;
+}
 
 // How many changed user cells a failure message names before it stops listing.
 var IS9WD_SETUP_REPORT_CELLS_ = 12;
@@ -107,7 +130,8 @@ function IS9WD_buildOrRepair_() {
 function IS9WD_buildOrRepairLocked_() {
   var report = {
     lines: [], tabsCreated: [], namesSet: 0, namesDropped: [], feedResized: false,
-    storeLastRow: 0, storeGrown: false, items: null, backfilledIds: 0,
+    storeLastRow: 0, storeGrown: false, archiveLastRow: 0, archiveGrown: false,
+    items: null, stats: null, tables: null, backfilledIds: 0,
     backfilledStatus: 0, tokensIssued: 0, userCellsChanged: 0, changedCells: [],
     missingNames: []
   };
@@ -119,15 +143,16 @@ function IS9WD_buildOrRepairLocked_() {
   // before snapshot has to cover ranges that already reach their full span.
   var sheets = IS9WD_setupTabs_(report, say);
   report.storeLastRow = IS9WD_setupStoreSpan_(sheets.CONFIG, report, say);
+  report.archiveLastRow = IS9WD_setupArchiveSpan_(sheets.ARCHIVE, report, say);
   IS9WD_setupGrids_(sheets, say);
 
   var before = IS9WD_setupSnapshot_();
 
   // Names before formulas, so nothing spends a recalculation reading #NAME?. These
-  // are the Configuration and data tab names; the feed's move with its own size and
-  // are pointed by IS9WD_Feed.js when it resizes the tab.
+  // are the Configuration, data tab and Archive names; the feed's and the two views'
+  // move with their own sizes and are pointed by the modules that own those tabs.
   report.namesSet += IS9WD_setupSetNames_(
-    IS9WD_configNames_().concat(IS9WD_itemNames_()));
+    IS9WD_configNames_().concat(IS9WD_itemNames_()).concat(IS9WD_archiveNames_()));
   report.namesDropped = IS9WD_setupDropRetired_();
 
   IS9WD_setupWriteConfig_(sheets.CONFIG, say);
@@ -169,6 +194,33 @@ function IS9WD_buildOrRepairLocked_() {
       'Restore the formula in the derived publishable maximum, then run this again.');
   }
 
+  // The two views, in this order and never the other way round: every count in an
+  // officer table's band row is an INDEX into a named range on 03 | Statistics, so
+  // that tab's names have to exist before this one's formulas are written.
+  //
+  // Neither call is gated on the capacity numbers, unlike the feed. That is the point
+  // of them: a view must not stop working because the carousel arithmetic is broken,
+  // and a broken view must not stop the carousel. The feed reference each of them
+  // makes falls back to the `!ERR` sentinel, which both tabs count and the self test
+  // fails on (6A).
+  report.stats = IS9WD_setupCall_('IS9WD_statsResize_', [cfg], say,
+    'the statistics tab was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.stats) {
+    report.namesSet += IS9WD_int_(report.stats.namesPointed) || 0;
+    say('statistics sized: ' + report.stats.directoryRows + ' officer rows, ' +
+      report.stats.trendWeeks + ' trend weeks, ' + report.stats.jobRows +
+      ' job rows, last row ' + report.stats.lastRow + ', last column ' +
+      report.stats.lastCol);
+  }
+  report.tables = IS9WD_setupCall_('IS9WD_officerTablesResize_', [cfg], say,
+    'the officer tables tab was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.tables) {
+    report.namesSet += IS9WD_int_(report.tables.namesPointed) || 0;
+    say('officer tables sized: ' + report.tables.blocks + ' blocks, ' +
+      report.tables.officerRows + ' rows reserved each showing ' +
+      report.tables.itemRows + ' items, last row ' + report.tables.lastRow);
+  }
+
   IS9WD_setupBackfillDirectory_(sheets.CONFIG, say);
   // The high-water mark is raised before anything is minted from it: a stored next
   // ID of 1 beside a column already holding D0001 would hand a hand-typed row an
@@ -193,7 +245,8 @@ function IS9WD_buildOrRepairLocked_() {
   SpreadsheetApp.flush();
   IS9WD_configReset_();
 
-  var audit = IS9WD_nameAudit_(cfg.switches.capacityOk ? cfg.feed : null);
+  var audit = IS9WD_nameAudit_(cfg.switches.capacityOk ? cfg.feed : null,
+    cfg.stats, cfg.ot);
   report.missingNames = audit.missing;
   say('named ranges: ' + report.namesSet + ' set of ' + audit.expected +
     ' expected, ' + audit.missing.length + ' missing, ' +
@@ -211,7 +264,8 @@ function IS9WD_buildOrRepairLocked_() {
   if (diff.length) {
     throw new Error('Build or repair changed ' + diff.length +
       ' cell(s) it does not own: ' + IS9WD_setupCellList_(diff) +
-      '. Every other repair in this run finished, and 04 | Log holds the full list.');
+      '. Every other repair in this run finished, and ' + IS9WD_TAB.LOG +
+      ' holds the full list.');
   }
   return report;
 }
@@ -279,14 +333,32 @@ function IS9WD_setupTabs_(report, say) {
       }
       report.tabsCreated.push(name);
     } else if (sheet.getName() !== name) {
-      // Renamed in the tab bar and found by its metadata: that is the sheet to
-      // repair, and renaming it back would undo a deliberate rename. Leave it.
-      say('tab ' + key + ' resolved by metadata as "' + sheet.getName() + '"');
+      // Found by its metadata under another name, and there are two of those.
+      //
+      // A sheet still carrying the project's own numbering, `NN | Something`, is a
+      // sheet this project named and then renumbered: that is what happened to the
+      // Archive and the Log when the two views took 03 and 04. It is renamed to the
+      // canonical name, because leaving it would put `03 | Archive` in the tab bar
+      // beside `03 | Statistics` and leave its own banner reading `05 | ARCHIVE`.
+      // The rename is by metadata key and never by the old name, so a second build
+      // cannot leave a twin.
+      //
+      // Any other name is one Ethan chose, and renaming it back would undo a
+      // deliberate rename. That one is left exactly as it is.
+      if (IS9WD_setupWasOurName_(key, sheet.getName()) &&
+        !IS9WD_setupNameTaken_(sheet, name)) {
+        say('tab ' + key + ' renamed from "' + sheet.getName() + '" to "' + name +
+          '", found by its metadata');
+        sheet.setName(name);
+      } else {
+        say('tab ' + key + ' resolved by metadata as "' + sheet.getName() +
+          '", and left under that name');
+      }
     }
     IS9WD_stampTab_(sheet, key);
     sheet.setTabColor(IS9WD_TAB_COLOR[key]);
     if (sheet.getIndex() !== i + 1) {
-      // A hidden sheet cannot be activated, and 04 | Log is hidden from the second
+      // A hidden sheet cannot be activated, and the log tab is hidden from the second
       // run onward, so it is shown here and hidden again by the loop below.
       if (sheet.isSheetHidden()) sheet.showSheet();
       ss.setActiveSheet(sheet);
@@ -317,6 +389,13 @@ function IS9WD_setupBlankDefaultTab_() {
     return sheet;
   }
   return null;
+}
+
+// Another sheet already sitting on the name we want. Renaming into it would throw, so
+// the rename is skipped and the resolution by metadata carries the run.
+function IS9WD_setupNameTaken_(sheet, name) {
+  var other = IS9WD_ss_().getSheetByName(name);
+  return !!other && other.getSheetId() !== sheet.getSheetId();
 }
 
 function IS9WD_setupIsStamped_(sheet) {
@@ -366,6 +445,42 @@ function IS9WD_setupStoreSpan_(sheet, report, say) {
 }
 
 // ============================================================================
+//  05 | ARCHIVE'S LIVE SPAN  (10.1: bounded so the trend block can read it)
+// ============================================================================
+
+// The same shape as the sign-off store's, and for the same reason. The Archive used to
+// be open ended, which is fine for appending and impossible for a formula: a named
+// range has to span a real grid. So the span is declared, and it is widened downward
+// when it runs short, never inserted into, so no appended row moves and no ID changes.
+//
+// Widening is all setup may do. Migrating an append only row is a capability it does
+// not have, which is why the span only ever grows.
+//
+// What this does NOT cover, and 10.1 says so: a row appended between two builds that
+// lands past the current span falls outside the six named ranges and vanishes from the
+// trend until the next `Build or repair workbook`. The append path in IS9WD_Archive.js
+// owes the same growth check inside the lock it already holds.
+function IS9WD_setupArchiveSpan_(sheet, report, say) {
+  var arc = IS9WD_ARCHIVE;
+  var current = arc.lastRow;
+  var existing = IS9WD_namedOrNull_('IS9WD_ARC_WEEKSTART');
+  if (existing && existing.getSheet().getName() === sheet.getName()) {
+    current = Math.max(current, existing.getRow() + existing.getNumRows() - 1);
+  }
+  var used = Math.max(sheet.getLastRow() - arc.firstRow + 1, 0);
+  var live = current;
+  if (current - arc.firstRow + 1 - used < arc.minFreeRows) {
+    live = current + arc.growBy;
+    report.archiveGrown = true;
+    say('archive span grown to row ' + live + ': ' + used + ' rows used of ' +
+      (current - arc.firstRow + 1));
+  }
+  arc.lastRow = live;
+  say('archive: rows ' + arc.firstRow + ' to ' + live + ', ' + used + ' used');
+  return live;
+}
+
+// ============================================================================
 //  THE GRID  (rows, columns, widths, frozen panes, nothing hidden by accident)
 // ============================================================================
 
@@ -376,11 +491,20 @@ function IS9WD_setupStoreSpan_(sheet, report, say) {
 // to one question.
 function IS9WD_setupGrids_(sheets, say) {
   var feed = IS9WD_feed_();
+  // The two views take the shipping layout here rather than the live one, exactly as
+  // the feed does: this runs before Configuration has been read, and IS9WD_Stats.js
+  // re-sizes and re-points both tabs from the live settings later in the run.
+  var stats = IS9WD_stats_();
+  var tables = IS9WD_officerTables_();
   var plan = {
     CONFIG: { rows: IS9WD_CFG.STORE.lastRow, cols: IS9WD_CFG.LAST_COL, trimRows: true, chrome: true },
     FEED: { rows: feed.endRow, cols: feed.helperLastCol, trimRows: false, chrome: false },
     ITEMS: { rows: IS9WD_ITEMS.lastRow, cols: IS9WD_ITEMS.lastCol, trimRows: false, chrome: false },
-    ARCHIVE: { rows: IS9WD_ARCHIVE.firstRow, cols: IS9WD_ARCHIVE.lastCol, trimRows: false, chrome: true },
+    STATS: { rows: stats.endRow, cols: stats.helperLastCol, trimRows: false, chrome: false },
+    TABLES: { rows: tables.endRow, cols: tables.lastCol, trimRows: false, chrome: false },
+    // The Archive now declares a last row, because the trend block's six named ranges
+    // have to span a real grid. It is grown in place by IS9WD_setupArchiveSpan_.
+    ARCHIVE: { rows: IS9WD_ARCHIVE.lastRow, cols: IS9WD_ARCHIVE.lastCol, trimRows: false, chrome: true },
     LOG: { rows: IS9WD_LOG.firstRow, cols: IS9WD_LOG.lastCol, trimRows: false, chrome: true }
   };
   for (var k = 0; k < IS9WD_TAB_ORDER.length; k++) {

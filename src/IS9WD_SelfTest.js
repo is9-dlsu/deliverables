@@ -14,13 +14,19 @@
  *  file is the other half: it asserts the wiring. Nothing here sends an email,
  *  writes an item, or touches an archive row.
  *
- *  THE TWO CHECKS THAT MATTER MOST, because both fail green
+ *  THE FOUR CHECKS THAT MATTER MOST, because all four fail green
  *    · The Feed errors scan's extent. A scan that stops short reads green over
  *      every row it no longer covers, which is worse than no scan at all, and it
  *      is the thing a resize forgets (6.4).
  *    · The readiness prefix. Feed errors deliberately skips row 5 so readiness
  *      can read it without a circular reference, so nothing else would notice if
  *      C5 broke. Asserting the prefix is what buys that back (6.4).
+ *    · The gate agreement on 03 | Statistics. The gates block is a second reading of
+ *      the seven gates behind Ready for Canva, and a stale copy of it would read
+ *      reassuringly forever. One cell compares the two and this is what watches it (6A).
+ *    · The overflow notice on 04 | Officer Tables. Fixed blocks would otherwise drop an
+ *      officer's extra items without a word, and a shorter table looks like a quieter
+ *      week rather than like a truncation (6B).
  *
  *  WHY EVERY CHECK RUNS IN ITS OWN TRY
  *  A self test that dies on check three tells you nothing about checks four to
@@ -35,7 +41,7 @@
  *  checked here and the ping stays a hand check (13.3).
  *
  *  WHERE THE RESULTS GO
- *  A line per check to 04 | Log, the summary to Last self test result in
+ *  A line per check to the hidden log tab, the summary to Last self test result in
  *  00 | Configuration, and the whole list back to the caller so the menu can show
  *  it. The execution log alone would mean Ethan has to open the editor to find
  *  out whether his workbook is sound.
@@ -77,6 +83,11 @@ function IS9WD_selfTest_() {
   IS9WD_stFeedReadiness_(suite, ctx);
   IS9WD_stFeedPlan_(suite, ctx);
   IS9WD_stFeedFlags_(suite, ctx);
+  IS9WD_stTabOrder_(suite, ctx);
+  IS9WD_stStatsStructure_(suite, ctx);
+  IS9WD_stStatsOfficers_(suite, ctx);
+  IS9WD_stStatsTrend_(suite, ctx);
+  IS9WD_stOfficerTables_(suite, ctx);
   IS9WD_stEndpoint_(suite, ctx);
   IS9WD_stQuota_(suite);
 
@@ -133,13 +144,22 @@ function IS9WD_checkTerms_() {
 
 function IS9WD_stGather_(suite) {
   var ctx = {
-    cfg: null, layout: null, names: null, audit: null, sheetNames: {},
-    feed: null, items: null
+    cfg: null, layout: null, statsLayout: null, otLayout: null,
+    names: null, audit: null, sheetNames: {},
+    feed: null, items: null, stats: null, tables: null
   };
 
   try {
     ctx.cfg = IS9WD_readConfig_(true);
     ctx.layout = ctx.cfg.feed;
+    ctx.statsLayout = ctx.cfg.stats;
+    // Every row map below must describe the tab as it was BUILT, not as the setting
+    // currently reads, or a setting changed without a rebuild fails the whole suite
+    // instead of the one check that exists to catch exactly that.
+    var built = IS9WD_namedOrNull_('IS9WD_OT_ROWS_BUILT');
+    ctx.otLayout = built
+      ? IS9WD_otLayout_(ctx.cfg.directory.rows.length, IS9WD_int_(built.getValue()))
+      : ctx.cfg.ot;
   } catch (err) {
     IS9WD_stAdd_(suite, 'Configuration reads', IS9WD_ST.FAIL, IS9WD_stErr_(err));
     return ctx;
@@ -148,10 +168,10 @@ function IS9WD_stGather_(suite) {
     'Every named range the reader needs resolved on the Configuration tab.');
 
   try {
-    // One getNamedRanges for the whole run: resolving 116 names three times over
+    // One getNamedRanges for the whole run: resolving 188 names three times over
     // is three server calls for one answer.
     ctx.names = IS9WD_namedMap_();
-    ctx.audit = IS9WD_nameAudit_(ctx.layout);
+    ctx.audit = IS9WD_nameAudit_(ctx.layout, ctx.statsLayout, ctx.otLayout);
     for (var i = 0; i < IS9WD_TAB_ORDER.length; i++) {
       var key = IS9WD_TAB_ORDER[i];
       ctx.sheetNames[key] = IS9WD_sheet_(key).getName();
@@ -206,7 +226,42 @@ function IS9WD_stGather_(suite) {
   } catch (err) {
     IS9WD_stAdd_(suite, 'Deliverables reads', IS9WD_ST.FAIL, IS9WD_stErr_(err));
   }
+
+  // The two views, read the same way and for the same reason: display values, because
+  // an error cell has to arrive as the text `#REF!` for a scan to see it at all, and
+  // the hidden band is read too, because half the assertions are about it.
+  ctx.stats = IS9WD_stView_(suite, 'Statistics reads', 'STATS', ctx.statsLayout,
+    ctx.statsLayout ? ctx.statsLayout.helperLastCol : 0);
+  ctx.tables = IS9WD_stView_(suite, 'Officer Tables reads', 'TABLES', ctx.otLayout,
+    ctx.otLayout ? ctx.otLayout.lastCol : 0);
   return ctx;
+}
+
+// One read per view, padded out to the size the layout expects so a grid that is too
+// small produces one clear failure rather than thirty index errors.
+function IS9WD_stView_(suite, label, tabKey, layout, wantCols) {
+  if (!layout) return null;
+  try {
+    var sheet = IS9WD_sheet_(tabKey);
+    var haveRows = Math.min(sheet.getMaxRows(), layout.endRow);
+    var haveCols = Math.min(sheet.getMaxColumns(), wantCols);
+    return {
+      sheet: sheet,
+      lastRow: sheet.getLastRow(),
+      name: sheet.getName(),
+      cols: wantCols,
+      frozenRows: sheet.getFrozenRows(),
+      frozenCols: sheet.getFrozenColumns(),
+      shortRows: layout.endRow - haveRows,
+      shortCols: wantCols - haveCols,
+      disp: IS9WD_stPad_(
+        sheet.getRange(1, 1, haveRows, haveCols).getDisplayValues(),
+        layout.endRow, wantCols)
+    };
+  } catch (err) {
+    IS9WD_stAdd_(suite, label, IS9WD_ST.FAIL, IS9WD_stErr_(err));
+    return null;
+  }
 }
 
 // Pads a short read out to the size the layout expects with blanks, so a grid
@@ -242,10 +297,10 @@ function IS9WD_stNames_(suite, ctx) {
   });
 
   IS9WD_stRun_(suite, 'Named range spans', ctx.names, function () {
-    var want = IS9WD_allNames_(ctx.layout);
-    var store = IS9WD_stStoreNames_();
+    var want = IS9WD_allNames_(ctx.layout, ctx.statsLayout, ctx.otLayout);
+    var growing = IS9WD_stGrowingNames_();
     var wrong = [];
-    var storeHeights = {};
+    var heightsBy = {};
     for (var i = 0; i < want.length; i++) {
       var range = ctx.names[want[i].name];
       if (!range) continue;
@@ -255,28 +310,29 @@ function IS9WD_stNames_(suite, ctx) {
         wrong.push(want[i].name + ' is on "' + on + '" not "' + expectSheet + '"');
         continue;
       }
-      // The sign-off store is the one block that grows, by 52 rows at a time, so
-      // its seven names are checked on their start, their width and a height that
-      // is a whole number of blocks. Every other name must land exactly where the
-      // layout puts it: a name that kept its height and lost a column is what
+      // Two blocks grow: the sign-off store by 52 rows at a time and 05 | Archive by
+      // 1,000, so their names are checked on their start, their width and a height
+      // that is a whole number of blocks. Every other name must land exactly where
+      // the layout puts it: a name that kept its height and lost a column is what
       // makes a COUNTIFS answer quietly about the wrong column.
-      if (store[want[i].name]) {
-        var spec = store[want[i].name];
+      if (growing[want[i].name]) {
+        var spec = growing[want[i].name];
         var h = range.getNumRows();
-        if (range.getRow() !== IS9WD_CFG.STORE.firstRow) {
+        if (range.getRow() !== spec.firstRow) {
           wrong.push(want[i].name + ' starts on row ' + range.getRow() + ' not ' +
-            IS9WD_CFG.STORE.firstRow);
+            spec.firstRow);
         }
         if (range.getColumn() !== spec.col || range.getNumColumns() !== spec.cols) {
           wrong.push(want[i].name + ' spans ' + range.getNumColumns() +
             ' columns from column ' + range.getColumn() + ', not ' + spec.cols +
             ' from column ' + spec.col);
         }
-        if (h < spec.rows || h % IS9WD_CFG.STORE.growBy !== 0) {
+        if (h < spec.rows || h % spec.growBy !== 0) {
           wrong.push(want[i].name + ' spans ' + h + ' rows, which is not a whole ' +
-            'number of ' + IS9WD_CFG.STORE.growBy + ' row blocks of at least ' + spec.rows);
+            'number of ' + spec.growBy + ' row blocks of at least ' + spec.rows);
         }
-        storeHeights[h] = true;
+        if (!heightsBy[spec.block]) heightsBy[spec.block] = {};
+        heightsBy[spec.block][h] = true;
         continue;
       }
       var a1 = range.getA1Notation();
@@ -284,19 +340,24 @@ function IS9WD_stNames_(suite, ctx) {
         wrong.push(want[i].name + ' spans ' + a1 + ' not ' + want[i].a1);
       }
     }
-    var heights = [];
-    for (var h2 in storeHeights) {
-      if (Object.prototype.hasOwnProperty.call(storeHeights, h2)) heights.push(h2);
-    }
-    if (heights.length > 1) {
-      wrong.push('the sign-off store names disagree on height: ' + heights.join(' and '));
+    var said = [];
+    for (var block in heightsBy) {
+      if (!Object.prototype.hasOwnProperty.call(heightsBy, block)) continue;
+      var list = [];
+      for (var h2 in heightsBy[block]) {
+        if (Object.prototype.hasOwnProperty.call(heightsBy[block], h2)) list.push(h2);
+      }
+      if (list.length > 1) {
+        wrong.push('the ' + block + ' names disagree on height: ' + list.join(' and '));
+      }
+      said.push(block + ' at ' + list.join('/') + ' rows');
     }
     if (wrong.length) {
       return IS9WD_stFail_(wrong.length + ' named ranges span the wrong cells: ' +
         IS9WD_stList_(wrong) + '. Run Build or repair workbook.');
     }
-    return 'All ' + want.length + ' named ranges span what the layout says, with the ' +
-      'sign-off store at ' + (heights.length ? heights[0] : '0') + ' rows.';
+    return 'All ' + want.length + ' named ranges span what the layout says, with ' +
+      said.join(' and ') + '.';
   });
 
   IS9WD_stRun_(suite, 'Retired names absent', ctx.audit, function () {
@@ -308,14 +369,32 @@ function IS9WD_stNames_(suite, ctx) {
   });
 }
 
-// { name: {col, cols, rows} } for the seven names over the sign-off store, built
-// from the same column map setup writes them from.
-function IS9WD_stStoreNames_() {
-  var rows = IS9WD_CFG.STORE.lastRow - IS9WD_CFG.STORE.firstRow + 1;
-  var out = { IS9WD_SIGNOFF: { col: 1, cols: 6, rows: rows } };
+// Every name over a block that grows, built from the same column maps setup writes
+// them from: the seven over the sign-off store and the six over 05 | Archive. A
+// growing block's declared last row is stale the moment it grows, so an exact A1
+// comparison would fail on a healthy workbook.
+function IS9WD_stGrowingNames_() {
+  var out = {};
+  var store = IS9WD_CFG.STORE;
+  var storeRows = store.lastRow - store.firstRow + 1;
+  var put = function (name, col, cols, firstRow, rows, growBy, block) {
+    out[name] = {
+      col: col, cols: cols, firstRow: firstRow, rows: rows,
+      growBy: growBy, block: block
+    };
+  };
+  put('IS9WD_SIGNOFF', 1, 6, store.firstRow, storeRows, store.growBy, 'the sign-off store');
   for (var c in IS9WD_STORE_COL_NAMES) {
     if (!Object.prototype.hasOwnProperty.call(IS9WD_STORE_COL_NAMES, c)) continue;
-    out[IS9WD_STORE_COL_NAMES[c]] = { col: Number(c), cols: 1, rows: rows };
+    put(IS9WD_STORE_COL_NAMES[c], Number(c), 1, store.firstRow, storeRows,
+      store.growBy, 'the sign-off store');
+  }
+  var arc = IS9WD_ARCHIVE;
+  var arcRows = arc.lastRow - arc.firstRow + 1;
+  for (var a in IS9WD_ARC_COL_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(IS9WD_ARC_COL_NAMES, a)) continue;
+    put(IS9WD_ARC_COL_NAMES[a], Number(a), 1, arc.firstRow, arcRows, arc.growBy,
+      'the archive');
   }
   return out;
 }
@@ -976,6 +1055,600 @@ function IS9WD_stFeedFlags_(suite, ctx) {
   });
 }
 
+// ============================================================================
+//  THE TWO VIEWS  (13.4: the assertions 6A and 6B add)
+// ============================================================================
+
+// Seven tabs in one order, and no frozen column anywhere. The freeze assertion is
+// Ethan's instruction of 2026-09-27 made testable: a column freeze restored by hand, or
+// left behind by an older build, is otherwise invisible until somebody scrolls.
+function IS9WD_stTabOrder_(suite, ctx) {
+  IS9WD_stRun_(suite, 'Tab order', ctx.cfg, function () {
+    var problems = [];
+    var order = [];
+    for (var i = 0; i < IS9WD_TAB_ORDER.length; i++) {
+      var key = IS9WD_TAB_ORDER[i];
+      var sheet = IS9WD_sheet_(key);
+      order.push(sheet.getName());
+      if (sheet.getIndex() !== i + 1) {
+        problems.push(key + ' is at position ' + sheet.getIndex() + ' not ' + (i + 1));
+      }
+    }
+    // The one position that is a hard constraint rather than a reading order: a
+    // truncated connector read must lose the Archive and the Log before it loses a
+    // contract string (10.1).
+    if (IS9WD_sheet_('FEED').getIndex() !== 2) {
+      problems.push('01 | Canva Feed is not the second tab, so a truncated read can ' +
+        'lose a contract string before it loses the Archive');
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    // A tab of Ethan's own is reported rather than failed: setup moves the seven it
+    // owns to positions 1 to 7 and pushes anything else below them, and taking his
+    // scratch space would be worse than mentioning it.
+    var extra = IS9WD_ss_().getSheets().length - IS9WD_TAB_ORDER.length;
+    return IS9WD_TAB_ORDER.length + ' tabs in order: ' + order.join(', ') +
+      (extra > 0 ? IS9WD_SEP + extra + ' other tab(s) sit below them' : '') + '.';
+  });
+
+  IS9WD_stRun_(suite, 'No frozen column on any tab', ctx.cfg, function () {
+    var problems = [];
+    for (var i = 0; i < IS9WD_TAB_ORDER.length; i++) {
+      var key = IS9WD_TAB_ORDER[i];
+      var sheet = IS9WD_sheet_(key);
+      var want = IS9WD_FREEZE[key] || { rows: 0, cols: 0 };
+      if (sheet.getFrozenColumns() !== 0) {
+        problems.push(key + ' freezes ' + sheet.getFrozenColumns() + ' column(s)');
+      }
+      if (want.cols !== 0) {
+        problems.push('the layout asks ' + key + ' to freeze a column, which is no ' +
+          'longer allowed');
+      }
+      if (sheet.getFrozenRows() !== want.rows) {
+        problems.push(key + ' freezes ' + sheet.getFrozenRows() + ' row(s) not ' + want.rows);
+      }
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return 'No tab freezes a column, and every tab freezes the header rows the layout ' +
+      'asks for.';
+  });
+}
+
+// The statistics tab's own furniture: the grid, the end marker, the error count, the
+// gate agreement and the two layout settings that need a rebuild to take effect.
+function IS9WD_stStatsStructure_(suite, ctx) {
+  IS9WD_stRun_(suite, 'Statistics grid and markers', ctx.stats, function () {
+    var s = ctx.statsLayout;
+    var problems = [];
+    if (ctx.stats.shortRows > 0) {
+      problems.push('the tab is ' + ctx.stats.shortRows + ' rows short of row ' +
+        s.endRow + ', where the end marker belongs');
+    }
+    if (ctx.stats.shortCols > 0) {
+      problems.push('the tab is ' + ctx.stats.shortCols + ' columns short of column ' +
+        IS9WD_colLetter_(s.helperLastCol) + ', where the hidden band belongs');
+    }
+    if (ctx.stats.lastRow > s.endRow) {
+      problems.push('there is content down to row ' + ctx.stats.lastRow +
+        ', below the end marker, which puts it outside every check');
+    }
+    var banner = IS9WD_txt_(ctx.stats.disp[0][0]);
+    if (banner !== IS9WD_STATS.BANNER) {
+      problems.push('A1 reads "' + banner + '" not "' + IS9WD_STATS.BANNER +
+        '". The Drive connector strips tab names, so the tab identifies itself from ' +
+        'this cell');
+    }
+    var end = IS9WD_txt_(ctx.stats.disp[s.endRow - 1][0]);
+    if (end !== IS9WD_STATS.END) {
+      problems.push('the last row reads "' + end + '" not "' + IS9WD_STATS.END +
+        '", so a truncated read of this tab would not be self evident');
+    }
+    problems = problems.concat(IS9WD_stMerged_(ctx.stats.sheet, IS9WD_TAB.STATS));
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems) +
+      '. Run Build or repair workbook.');
+    return 'The grid reaches ' + IS9WD_colLetter_(s.helperLastCol) + s.endRow +
+      ', A1 names the tab, the last row carries the end marker, and nothing is merged.';
+  });
+
+  IS9WD_stRun_(suite, 'Statistics carries no error text', ctx.stats, function () {
+    var s = ctx.statsLayout;
+    var hits = [];
+    for (var r = 0; r < s.endRow; r++) {
+      for (var c = 0; c < ctx.stats.cols; c++) {
+        var text = IS9WD_trim_(ctx.stats.disp[r][c]);
+        if (text === '') continue;
+        if (IS9WD_ST_HAS_(IS9WD_ST_ERRORS, text)) {
+          hits.push(IS9WD_a1_(r + 1, c + 1, 1, 1) + ' = ' + text);
+        }
+      }
+    }
+    var counted = IS9WD_int_(IS9WD_named_('IS9WD_STATS_ERRORS').getValue());
+    if (hits.length) {
+      return IS9WD_stFail_(hits.length + ' cells carry an error or the !ERR sentinel: ' +
+        IS9WD_stList_(hits) + '. The tab counts ' + counted + '.');
+    }
+    if (counted !== 0) {
+      return IS9WD_stFail_('No cell reads as an error and the tab\'s own count reads ' +
+        counted + ', so the count and the scan disagree.');
+    }
+    return 'No error text anywhere, and the tab\'s own error count reads 0.';
+  });
+
+  // The one assertion that can tell a stale copy of the seven gate list from a correct
+  // one. Without it the gates block could drift from readiness and read reassuringly.
+  IS9WD_stRun_(suite, 'Readiness gates agree with the feed', ctx.stats, function () {
+    var agree = IS9WD_trim_(IS9WD_named_('IS9WD_STATS_GATE_AGREE').getValue());
+    var states = IS9WD_named_('IS9WD_STATS_GATE_STATE').getValues();
+    var holds = [];
+    var labels = IS9WD_named_('IS9WD_STATS_GATE_LABEL').getValues();
+    for (var i = 0; i < states.length; i++) {
+      var state = IS9WD_trim_(states[i][0]);
+      if (state !== 'PASS' && state !== 'HOLD') {
+        return IS9WD_stFail_('gate "' + IS9WD_txt_(labels[i][0]) + '" reads "' + state +
+          '" rather than PASS or HOLD.');
+      }
+      if (state === 'HOLD') holds.push(IS9WD_txt_(labels[i][0]));
+    }
+    if (states.length !== IS9WD_STATS_GATE_ROWS.length) {
+      return IS9WD_stFail_('the gates block holds ' + states.length +
+        ' rows and the layout names ' + IS9WD_STATS_GATE_ROWS.length + '.');
+    }
+    if (agree !== 'OK') {
+      return IS9WD_stFail_('The gate agreement cell reads "' + agree +
+        '". The gates say ' + (holds.length ? holds.join(', ') + ' hold' : 'nothing holds') +
+        ', and Ready for Canva disagrees. One of the two is a stale copy of the rule.');
+    }
+    return holds.length === 0
+      ? 'All ' + states.length + ' gates pass and Ready for Canva agrees.'
+      : holds.length + ' of ' + states.length + ' gates hold (' + holds.join(', ') +
+        ') and Ready for Canva agrees.';
+  });
+
+  // A layout setting changed without a rebuild fails here rather than showing a stale
+  // tab. The two guard notes in 00 | Configuration say the same thing on screen.
+  IS9WD_stRun_(suite, 'View layout settings match the build', ctx.stats, function () {
+    var problems = [];
+    var trendBuilt = IS9WD_int_(IS9WD_named_('IS9WD_STATS_TREND_BUILT').getValue());
+    var rowsBuilt = IS9WD_int_(IS9WD_named_('IS9WD_OT_ROWS_BUILT').getValue());
+    var trendWant = ctx.cfg.switches.statsTrendWeeks;
+    var rowsWant = ctx.cfg.switches.statsOfficerRows;
+    if (trendBuilt !== trendWant) {
+      problems.push('Statistics: trend weeks reads ' + trendWant + ' and the tab was ' +
+        'built with ' + trendBuilt);
+    }
+    if (rowsBuilt !== rowsWant) {
+      problems.push('Rows reserved per officer reads ' + rowsWant + ' and the tab was ' +
+        'built with ' + rowsBuilt);
+    }
+    var trendRows = IS9WD_named_('IS9WD_STATS_TRENDSTART').getNumRows();
+    if (trendRows !== trendWant) {
+      problems.push('the trend block spans ' + trendRows + ' rows and the setting ' +
+        'reads ' + trendWant);
+    }
+    if (problems.length) {
+      return IS9WD_stFail_(IS9WD_stList_(problems) +
+        '. Run Build or repair workbook so the tabs match the settings.');
+    }
+    return 'Both layout settings match what was built: ' + trendWant +
+      ' trend weeks and ' + rowsWant + ' rows reserved per officer.';
+  });
+}
+
+// The officer block, which every other block and the whole officer tables tab read.
+function IS9WD_stStatsOfficers_(suite, ctx) {
+  // MINIFS and MAXIFS are the only two spreadsheet functions this workbook asks to
+  // broadcast under ARRAYFORMULA whose array-criterion behaviour is not documented.
+  // If either returns a scalar instead, all 14 rows quietly take the first officer's
+  // answer, every officer reads the same earliest deadline, and nothing else notices.
+  // So the check recomputes both from the items and compares, which needs no new range.
+  IS9WD_stRun_(suite, 'Earliest deadline and last tick broadcast per officer', ctx.stats,
+    function () {
+      var names = IS9WD_named_('IS9WD_STATS_OFF_NAME').getValues();
+      var firstDue = IS9WD_named_('IS9WD_STATS_OFF_FIRSTDUE').getValues();
+      var committee = IS9WD_named_('IS9WD_DEL_COMMITTEE').getValues();
+      var deadline = IS9WD_named_('IS9WD_DEL_DEADLINE').getValues();
+      var title = IS9WD_named_('IS9WD_DEL_TITLE').getValues();
+      var active = IS9WD_named_('IS9WD_DEL_ACTIVE').getValues();
+      var problems = [];
+      var compared = 0;
+      for (var i = 0; i < names.length; i++) {
+        var who = IS9WD_txt_(names[i][0]);
+        if (!who) continue;
+        var want = 0;
+        for (var r = 0; r < committee.length; r++) {
+          if (IS9WD_txt_(committee[r][0]) !== who) continue;
+          if (!IS9WD_filled_(title[r][0]) || active[r][0] !== true) continue;
+          var day = IS9WD_isDate_(deadline[r][0]) ? IS9WD_midnight_(deadline[r][0]).getTime() : 0;
+          if (!day) continue;
+          if (!want || day < want) want = day;
+        }
+        var got = IS9WD_isDate_(firstDue[i][0]) ? IS9WD_midnight_(firstDue[i][0]).getTime() : 0;
+        if (want !== got) {
+          problems.push(who + ' reads ' + (got ? IS9WD_dateKey_(new Date(got)) : 'blank') +
+            ' and the items say ' + (want ? IS9WD_dateKey_(new Date(want)) : 'blank'));
+        }
+        compared++;
+      }
+      if (problems.length) {
+        return IS9WD_stFail_(IS9WD_stList_(problems) +
+          '. MINIFS or MAXIFS is not broadcasting under ARRAYFORMULA on this sheet, so ' +
+          'the helper band needs the per row fallback named in reference 6A.');
+      }
+      return 'Earliest deadline agrees with the items for all ' + compared + ' officers.';
+    });
+
+  IS9WD_stRun_(suite, 'Officer rows match the directory', ctx.stats, function () {
+    var names = IS9WD_named_('IS9WD_STATS_OFF_NAME').getValues();
+    var rows = ctx.cfg.directory.inHierarchy;
+    var problems = [];
+    if (names.length !== rows.length) {
+      problems.push('the block holds ' + names.length + ' rows and the directory ' +
+        rows.length);
+    }
+    var seen = {};
+    for (var i = 0; i < names.length && i < rows.length; i++) {
+      var got = IS9WD_txt_(names[i][0]);
+      var want = IS9WD_txt_(rows[i].committee);
+      if (got !== want) {
+        problems.push('row ' + (i + 1) + ' reads "' + got + '" and hierarchy order ' +
+          (i + 1) + ' is "' + want + '"');
+      }
+      if (seen[got]) problems.push('"' + got + '" appears twice');
+      seen[got] = true;
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return 'All ' + names.length + ' officers, once each, in hierarchy order, the ' +
+      'President first and ' + IS9WD_txt_(names[names.length - 1][0]) + ' last.';
+  });
+
+  // The cross check that the two windows are not quietly confused: the all-items
+  // columns the officer tables read must reconcile with each other and with the feed.
+  IS9WD_stRun_(suite, 'Officer totals reconcile', ctx.stats, function () {
+    var active = IS9WD_named_('IS9WD_STATS_OFF_ACTIVE_ALL').getValues();
+    var done = IS9WD_named_('IS9WD_STATS_OFF_DONE_ALL').getValues();
+    var total = IS9WD_named_('IS9WD_STATS_OFF_TOTAL').getValues();
+    var names = IS9WD_named_('IS9WD_STATS_OFF_NAME').getValues();
+    var problems = [];
+    var sum = 0;
+    for (var i = 0; i < total.length; i++) {
+      var a = IS9WD_int_(active[i][0]) || 0;
+      var d = IS9WD_int_(done[i][0]) || 0;
+      var t = IS9WD_int_(total[i][0]);
+      if (t === null || t !== a + d) {
+        problems.push(IS9WD_txt_(names[i][0]) + ' totals ' + total[i][0] + ' against ' +
+          a + ' active plus ' + d + ' done');
+      }
+      sum += a;
+    }
+    // Skipped rather than failed when the feed could not be read: that is the feed's
+    // own failure line to report, and a view must never be blamed for it.
+    var feedTotal = ctx.feed ? IS9WD_int_(IS9WD_stBlockA_(ctx, 'A.TOTAL')) : null;
+    if (feedTotal !== null && sum !== feedTotal) {
+      problems.push('the fourteen active counts sum to ' + sum +
+        ' and the feed\'s Total active deliverables reads ' + feedTotal +
+        ', which means an item sits under a committee no directory row names');
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return 'Every officer\'s total equals active plus done, and the fourteen active ' +
+      'counts sum to the feed\'s ' + sum + '.';
+  });
+
+  // The honesty rule behind the ranking: a rate is suppressed entirely below the
+  // minimum rather than printed as 0% or 100% off one item.
+  IS9WD_stRun_(suite, 'On time is suppressed below the minimum', ctx.stats, function () {
+    var onTime = IS9WD_named_('IS9WD_STATS_OFF_ONTIME').getValues();
+    var judged = IS9WD_named_('IS9WD_STATS_OFF_JUDGED').getValues();
+    var names = IS9WD_named_('IS9WD_STATS_OFF_NAME').getValues();
+    var min = ctx.cfg.switches.statsMinJudged;
+    var problems = [];
+    var scored = 0;
+    for (var i = 0; i < onTime.length; i++) {
+      var j = IS9WD_int_(judged[i][0]);
+      var v = onTime[i][0];
+      var name = IS9WD_txt_(names[i][0]);
+      if (j === null || j < 0) { problems.push(name + ' has Judged "' + judged[i][0] + '"'); continue; }
+      if (min !== null && j < min) {
+        if (IS9WD_filled_(v)) {
+          problems.push(name + ' scores ' + v + ' off only ' + j + ' judged items');
+        }
+        continue;
+      }
+      var n = IS9WD_num_(v);
+      if (n === null || n < 0 || n > 1) {
+        problems.push(name + ' has ' + j + ' judged items and reads "' + v + '"');
+        continue;
+      }
+      scored++;
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return scored + ' of ' + onTime.length + ' officers have at least ' + min +
+      ' items past their deadline and carry a rate; the rest are blank by design.';
+  });
+
+  // The nine publishing officers must agree with the feed about the one number both
+  // tabs print, or two tabs are telling Ethan different things about the same week.
+  IS9WD_stRun_(suite, 'Not on carousel agrees with the feed', ctx.stats, function () {
+    var carousel = IS9WD_named_('IS9WD_STATS_OFF_CAROUSEL').getValues();
+    var notPub = IS9WD_named_('IS9WD_STATS_OFF_NOTPUB').getValues();
+    var names = IS9WD_named_('IS9WD_STATS_OFF_NAME').getValues();
+    var ordinals = IS9WD_named_('IS9WD_OFFICER_ORDINAL').getValues();
+    var feedNotPub = IS9WD_named_('IS9WD_NOTPUB').getValues();
+    var byOrdinal = {};
+    for (var f = 0; f < ordinals.length; f++) {
+      byOrdinal[IS9WD_int_(ordinals[f][0])] = IS9WD_int_(feedNotPub[f][0]);
+    }
+    var problems = [];
+    var checked = 0;
+    for (var i = 0; i < carousel.length; i++) {
+      var ord = IS9WD_int_(carousel[i][0]);
+      var name = IS9WD_txt_(names[i][0]);
+      if (ord === null) {
+        if (IS9WD_filled_(notPub[i][0])) {
+          problems.push(name + ' does not publish yet carries "' + notPub[i][0] +
+            '" in Not on carousel, which must be blank by contract');
+        }
+        continue;
+      }
+      checked++;
+      var mine = IS9WD_int_(notPub[i][0]);
+      var theirs = byOrdinal[ord];
+      if (theirs === undefined) {
+        problems.push(name + ' holds carousel order ' + ord + ' and the feed has no ' +
+          'officer row for it');
+      } else if (mine !== theirs) {
+        problems.push(name + ' reads ' + mine + ' past the carousel and the feed reads ' +
+          theirs);
+      }
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return 'All ' + checked + ' publishing officers agree with the feed, and the rest ' +
+      'are blank because they have no Canva page.';
+  });
+}
+
+// The trend block, and the two states that are warnings rather than defects.
+function IS9WD_stStatsTrend_(suite, ctx) {
+  IS9WD_stRun_(suite, 'Trend weeks are consecutive Mondays', ctx.stats, function () {
+    var starts = IS9WD_named_('IS9WD_STATS_TRENDSTART').getValues();
+    var want = ctx.cfg.switches.statsTrendWeeks;
+    var problems = [];
+    if (want !== null && starts.length !== want) {
+      problems.push('the block holds ' + starts.length + ' rows and the setting reads ' +
+        want);
+    }
+    var previous = null;
+    for (var i = 0; i < starts.length; i++) {
+      var d = IS9WD_midnight_(starts[i][0]);
+      if (!d) { problems.push('row ' + (i + 1) + ' holds no date'); continue; }
+      if (!IS9WD_isMonday_(d)) {
+        problems.push('row ' + (i + 1) + ' is ' + IS9WD_dateKey_(d) + ', not a Monday');
+      }
+      if (previous) {
+        var gap = Math.round((d.getTime() - previous.getTime()) / 86400000);
+        if (gap !== 7) {
+          problems.push('row ' + (i + 1) + ' is ' + gap + ' days after the row above');
+        }
+      }
+      previous = d;
+    }
+    // Oldest first, so the newest row is the week before this one and the sparkline
+    // reads left to right in time.
+    var weekStart = ctx.cfg.weeks.weekStart;
+    if (previous && weekStart) {
+      var expect = IS9WD_addDays_(weekStart, -7);
+      if (IS9WD_dateKey_(previous) !== IS9WD_dateKey_(expect)) {
+        problems.push('the newest trend row is ' + IS9WD_dateKey_(previous) +
+          ' and the week before this one is ' + IS9WD_dateKey_(expect));
+      }
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return starts.length + ' consecutive Mondays, oldest first, ending at ' +
+      IS9WD_dateKey_(previous) + '.';
+  });
+
+  IS9WD_stRun_(suite, 'Trend has something to read', ctx.stats, function () {
+    var recorded = IS9WD_named_('IS9WD_STATS_TRENDRECORDED').getValues();
+    var missing = 0;
+    for (var i = 0; i < recorded.length; i++) {
+      if (IS9WD_trim_(recorded[i][0]) === 'Not archived') missing++;
+    }
+    if (missing === recorded.length) {
+      // Expected until an archive job is switched on, and the block says so on screen
+      // rather than printing a wall of zeros, so this is a warning and not a defect.
+      return { state: IS9WD_ST.WARN, detail: 'No week in the trend block was ever ' +
+        'archived, so the whole block reads Not archived. Switch ARCHIVE_WEEK on in ' +
+        '00 | Configuration, or run Archive this week from the menu. Both archive ' +
+        'jobs ship OFF.' };
+    }
+    if (missing) {
+      return { state: IS9WD_ST.WARN, detail: missing + ' of ' + recorded.length +
+        ' trend weeks were never archived.' };
+    }
+    return 'All ' + recorded.length + ' trend weeks carry archive rows.';
+  });
+
+  IS9WD_stRun_(suite, 'Row room left', ctx.stats, function () {
+    var weeks = IS9WD_int_(IS9WD_named_('IS9WD_STATS_ROOM_WEEKS').getValue());
+    var warn = ctx.cfg.switches.statsRoomWeeksWarn;
+    if (weeks === null) {
+      return { state: IS9WD_ST.WARN, detail: 'Weeks of row room left does not read as ' +
+        'a number yet, which is what an empty data tab looks like.' };
+    }
+    if (warn !== null && weeks < warn) {
+      return { state: IS9WD_ST.WARN, detail: weeks + ' weeks of room left at the rate ' +
+        'of the last four weeks, under the warning level of ' + warn +
+        '. Retire accomplished items to reclaim rows.' };
+    }
+    return weeks + ' weeks of room left at the rate of the last four weeks.';
+  });
+}
+
+// 04 | Officer Tables, including the one assertion the whole tab turns on: that
+// nothing was silently left out.
+function IS9WD_stOfficerTables_(suite, ctx) {
+  IS9WD_stRun_(suite, 'Officer tables grid and markers', ctx.tables, function () {
+    var o = ctx.otLayout;
+    var problems = [];
+    if (ctx.tables.shortRows > 0) {
+      problems.push('the tab is ' + ctx.tables.shortRows + ' rows short of row ' +
+        o.endRow + ', where the end marker belongs');
+    }
+    if (ctx.tables.shortCols > 0) {
+      problems.push('the tab is ' + ctx.tables.shortCols + ' columns short of column ' +
+        IS9WD_colLetter_(o.lastCol));
+    }
+    if (ctx.tables.lastRow > o.endRow) {
+      problems.push('there is content down to row ' + ctx.tables.lastRow +
+        ', below the end marker');
+    }
+    var banner = IS9WD_txt_(ctx.tables.disp[0][0]);
+    if (banner !== IS9WD_OT.BANNER) {
+      problems.push('A1 reads "' + banner + '" not "' + IS9WD_OT.BANNER + '"');
+    }
+    var end = IS9WD_txt_(ctx.tables.disp[o.endRow - 1][0]);
+    if (end !== IS9WD_OT.END) {
+      problems.push('the last row reads "' + end + '" not "' + IS9WD_OT.END + '"');
+    }
+    var counted = IS9WD_int_(IS9WD_named_('IS9WD_OT_ERRORS').getValue());
+    if (counted !== 0) problems.push('the tab\'s own error count reads ' + counted);
+    for (var r = 0; r < o.endRow; r++) {
+      for (var c = 0; c < o.lastCol; c++) {
+        var text = IS9WD_trim_(ctx.tables.disp[r][c]);
+        if (text !== '' && IS9WD_ST_HAS_(IS9WD_ST_ERRORS, text)) {
+          problems.push(IS9WD_a1_(r + 1, c + 1, 1, 1) + ' = ' + text);
+        }
+      }
+    }
+    problems = problems.concat(IS9WD_stMerged_(ctx.tables.sheet, IS9WD_TAB.TABLES));
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems) +
+      '. Run Build or repair workbook.');
+    return o.blocks.length + ' blocks in ' + o.endRow + ' rows, A1 names the tab, the ' +
+      'last row carries the end marker, nothing is merged and no cell reads as an error.';
+  });
+
+  IS9WD_stRun_(suite, 'Officer table blocks', ctx.tables, function () {
+    var o = ctx.otLayout;
+    var names = IS9WD_named_('IS9WD_STATS_OFF_NAME').getValues();
+    var problems = [];
+    var seen = {};
+    for (var i = 0; i < o.blocks.length; i++) {
+      var block = o.blocks[i];
+      var ord = IS9WD_int_(ctx.tables.disp[block.bandRow - 1][o.keyCol - 1]);
+      if (ord === null) {
+        problems.push('the band on row ' + block.bandRow + ' carries no hierarchy ordinal');
+        continue;
+      }
+      if (seen[ord]) problems.push('ordinal ' + ord + ' is on two bands');
+      seen[ord] = true;
+      if (ord < 1 || ord > names.length) {
+        problems.push('the band on row ' + block.bandRow + ' carries ordinal ' + ord +
+          ', outside 1 to ' + names.length);
+        continue;
+      }
+      var want = IS9WD_upper_(IS9WD_txt_(names[ord - 1][0]));
+      var band = IS9WD_txt_(ctx.tables.disp[block.bandRow - 1][0]);
+      if (want !== '' && band.indexOf(want) !== 0) {
+        problems.push('the band on row ' + block.bandRow + ' reads "' +
+          band.substring(0, 40) + '" and ordinal ' + ord + ' is "' + want + '"');
+      }
+    }
+    for (var k = 1; k <= o.blocks.length; k++) {
+      if (!seen[k]) problems.push('no band carries ordinal ' + k);
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return o.blocks.length + ' bands, ordinals 1 to ' + o.blocks.length +
+      ' with no duplicate and no gap, each naming its own officer.';
+  });
+
+  // THE ANTI-SILENT-TRUNCATION ASSERTION. Fixed blocks plus ARRAY_CONSTRAIN would
+  // otherwise drop an officer's extra items without a word, which is the one failure
+  // this tab is not allowed to have.
+  IS9WD_stRun_(suite, 'Nothing is hidden without a notice', ctx.tables, function () {
+    var o = ctx.otLayout;
+    var totals = IS9WD_named_('IS9WD_STATS_OFF_TOTAL').getValues();
+    var names = IS9WD_named_('IS9WD_STATS_OFF_NAME').getValues();
+    var problems = [];
+    var hidden = 0;
+    for (var i = 0; i < o.blocks.length; i++) {
+      var block = o.blocks[i];
+      var ord = IS9WD_int_(ctx.tables.disp[block.bandRow - 1][o.keyCol - 1]);
+      if (ord === null || ord < 1 || ord > totals.length) continue;
+      var total = IS9WD_int_(totals[ord - 1][0]);
+      if (total === null) continue;
+      var notice = IS9WD_trim_(ctx.tables.disp[block.noticeRow - 1][0]);
+      var over = total - o.itemRows;
+      var name = IS9WD_txt_(names[ord - 1][0]);
+      if (over > 0) {
+        hidden++;
+        if (notice === '') {
+          problems.push(name + ' has ' + total + ' items and ' + o.itemRows +
+            ' rows to show them in, and the notice row is blank');
+        } else if (notice.indexOf('+ ' + over + ' more') !== 0) {
+          problems.push(name + ' hides ' + over + ' items and the notice reads "' +
+            notice.substring(0, 40) + '"');
+        }
+      } else if (notice !== '') {
+        problems.push(name + ' fits in ' + o.itemRows + ' rows and the notice row ' +
+          'reads "' + notice.substring(0, 40) + '"');
+      }
+    }
+    var summary = IS9WD_txt_(IS9WD_named_('IS9WD_OT_SUMMARY').getValue());
+    if (hidden > 0 && summary.indexOf('Not shown below') !== 0) {
+      problems.push(hidden + ' officers have items hidden and the summary row reads "' +
+        summary.substring(0, 40) + '"');
+    }
+    if (hidden === 0 && summary.indexOf('Every officer') !== 0) {
+      problems.push('nothing is hidden and the summary row reads "' +
+        summary.substring(0, 40) + '"');
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return hidden === 0
+      ? 'Every officer\'s full list fits, and the summary row says so.'
+      : hidden + ' officers have more items than the ' + o.itemRows + ' rows reserved, ' +
+        'and each one carries a notice and is named in the summary row.';
+  });
+
+  // The sort key is what orders every block and what the muted rule reads, so a
+  // malformed key is a block in the wrong order and an accomplished row that does not
+  // read as one.
+  IS9WD_stRun_(suite, 'Officer table sort keys', ctx.tables, function () {
+    var o = ctx.otLayout;
+    var problems = [];
+    var count = 0;
+    for (var i = 0; i < o.blocks.length; i++) {
+      var block = o.blocks[i];
+      for (var r = block.itemFirst; r <= block.itemLast; r++) {
+        var key = IS9WD_trim_(ctx.tables.disp[r - 1][o.keyCol - 1]);
+        if (key === '') continue;
+        count++;
+        var lead = key.substring(0, 1);
+        if (lead !== '0' && lead !== '1') {
+          problems.push('row ' + r + ' has a key beginning "' + lead +
+            '" rather than 0 for active or 1 for done');
+        }
+        if (IS9WD_int_(key.substring(1, 7)) === null) {
+          problems.push('row ' + r + ' has a key whose deadline part is "' +
+            key.substring(1, 7) + '"');
+        }
+      }
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return count + ' item rows, every key carrying the derived Active flag and a ' +
+      'six digit deadline. Nothing here keys on a status label.';
+  });
+}
+
+// Nothing on either view may be merged: the Drive connector renders a merged cell as a
+// repeated `[merged]` value, and both tabs are inside the same read.
+function IS9WD_stMerged_(sheet, label) {
+  var merged = sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns())
+    .getMergedRanges();
+  if (!merged.length) return [];
+  var where = [];
+  for (var i = 0; i < merged.length && i < 4; i++) where.push(merged[i].getA1Notation());
+  return [merged.length + ' merged range(s) on ' + label + ' at ' + where.join(', ') +
+    ', which the Drive connector renders as repeated [merged] values'];
+}
+
 // The one check this build cannot perform. 2.4 forbids UrlFetchApp outright, and
 // widening a scope means re-authorizing from the editor and repointing the
 // deployment, which an anonymous caller can never answer a prompt for.
@@ -1020,7 +1693,7 @@ function IS9WD_stQuota_(suite) {
 
 
 // ============================================================================
-//  RESULTS  (04 | Log, the diagnostics cell, and the lines the menu shows)
+//  RESULTS  (the log tab, the diagnostics cell, and the lines the menu shows)
 // ============================================================================
 
 function IS9WD_stSummary_(suite) {
@@ -1038,8 +1711,11 @@ function IS9WD_stSummary_(suite) {
     counts: count,
     ok: count.FAIL === 0,
     firstFail: firstFail,
+    // The failure phrase comes from IS9WD_Config.js, because 03 | Statistics tests this
+    // line for it: two copies of it are two strings that drift, and the drift would read
+    // as a healthy self test on the tab whose job is to say otherwise.
     line: IS9WD_stampText_(suite.startedAt) + IS9WD_SEP + line +
-      (firstFail === '' ? '' : IS9WD_SEP + 'first failure: ' + firstFail)
+      (firstFail === '' ? '' : IS9WD_SEP + IS9WD_SELFTEST_FAIL_MARKER_ + firstFail)
   };
 }
 
@@ -1127,7 +1803,8 @@ function IS9WD_stReport_(suite, summary) {
   out.push(summary.ok
     ? 'Nothing is failing. Warnings are states that are correct today and wrong at ' +
       'go live, so read them before the first live weekend.'
-    : 'Fix the failures above before the Sunday run. Every line is in 04 | Log.');
+    : 'Fix the failures above before the Sunday run. Every line is in ' +
+      IS9WD_TAB.LOG + '.');
   return out;
 }
 
