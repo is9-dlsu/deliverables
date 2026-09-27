@@ -1370,7 +1370,7 @@ function IS9WD_statsCaptions_(sheet, layout) {
   var captions = [
     '=IF(' + due + '+' + done + '=0,' +
       '"Nothing is entered for this week yet, so the chart below is empty. It fills the ' +
-      'moment you enter deliverables on 02 | Deliverables.",' +
+      'moment you enter deliverables on ' + IS9WD_TAB.ITEMS + '.",' +
       '"' + 'Showing "&' + due + '&" still to do and "&' + done + '&" done across "&' +
       officers + '&" officers.")',
     '=IF(COUNT(IS9WD_STATS_OFF_ONTIME)=0,' +
@@ -1430,12 +1430,15 @@ function IS9WD_statsEndRow_(sheet, layout) {
 // workbook rather than a guest in it. The series colours are #085040 and #8a64a9, the
 // gridlines #e9ebd4, the text #58756a and the background #F8FBFD. No green, no red, and
 // nothing outside the palette (2.5).
-function IS9WD_statsChartOptions_(builder, title) {
+// NO TITLE INSIDE THE CHART. The card's own band row above it already prints the same
+// words in #5d4170 at BAND size, so setting a chart title drew the heading twice and cost
+// 28 px of plot area to do it. chartArea is deliberately absent here as well: the three
+// charts need three different left margins, because one has fourteen slanted names under
+// it, one has fourteen names beside it and one has none, and a single shared chartArea
+// gave the slanted names 56 px to live in.
+function IS9WD_statsChartOptions_(builder, width) {
   return builder
-    .setOption('title', title)
-    .setOption('titleTextStyle', {
-      color: IS9WD_ROLE.BODY_FG, fontName: IS9WD_FONT, fontSize: 13, bold: true
-    })
+    .setOption('title', '')
     .setOption('backgroundColor', IS9WD_ROLE.BODY_BG)
     .setOption('fontName', IS9WD_FONT)
     .setOption('fontSize', 10)
@@ -1444,15 +1447,71 @@ function IS9WD_statsChartOptions_(builder, title) {
       position: 'top', alignment: 'start',
       textStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 }
     })
-    .setOption('chartArea', { left: 150, top: 56, width: '70%', height: '66%' })
-    .setOption('width', IS9WD_STATS_CHART_WIDTH)
+    .setOption('width', width)
     .setOption('height', IS9WD_STATS_CHART_HEIGHT);
 }
 
+// A chart's width is its own card's width in pixels, so the three line up inside their own
+// borders instead of each sitting a different distance from its right edge.
+function IS9WD_statsChartWidth_(chart) {
+  var widths = IS9WD_WIDTH[IS9WD_TAB_KEY_STATS_];
+  if (!widths || !chart) return IS9WD_STATS_CHART_WIDTH;
+  var total = 0;
+  for (var c = chart.firstCol; c <= chart.lastCol; c++) {
+    var w = IS9WD_posInt_(widths[c - 1]);
+    if (!w) return IS9WD_STATS_CHART_WIDTH;
+    total += w;
+  }
+  var out = total - IS9WD_STATS_CHART_INSET * 2;
+  return out > 200 ? out : IS9WD_STATS_CHART_WIDTH;
+}
+
+var IS9WD_TAB_KEY_STATS_ = 'STATS';
+
+// `kind` in IS9WD_STATS_CHARTS was a declaration nothing read: the painter named its own
+// chart type three times, so editing `kind` changed nothing and the field implied a
+// contract it did not have. Reading it here closes that, and an unknown kind throws on the
+// undefined enum rather than building a chart of some other shape.
+function IS9WD_statsChartType_(index) {
+  var kind = IS9WD_trim_(IS9WD_STATS_CHARTS[index] && IS9WD_STATS_CHARTS[index].kind);
+  var type = kind === '' ? null : Charts.ChartType[kind];
+  if (!type) {
+    throw new Error('IS9WD: chart ' + index + ' declares the chart type "' + kind +
+      '", which the chart builder does not have.');
+  }
+  return type;
+}
+
+// GOOGLE'S OWN AXIS DEFAULTS ARE OFF PALETTE, and they are #CCCCCC gridlines on a
+// #333333 baseline, which is black on a workbook whose palette holds no black. Both axes
+// of every chart take these, not just the value axis: setting one axis and leaving the
+// other is how the leak survived. `minorGridlines: { count: 0 }` is here because a minor
+// gridline is a second, fainter grid nobody asked for and it renders in Google's grey too.
+//
+// The gridline colour is cream, and that is the one place in the workbook where #e9ebd4
+// appears on something that is not a cell Ethan types into. A chart gridline is chrome
+// drawn inside an overlay rather than a cell fill, so the cream rule is not engaged, and
+// cream is the only palette member faint enough to sit behind data. Recorded here rather
+// than assumed: if Ethan rules that the cream rule covers anything rendered at all, this
+// becomes IS9WD_CLR.PURPLE_SOFT and the charts get slightly heavier grid.
 function IS9WD_statsAxisStyle_() {
   return {
     textStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 },
-    titleTextStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 }
+    titleTextStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 },
+    gridlines: { color: IS9WD_CLR.CREAM },
+    minorGridlines: { count: 0 },
+    baselineColor: IS9WD_ROLE.HINT_FG
+  };
+}
+
+// A count axis holds whole tasks. Left alone, Google fits five gridlines to the data range,
+// so a week whose highest Due is 3 gets an axis labelled 0, 0.5, 1, 1.5, 2, 2.5, 3 beside
+// cells formatted as integers. Half a task is not a thing this workbook can hold.
+function IS9WD_statsCountAxis_(axis) {
+  return {
+    textStyle: axis.textStyle, gridlines: { color: IS9WD_CLR.CREAM, count: -1 },
+    minorGridlines: { count: 0 }, baselineColor: axis.baselineColor,
+    format: '0', viewWindow: { min: 0 }
   };
 }
 
@@ -1465,33 +1524,39 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
   var axis = IS9WD_statsAxisStyle_();
   var built = 0;
 
-  var anchor = function (index) {
-    return f.charts[index] ? f.charts[index].firstRow : f.endRow;
-  };
-  // A chart is anchored inside its own card, so the anchor column is the card's first
-  // column rather than column A.
-  var anchorCol = function (index) {
-    return f.charts[index] ? f.charts[index].firstCol : 1;
+  // A MISSING CHART BAND THROWS. The old fallbacks put the chart at f.endRow in column A,
+  // which is the tab's own footer: the end marker, the error count and the gate agreement
+  // cell the Sunday brief reads, all three hidden under an overlay and still counted by
+  // the error scan. A layout that declares no band for a chart the painter builds is a
+  // layout fault, and it should say so rather than quietly cover the footer.
+  var band = function (index) {
+    if (!f.charts || !f.charts[index]) {
+      throw new Error('IS9WD: the layout declares no chart band ' + index +
+        ', so ' + IS9WD_TAB.STATS + ' cannot be built. Run Checks > Rebuild the views.');
+    }
+    return f.charts[index];
   };
 
   // 1. Due against done per committee, this week. A column chart, because the comparison is
   // between two bars for one officer and a reader has to see the pair.
   var officerRows = f.officerLast - f.officerHeader + 1;
   var one = sheet.newChart()
-    .setChartType(Charts.ChartType.COLUMN)
+    .setChartType(IS9WD_statsChartType_(0))
     .addRange(sheet.getRange(f.officerHeader, f.officerCol, officerRows, 1))
     .addRange(sheet.getRange(f.officerHeader, f.officerCol + 2, officerRows, 1))
     .addRange(sheet.getRange(f.officerHeader, f.officerCol + 3, officerRows, 1))
     .setNumHeaders(1)
-    .setPosition(anchor(0), anchorCol(0), 4, 4);
-  IS9WD_statsChartOptions_(one, IS9WD_STATS_CHARTS[0].title);
+    .setPosition(band(0).firstRow, band(0).firstCol, IS9WD_STATS_CHART_INSET, 8);
+  IS9WD_statsChartOptions_(one, IS9WD_statsChartWidth_(band(0)));
+  // Fourteen names slanted at 40 degrees need room under the plot, not beside it.
+  one.setOption('chartArea', { left: 56, top: 28, width: '88%', height: '50%' });
   one.setOption('hAxis', {
     textStyle: axis.textStyle, slantedText: true, slantedTextAngle: 40
   });
-  one.setOption('vAxis', {
-    textStyle: axis.textStyle, minValue: 0,
-    gridlines: { color: IS9WD_CLR.CREAM }, baselineColor: IS9WD_ROLE.HINT_FG
-  });
+  one.setOption('vAxis', IS9WD_statsCountAxis_(axis));
+  // The single most visible part of what Ethan called premium: bars with weight rather
+  // than hairlines with gaps.
+  one.setOption('bar', { groupWidth: '72%' });
   sheet.insertChart(one.build());
   built++;
 
@@ -1499,41 +1564,63 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
   // straight along the vertical axis and do not need slanting.
   var rankRows = f.rankLast - f.rankHeader + 1;
   var two = sheet.newChart()
-    .setChartType(Charts.ChartType.BAR)
+    .setChartType(IS9WD_statsChartType_(1))
     .addRange(sheet.getRange(f.rankHeader, f.rankCol + 1, rankRows, 1))
     .addRange(sheet.getRange(f.rankHeader, f.rankCol + 2, rankRows, 1))
     .setNumHeaders(1)
-    .setPosition(anchor(1), anchorCol(1), 4, 4);
-  IS9WD_statsChartOptions_(two, IS9WD_STATS_CHARTS[1].title);
+    .setPosition(band(1).firstRow, band(1).firstCol, IS9WD_STATS_CHART_INSET, 8);
+  IS9WD_statsChartOptions_(two, IS9WD_statsChartWidth_(band(1)));
   two.setOption('colors', [IS9WD_CLR.PURPLE_DEEP]);
   two.setOption('legend', { position: 'none' });
+  // Fourteen names read straight down the left, so the plot starts well in, and with no
+  // legend there is nothing above it to leave room for.
+  two.setOption('chartArea', { left: 240, top: 8, width: '62%', height: '84%' });
   // On a bar chart the axes swap, so the value axis is the horizontal one and the
   // percentage format belongs there.
   two.setOption('hAxis', {
-    textStyle: axis.textStyle, format: '#%', minValue: 0, maxValue: 1,
-    gridlines: { color: IS9WD_CLR.CREAM }, baselineColor: IS9WD_ROLE.HINT_FG
+    textStyle: axis.textStyle, format: '#%',
+    viewWindow: { min: 0, max: 1 },
+    gridlines: { color: IS9WD_CLR.CREAM, count: -1 }, minorGridlines: { count: 0 },
+    baselineColor: axis.baselineColor
   });
-  two.setOption('vAxis', { textStyle: axis.textStyle });
+  // The data arrives as a descending sort, and which end of the axis row one lands on is
+  // an undocumented Google default. A chart whose band says RANKED must put rank one at
+  // the top, so the direction is stated rather than inherited.
+  two.setOption('vAxis', {
+    textStyle: axis.textStyle, direction: -1,
+    gridlines: { color: IS9WD_CLR.CREAM }, minorGridlines: { count: 0 },
+    baselineColor: axis.baselineColor
+  });
+  two.setOption('bar', { groupWidth: '72%' });
   sheet.insertChart(two.build());
   built++;
 
   // 3. Week by week. A line chart, because the point is the shape over time.
   var trendRows = f.trendLast - f.trendHeader + 1;
   var three = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
+    .setChartType(IS9WD_statsChartType_(2))
     .addRange(sheet.getRange(f.trendHeader, f.trendCol + 1, trendRows, 1))
     .addRange(sheet.getRange(f.trendHeader, f.trendCol + 2, trendRows, 1))
     .addRange(sheet.getRange(f.trendHeader, f.trendCol + 3, trendRows, 1))
     .setNumHeaders(1)
-    .setPosition(anchor(2), anchorCol(2), 4, 4);
-  IS9WD_statsChartOptions_(three, IS9WD_STATS_CHARTS[2].title);
-  three.setOption('pointSize', 5);
+    .setPosition(band(2).firstRow, band(2).firstCol, IS9WD_STATS_CHART_INSET, 8);
+  IS9WD_statsChartOptions_(three, IS9WD_statsChartWidth_(band(2)));
+  three.setOption('chartArea', { left: 56, top: 28, width: '88%', height: '62%' });
   three.setOption('curveType', 'none');
-  three.setOption('hAxis', { textStyle: axis.textStyle, format: 'MMM d' });
-  three.setOption('vAxis', {
-    textStyle: axis.textStyle, minValue: 0,
-    gridlines: { color: IS9WD_CLR.CREAM }, baselineColor: IS9WD_ROLE.HINT_FG
+  // #085040 and #8a64a9 differ mostly in hue, so the two lines carry a shape as well as a
+  // colour and stay separable in greyscale and to a colour blind reader.
+  three.setOption('lineWidth', 3);
+  three.setOption('pointSize', 6);
+  three.setOption('series', {
+    0: { pointShape: 'circle' },
+    1: { pointShape: 'square' }
   });
+  three.setOption('hAxis', {
+    textStyle: axis.textStyle, format: 'MMM d',
+    gridlines: { color: IS9WD_CLR.CREAM }, minorGridlines: { count: 0 },
+    baselineColor: axis.baselineColor
+  });
+  three.setOption('vAxis', IS9WD_statsCountAxis_(axis));
   sheet.insertChart(three.build());
   built++;
 

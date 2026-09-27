@@ -1970,17 +1970,21 @@ var IS9WD_STATS_TREND_COL_NAMES = {
 // formula rather than a literal precisely so an empty chart says what will fill it.
 var IS9WD_STATS_CHART_ROWS = 14;
 var IS9WD_STATS_CHART_HEIGHT = 330;
-// A chart is drawn over its own card now rather than over the whole width of the tab, so its
-// pixel width is the card's: twelve columns of the widths in IS9WD_WIDTH.STATS, about
-// 1,200 px, less a little so the border stays visible around it.
+// A chart is drawn over its own card, so its width is ITS OWN card's width in pixels,
+// summed from IS9WD_WIDTH.STATS across that card's columns, less an inset each side so the
+// card border stays visible. The three cards are not equal widths, so one shared number
+// left every chart a different distance from its own right border and the three did not
+// line up. This constant survives only as the fallback for a width table too short to
+// measure, and IS9WD_statsChartWidth_ is what the painter calls.
 var IS9WD_STATS_CHART_WIDTH = 1160;
+var IS9WD_STATS_CHART_INSET = 12;
 
 var IS9WD_STATS_CHARTS = [
   {
     key: 'C.OFFICER', kind: 'COLUMN',
-    title: 'DUE AGAINST DONE, BY COMMITTEE',
+    title: 'DUE AGAINST DONE, BY OFFICER',
     help: 'This week only, fourteen officers in hierarchy order. A tall Due bar beside a ' +
-      'short Done bar is the committee to chase.'
+      'short Done bar is the officer to chase.'
   },
   {
     key: 'C.RANK', kind: 'BAR',
