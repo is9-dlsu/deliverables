@@ -1261,7 +1261,11 @@ function IS9WD_stStatsOfficers_(suite, ctx) {
           if (!day) continue;
           if (!want || day < want) want = day;
         }
-        var got = IS9WD_isDate_(firstDue[i][0]) ? IS9WD_midnight_(firstDue[i][0]).getTime() : 0;
+        // MINIFS over no matching rows returns 0, which a date-formatted cell renders
+        // as 1899-12-30. That is the empty answer, not a wrong one.
+        var cell = firstDue[i][0];
+        var got = IS9WD_isDate_(cell) ? IS9WD_midnight_(cell).getTime() : 0;
+        if (got && new Date(got).getFullYear() < 1900) got = 0;
         if (want !== got) {
           problems.push(who + ' reads ' + (got ? IS9WD_dateKey_(new Date(got)) : 'blank') +
             ' and the items say ' + (want ? IS9WD_dateKey_(new Date(want)) : 'blank'));

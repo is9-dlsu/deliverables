@@ -120,6 +120,109 @@ function IS9WD_setupSheet_(tabKey) {
 // at once is two writers over one range, and the second one wins silently (9). The
 // menu already locks before it calls, so the lock is taken only when this execution
 // does not hold it, matching IS9WD_lockedRun_ in IS9WD_Menus.js.
+// Build repairs a workbook; it does not migrate one. A block that moves takes every
+// block below it with it, and setup writes an Ethan-owned cell only when it is blank,
+// so on a workbook built against an older layout the old values stay where they were
+// and the new layout reads them at the wrong rows. During build-out that is cheap to
+// undo, and this is the undo: delete every tab this project owns and build again.
+//
+// It refuses the moment the workbook holds anything a person would miss. After go-live
+// the answer is a migration, not this.
+// The two view tabs are the tail of a build and the most expensive part of it, so on a
+// slow run they are what Apps Script kills when the execution clock runs out, leaving
+// their named ranges unset and the self test failing on exactly those. They rebuild
+// here on their own, in their own execution, which is also what a layout setting change
+// needs: neither reads anything Build writes except Configuration.
+function IS9WD_buildViews_() {
+  if (LockService.getDocumentLock().hasLock()) return IS9WD_buildViewsLocked_();
+  return IS9WD_withLock_(function () {
+    return IS9WD_buildViewsLocked_();
+  });
+}
+
+function IS9WD_buildViewsLocked_() {
+  var report = { lines: [], namesSet: 0, stats: null, tables: null };
+  var say = function (line) { report.lines.push(line); Logger.log(line); };
+  var cfg = IS9WD_readConfig_(true);
+
+  report.stats = IS9WD_setupCall_('IS9WD_statsResize_', [cfg], say,
+    'the statistics tab was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.stats) {
+    report.namesSet += IS9WD_int_(report.stats.namesPointed) || 0;
+    say('statistics sized: ' + report.stats.directoryRows + ' officer rows, ' +
+      report.stats.trendWeeks + ' trend weeks, last row ' + report.stats.lastRow);
+  }
+  report.tables = IS9WD_setupCall_('IS9WD_officerTablesResize_', [cfg], say,
+    'the officer tables tab was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.tables) {
+    report.namesSet += IS9WD_int_(report.tables.namesPointed) || 0;
+    say('officer tables sized: ' + report.tables.blocks + ' blocks, ' +
+      report.tables.officerRows + ' rows reserved each showing ' +
+      report.tables.itemRows + ' items, last row ' + report.tables.lastRow);
+  }
+  say('named ranges pointed: ' + report.namesSet);
+  return report;
+}
+
+function IS9WD_resetAndBuild_() {
+  if (LockService.getDocumentLock().hasLock()) return IS9WD_resetAndBuildLocked_();
+  return IS9WD_withLock_(function () {
+    return IS9WD_resetAndBuildLocked_();
+  });
+}
+
+function IS9WD_resetAndBuildLocked_() {
+  var ss = IS9WD_ss_();
+  var holds = IS9WD_resetBlockers_(ss);
+  if (holds.length) {
+    throw new Error('This workbook holds data, so it will not be reset: ' +
+      holds.join('; ') + '. Reset is for build-out only.');
+  }
+
+  var deleted = [];
+  var keys = IS9WD_TAB_ORDER.slice();
+  for (var i = 0; i < keys.length; i++) {
+    var sheet = IS9WD_sheetOrNull_(keys[i]);
+    if (!sheet) continue;
+    if (ss.getSheets().length === 1) ss.insertSheet();   // a file needs one sheet
+    deleted.push(sheet.getName());
+    ss.deleteSheet(sheet);
+  }
+
+  var names = ss.getNamedRanges();
+  var dropped = 0;
+  for (var n = 0; n < names.length; n++) {
+    if (names[n].getName().indexOf('IS9WD_') === 0) { names[n].remove(); dropped++; }
+  }
+
+  var report = IS9WD_buildOrRepairLocked_();
+  report.lines.unshift('reset: deleted ' + deleted.length + ' tabs (' +
+    deleted.join(', ') + ') and dropped ' + dropped + ' named ranges');
+  return report;
+}
+
+// Anything here is something a person typed or the script recorded, and none of it
+// survives a delete. Tokens are deliberately absent: they live in Script Properties,
+// and the build reissues only what is missing.
+function IS9WD_resetBlockers_(ss) {
+  var out = [];
+  var count = function (rangeName, label) {
+    var r = IS9WD_namedOrNull_(rangeName);
+    if (!r) return;
+    var vals = r.getValues();
+    var filled = 0;
+    for (var i = 0; i < vals.length; i++) {
+      if (IS9WD_filled_(vals[i][0])) filled++;
+    }
+    if (filled) out.push(filled + ' ' + label);
+  };
+  count('IS9WD_DEL_TITLE', 'deliverables');
+  count('IS9WD_ARC_ID', 'archive rows');
+  count('IS9WD_SIGNOFF_WEEKS', 'sign-off rows');
+  count('IS9WD_DIR_VP', 'directory names');
+  return out;
+}
+
 function IS9WD_buildOrRepair_() {
   if (LockService.getDocumentLock().hasLock()) return IS9WD_buildOrRepairLocked_();
   return IS9WD_withLock_(function () {

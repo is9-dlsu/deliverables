@@ -63,6 +63,22 @@ var IS9WD_ACTION = {
     fn: 'IS9WD_applyGuards_', from: 'IS9WD_Setup.js', lock: true,
     label: 'Apply sheet guards'
   },
+  // Build repairs a layout; it cannot move one. A block that shifts leaves every
+  // Ethan-owned cell below it at its old row, because setup writes those only when
+  // blank. This deletes the tabs and builds again, and it refuses the moment the
+  // workbook holds an item, an archive row, a sign-off row or a directory name.
+  VIEWS: {
+    fn: 'IS9WD_buildViews_', from: 'IS9WD_Setup.js', lock: true,
+    label: 'Rebuild the views'
+  },
+  RESET: {
+    fn: 'IS9WD_resetAndBuild_', from: 'IS9WD_Setup.js', lock: true,
+    label: 'Reset and rebuild',
+    confirm: 'This DELETES every tab this project owns and builds them again from ' +
+      'scratch.\n\nIt refuses if the workbook holds any deliverable, archive row, ' +
+      'sign-off row or directory name, so it is safe only during build-out. Tokens ' +
+      'survive, because they live in Script Properties.\n\nReset now?'
+  },
   // IS9WD_linkFor_(key) is the reference's own name for the one link builder, and
   // the President's row returns the admin link rather than a member one (4.8).
   APP_URL: {
@@ -245,6 +261,8 @@ function IS9WD_buildMenu_() {
 
   var checks = ui.createMenu('Checks')
     .addItem('Run self test', 'IS9WD_menuSelfTest')
+    .addItem('Rebuild the views', 'IS9WD_menuBuildViews')
+    .addItem('Reset and rebuild (build-out only)', 'IS9WD_menuResetAndBuild')
     .addItem('Check the term calendar', 'IS9WD_menuCheckTerms')
     .addItem('List every protection', 'IS9WD_menuListProtections')
     .addItem('Record the live deployment settings', 'IS9WD_menuRecordDeployment');
@@ -785,4 +803,14 @@ function IS9WD_aboutLines_() {
     'Active flag is what the code reads, so a status can be renamed in ' +
     '00 | Configuration.');
   return out;
+}
+
+function IS9WD_menuResetAndBuild() {
+  var ui = IS9WD_assertUiContext_();
+  IS9WD_do_(ui, IS9WD_ACTION.RESET);
+}
+
+function IS9WD_menuBuildViews() {
+  var ui = IS9WD_assertUiContext_();
+  IS9WD_do_(ui, IS9WD_ACTION.VIEWS);
 }

@@ -1212,14 +1212,14 @@ function IS9WD_statsRules_(sheet, layout) {
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 6, oRows, 1)],
     '=N(' + IS9WD_statsRef_(6, o) + ')>0', flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 7, oRows, 1)],
-    '=N(' + IS9WD_statsRef_(7, o) + ')>=IS9WD_STATS_LATE_DAYS', flag));
+    '=N(' + IS9WD_statsRef_(7, o) + ')>=INDIRECT("IS9WD_STATS_LATE_DAYS")', flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 8, oRows, 1)],
     '=OR(' + IS9WD_statsRef_(8, o) + '="never",N(' + IS9WD_statsRef_(8, o) +
-    ')>=IS9WD_STATS_SILENT_DAYS)', flag));
+    ')>=INDIRECT("IS9WD_STATS_SILENT_DAYS"))', flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 5, oRows, 1)],
     '=AND(' + IS9WD_statsRef_(3, o) + '+' + IS9WD_statsRef_(4, o) + '>0,' +
     'IS9WD_STATS_ELAPSED>0,' + IS9WD_statsRef_(5, o) +
-    '<IS9WD_STATS_ELAPSED/7-IS9WD_STATS_PACE_SLACK)', flag));
+    '<IS9WD_STATS_ELAPSED/7-INDIRECT("IS9WD_STATS_PACE_SLACK"))', flag));
   // A committee that finished its whole week is the one good state this tab decorates,
   // and it takes the accent rather than a flag colour, because it is not a fault.
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 5, oRows, 1)],
@@ -1227,7 +1227,7 @@ function IS9WD_statsRules_(sheet, layout) {
     IS9WD_statsRef_(5, o) + '=1)', accent));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 9, oRows, 1)],
     '=AND(' + IS9WD_statsRef_(9, o) + '<>"",' + IS9WD_statsRef_(9, o) +
-    '<IS9WD_STATS_ONTIME_TARGET)', flag));
+    '<INDIRECT("IS9WD_STATS_ONTIME_TARGET"))', flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 12, oRows, 1)],
     '=N(' + IS9WD_statsRef_(12, o) + ')>0', accent));
 
