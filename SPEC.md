@@ -109,5 +109,6 @@ Ownership transfers inside the DLSU domain, so the next president inherits the S
 - Settings live in `00 | Configuration` and are read through named ranges, never hardcoded, never by cell address.
 - Setup is idempotent: re-running creates what is missing and repairs formatting and validation, and never touches an item, a token, an archive row or a log row.
 - No em dashes in anything a person reads.
+- The workbook is Poppins throughout, with gridlines on and a frozen header row on every tab. Colors come from the IS9 palette only: `#085040`, `#58756a`, `#5d4170`, `#8a64a9`, `#8b74a1`, `#724485`, `#e9ebd4`, `#F8FBFD`. Dark text is `#085040`. `#1C2120` never appears in the workbook, and survives only as the number text hex the Canva feed prints.
 - Asia/Manila everywhere, in the spreadsheet and in `appsscript.json`.
 - `IS9WD` prefixes functions and named ranges, matching Ethan's other sistemas.

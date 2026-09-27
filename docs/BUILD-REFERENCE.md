@@ -192,7 +192,12 @@ Verified against the installed clasp **3.4.1** on 2026-09-27. Re-check `clasp <c
 - `setRecalculationInterval(SpreadsheetApp.RecalculationInterval.HOUR)`, because Claude reads cached values through Drive and date formulas must stay current.
 - Prefix every constant, function and named range with `IS9WD`, matching IS9PA and IS9POST.
 - One `onOpen`, one menu, in `IS9WD_Menus.js`, as a simple trigger. A second `createMenu` with the same name produces a second menu rather than merging. A simple trigger may be refused `PropertiesService`, so any label reflecting a toggle goes through `IS9WD_toggleLabel_()`, which falls back to a static label rather than losing the menu bar. This is the EBEXECOM `IS9_Menus.js` pattern.
-- Font Montserrat. Palette: tab header fill `#5d4170` on `#F8FBFD` text, table header fill `#085040` on `#F8FBFD` text, input rows alternate `#F8FBFD` and `#e9ebd4`, ink `#1C2120`, accent `#8a64a9`.
+- **Font Poppins throughout**, set on every tab's full data range by setup, matching the ARW sistema.
+- **Gridlines stay visible on every tab.** They are the cheapest alignment cue in a wide sheet, and the design below does not fight them: fills are used for headers and bands only, never to fake a grid.
+- **Every tab has a frozen header row**, so a header is always on screen no matter how far down the sheet runs.
+- **Palette, and nothing outside it.** Section title fill `#085040` with `#F8FBFD` text. Column header fill `#5d4170` with `#F8FBFD` text. Body text `#085040` on `#F8FBFD`. Secondary and hint text `#58756a`. Row banding alternates `#F8FBFD` and `#e9ebd4`. Accent, used for a value that needs the eye, `#8a64a9`. Strong accent, used for a blocking flag as bold text on `#e9ebd4`, `#724485`. Muted accent, for a disabled or superseded row, `#8b74a1`.
+- **`#1C2120` is never used in the workbook.** It survives only as a Canva feed value, where it is the number text hex the carousel prints, which is data rather than styling. Dark text in the workbook is `#085040`.
+- **Tab colors**, so the five tabs are distinguishable at a glance: Configuration `#5d4170`, Canva Feed `#085040`, Deliverables `#8a64a9`, Archive `#58756a`, Log `#8b74a1`.
 - Every contract string in section 6 is computed once, server side, in `IS9WD_Core.js`. The React app renders strings and never derives them. This is the single rule that stops the front end drifting from the Canva contract.
 
 ### 2.6 Repo layout
