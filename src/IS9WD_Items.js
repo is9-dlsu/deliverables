@@ -264,11 +264,25 @@ function IS9WD_itemsBuild_(cfg) {
     IS9WD_itemsHelpText_(c.switches.publishMax, c.switches.slotsPerPage, c.switches.maxParts));
 
   var labels = [];
-  for (var h = 0; h < IS9WD_ITEMS.columns.length; h++) labels.push(IS9WD_ITEMS.columns[h].header);
+  var hints = [];
+  for (var h = 0; h < IS9WD_ITEMS.columns.length; h++) {
+    labels.push(IS9WD_ITEMS.columns[h].header);
+    hints.push(IS9WD_txt_(IS9WD_ITEMS.columns[h].hint));
+  }
   IS9WD_paintHeader_(sheet, IS9WD_ITEMS.headerRow, IS9WD_ITEMS.firstCol, labels);
 
-  // The body carries no background of its own: banding owns it, and a fill set here
-  // would sit on top of the banding and flatten every second row.
+  // Row 4, the plain English hint row, one sentence per column directly above the column
+  // it describes and inside the frozen pane. Ethan's instruction of 2026-09-27 was an
+  // explanation per cell he types into; on a 2,000 row table this row plus the same
+  // sentence as every one of that column's notes is what that means in practice.
+  var hintRange = sheet.getRange(IS9WD_ITEMS.hintRow, IS9WD_ITEMS.firstCol, 1, labels.length);
+  IS9WD_style_(hintRange, {
+    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
+    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.WRAP, format: IS9WD_FMT.TEXT
+  });
+  hintRange.setValues([hints]);
+  sheet.setRowHeight(IS9WD_ITEMS.hintRow, IS9WD_ROW_H.HINT);
+
   var body = sheet.getRange(IS9WD_ITEMS.firstRow, IS9WD_ITEMS.firstCol, rows, lastCol);
   IS9WD_style_(body, { size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, align: IS9WD_ALIGN.LEFT });
   IS9WD_applyColumnStyles_(sheet, IS9WD_ITEMS.firstRow, rows, IS9WD_ITEMS.firstCol,
@@ -278,7 +292,32 @@ function IS9WD_itemsBuild_(cfg) {
       .setFontSize(IS9WD_SIZE.HINT).setFontColor(IS9WD_ROLE.HINT_FG);
   }
   IS9WD_setDataHeights_(sheet, IS9WD_ITEMS.firstRow, rows);
-  IS9WD_banding_(body);
+
+  // THE CREAM RULE, on the tab where it earns the most. Banding is gone from this tab:
+  // cream now means "this is yours to type into", and a banded row would have put cream
+  // under every second cell of the nine columns the machine owns. The five input columns
+  // are cream and carry their hint as a note; everything else is the page background and
+  // carries the sentence that says it is worked out by the sheet. Five columns of colour
+  // against twelve of paper is the whole of what makes 2,000 rows legible at a glance.
+  //
+  // The note goes on the header cell and on the hint cell of each column rather than on
+  // each of its 2,000 cells, and that is a deliberate departure from the per-cell rule on
+  // the settings tabs: 17 columns times 2,000 rows is 34,000 notes, which is a minute of
+  // every build and a heavier file for a sentence that is already on screen one row above
+  // the column in #58756a. The settings tabs, where a cell is a setting rather than a
+  // column, do carry a note per cell.
+  IS9WD_clearBanding_(body);
+  body.setBackground(IS9WD_ROLE.BODY_BG);
+  for (var ic = 0; ic < IS9WD_ITEMS.columns.length; ic++) {
+    var col = IS9WD_ITEMS.columns[ic];
+    var at = IS9WD_ITEMS.firstCol + ic;
+    var range = sheet.getRange(IS9WD_ITEMS.firstRow, at, rows, 1);
+    var mine = col.owner === IS9WD_OWN.ETHAN;
+    range.setBackground(mine ? IS9WD_INPUT_BG : IS9WD_ROLE.BODY_BG);
+    var note = mine ? IS9WD_txt_(col.hint) : IS9WD_CFG_CALC_HINT;
+    sheet.getRange(IS9WD_ITEMS.headerRow, at).setNote(note);
+    sheet.getRange(IS9WD_ITEMS.hintRow, at).setNote(note);
+  }
 
   IS9WD_applyValidations_(sheet, IS9WD_ITEMS.firstRow, rows, IS9WD_ITEMS.firstCol,
     IS9WD_ITEMS.columns);
@@ -316,9 +355,13 @@ function IS9WD_itemRules_(sheet) {
   }
 
   return [
-    // A blocking flag stops the carousel, so it is the one thing that takes a fill.
+    // A blocking flag stops the carousel, so it shouts across the whole row. It takes
+    // bold strong purple TEXT and no fill, which is a deliberate exception to the
+    // workbook's usual flag treatment: on this tab #e9ebd4 already means "this cell is
+    // yours to type into", and a flag that filled the row cream would say that about the
+    // nine columns the machine owns. The bold purple carries the signal on its own.
     IS9WD_ruleFormula_(wholeRow, '=OR(' + ors.join(',') + ')',
-      { bg: IS9WD_ROLE.FLAG_BG, fg: IS9WD_ROLE.FLAG_FG, bold: true }),
+      { fg: IS9WD_ROLE.FLAG_FG, bold: true }),
     // Overdue does not block, so it marks the two cells that say why and leaves the
     // banding alone.
     IS9WD_ruleFormula_(dueAndCheck, '=' + check + '="Overdue"',

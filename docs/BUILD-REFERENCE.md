@@ -41,8 +41,10 @@ Revised again on 2026-09-27, later the same day, with Ethan's pagination decisio
         +---------------------------------------------------------------+
         |  Google Sheet: [IS9] Weekly Deliverables Tracker              |
         |  00 Configuration | 01 Canva Feed | 02 Deliverables           |
-        |  03 Statistics | 04 Officer Tables (both views)               |
+        |  03 Statistics (KPI tiles + 3 charts) | 04 Officer Tables     |
         |  05 Archive | 06 Log (hidden)                                 |
+        |  _Engine (hidden: the settings the code needs)                |
+        |  _Views  (hidden: the helper band both views read)            |
         +---------------------------------------------------------------+
               |                                    ^
               | Drive connector (2.2)              | one hourly trigger
@@ -55,7 +57,8 @@ Revised again on 2026-09-27, later the same day, with Ethan's pagination decisio
 | Part | Owner of truth | Never |
 |---|---|---|
 | Items | `02 \| Deliverables` | never in the app's local state |
-| Settings, colors, schedule, statuses, directory, the weekly sign-off | `00 \| Configuration`, read through named ranges | never a constant in code |
+| Settings a president sets: the week, the trimester dates, the people, the switches, the addresses, the sign-off | `00 \| Configuration`, read through named ranges | never a constant in code |
+| Settings the code needs: colors, statuses, schedule, capacity, thresholds, diagnostics, the sign-off store | `_Engine`, hidden, read through the same named ranges | never a constant in code, and never on a tab Ethan reads |
 | Canva strings | `01 \| Canva Feed`, formulas mirroring `IS9WD_Core.js` | never built in the browser |
 | Tokens | Script Properties | never a Sheet cell |
 | URLs | `00 \| Configuration` | never a constant, never only in an old email |
@@ -189,18 +192,22 @@ Verified against the installed clasp **3.4.1** on 2026-09-27. Re-check `clasp <c
 - Setup is idempotent: re-running creates missing pieces and resets formatting, validation, formulas and named ranges, but never deletes a tab, never duplicates a tab, and never wipes an Ethan-entered item, a token, an archive row or a log row. Idempotent means **nothing accumulates**, which takes explicit work in four places: a named range is re-pointed with `setNamedRange` on the same name rather than created again; banding is removed by range before it is applied; conditional format rules are rebuilt by replacing the sheet's whole rule list rather than appending to it; data validations are set with `setDataValidations` over the full range; and triggers are handled by 8.1. Anything appended instead of replaced silently doubles on every run, and none of the four shows up on screen until the file is slow.
 - No em dashes anywhere in user-facing text: tab labels, menu items, notes, help text, app copy, emails, error pages, commit messages. Use commas, colons or pipes. Checked automatically, 13.4.
 - **Function visibility.** This rule existed to make Shape B safe. Shape B is not built (7.7), and the rule stays anyway, because it costs nothing and because it is the only thing standing between a future `google.script.run` and the whole project. `google.script.run` exposes server globals, not only the function you meant to expose. So: **every function in the project ends in `_`**, except `doGet`, `doPost`, `onOpen`, `IS9WD_rpc`, the menu handlers, and the tested API of `IS9WD_Core.js` listed in the 13.1 table. Core is exempt because its names are pinned by 233 tests written against this document, and because every one of those functions is pure: no function in Core reads or writes the workbook, sends mail, or touches Script Properties, so reaching one through a future `google.script.run` returns a computation over arguments the caller already had. See Appendix C R13. A trailing underscore is the documented Apps Script private convention and is the first layer. The load-bearing layer is the second: **every menu handler's first statement is `IS9WD_assertUiContext_()`**, which calls `SpreadsheetApp.getUi()` in a try/catch and throws unless a document UI is attached. A `google.script.run` web app context has no UI, so the guard refuses. This is verified ground: `SpreadsheetApp.getUi()` throwing with no UI attached is already documented and relied on in Ethan's EBEXECOM `IS9_Menus.js` (`is9Tell`). The guard precedes every write, send, rotation and seed.
+- **A conditional format rule may not reference another sheet.** Sheets refuses it at the moment the rule is applied, which takes a whole build down several tabs later than the mistake, and that is exactly what left `04 | Officer Tables` empty before the 2026-09-27 revision. Most of the thresholds a rule on a view needs are on `_Engine` or `_Views` now, so `IS9WD_Stats.js` puts **every** named range in **every** rule it writes through one wrapper that emits `INDIRECT("NAME")`, including the ones that happen to be local: a wrapper applied selectively is a wrapper somebody forgets. The harness in 13.4 refuses a cross-sheet rule outright.
+- **A chart is removed before it is inserted.** `insertChart` appends and has no replace form, so the three charts on `03 | Statistics` are rebuilt by removing every chart on the tab first. Without it a build run twice leaves six charts stacked on three anchors and nothing on screen says so. This is the fifth member of the idempotency list above.
 - Spreadsheet time zone `Asia/Manila`. Locale English (`en_PH` or `en_US`) so `TEXT(date, "ddd, mmm d")` returns English day and month names.
 - `setRecalculationInterval(SpreadsheetApp.RecalculationInterval.HOUR)`, because Claude reads cached values through Drive and date formulas must stay current.
 - Prefix every constant, function and named range with `IS9WD`, matching IS9PA and IS9POST.
 - One `onOpen`, one menu, in `IS9WD_Menus.js`, as a simple trigger. A second `createMenu` with the same name produces a second menu rather than merging. A simple trigger may be refused `PropertiesService`, so any label reflecting a toggle goes through `IS9WD_toggleLabel_()`, which falls back to a static label rather than losing the menu bar. This is the EBEXECOM `IS9_Menus.js` pattern.
 - **Font Poppins throughout**, set on every tab's full data range by setup, matching the ARW sistema.
 - **Gridlines stay visible on every tab.** They are the cheapest alignment cue in a wide sheet, and the design below does not fight them: fills are used for headers and bands only, never to fake a grid.
-- **Every tab has a frozen header row**, so a header is always on screen no matter how far down the sheet runs.
-- **No tab freezes a column.** Ethan's instruction of 2026-09-27, applied workbook-wide as given. It **supersedes** the earlier convention of freezing the key column on a wide tab, and `IS9WD_FREEZE` now reads `cols: 0` on all seven tabs. The cost is named rather than skipped: `02 | Deliverables` shows 2,040 px of columns, `05 | Archive` 2,660 and `06 | Log` 1,930, so on all three, scrolling right loses the row's identity. Neither new view pays anything, because both are sized to fit the grid a 1366 px laptop shows without horizontal scroll: `03 | Statistics` totals 1,170 px of visible columns and `04 | Officer Tables` 1,075. See Appendix C for the ruling. **With no frozen column, column order is the load bearing design decision**, so on every block of both views the leftmost columns carry the identifier and the verdict and the detail runs right. That rule is why the officer block reads `Committee or office | Attention | Due | Done | ...` and not `... | Attention` last.
-- **Nothing in the workbook is merged.** `01 | Canva Feed` forbade it because the Drive connector renders a merged cell as a repeated `[merged]` value; `03 | Statistics` and `04 | Officer Tables` are inside the same read, so the rule extends to both. A band of text running across a filled span is achieved with column width, type scale and overflow wrap. The self test asserts it on both views (13.4).
+- **Every tab has a frozen header row**, so a header is always on screen no matter how far down the sheet runs. `02 | Deliverables` freezes four rather than three, because row 4 is the plain English hint row and a hint that scrolls away on row 40 helps nobody.
+- **Every cell a person is expected to type into carries the fill `#e9ebd4`, the plain English sentence beside it and the same sentence as its own note; every calculated cell carries none of the three and carries the sentence that says it is calculated.** Ethan's instruction of 2026-09-27, and it is an acceptance check (13.3) and a self test assertion (13.4) rather than a style note. It holds on `00 | Configuration`, on `_Engine` and, per column, on `02 | Deliverables`. The consequence is that **row banding is withdrawn from every block that holds an input column**, and existing bandings are removed rather than left: a banded row would put cream under half the calculated cells.
+- **A section band carries only its title, and the plain English line rides in a hint row under it.** The earlier device of appending the help to the band cell in a lighter colour is withdrawn: it read as decoration on the band rather than as an instruction. A band is 38 px, a hint row 26, a header 30, a data row 26 and a spacer 18. The heights grew on 2026-09-27 for the reason Ethan gave: more air.
+- **No tab freezes a column.** Ethan's instruction of 2026-09-27, applied workbook-wide as given. It **supersedes** the earlier convention of freezing the key column on a wide tab, and `IS9WD_FREEZE` now reads `cols: 0` on all nine tabs, the two hidden ones included. The cost is named rather than skipped: `02 | Deliverables` shows 2,040 px of columns, `05 | Archive` 2,660 and `06 | Log` 1,930, so on all three, scrolling right loses the row's identity. Neither new view pays anything, because both are sized to fit the grid a 1366 px laptop shows without horizontal scroll: `03 | Statistics` totals 1,180 px of visible columns and `04 | Officer Tables` 1,095. See Appendix C for the ruling. **With no frozen column, column order is the load bearing design decision**, so on every block of both views the leftmost columns carry the identifier and the verdict and the detail runs right. That rule is why the officer block reads `Committee or office | Attention | Due | Done | ...` and not `... | Attention` last.
+- **Nothing in the workbook is merged.** `01 | Canva Feed` forbade it because the Drive connector renders a merged cell as a repeated `[merged]` value; every other tab is inside the same read, so the rule extends to all of them. A band of text running across a filled span is achieved with column width, type scale and overflow wrap, and **so is a KPI tile on `03 | Statistics`**: a big number in a wide column with overflow wrap, never a merge. The self test asserts it on both views (13.4).
 - **Palette, and nothing outside it.** Section title fill `#085040` with `#F8FBFD` text. Column header fill `#5d4170` with `#F8FBFD` text. Body text `#085040` on `#F8FBFD`. Secondary and hint text `#58756a`. Row banding alternates `#F8FBFD` and `#e9ebd4`. Accent, used for a value that needs the eye, `#8a64a9`. Strong accent, used for a blocking flag as bold text on `#e9ebd4`, `#724485`. Muted accent, for a disabled or superseded row, `#8b74a1`.
 - **`#1C2120` is never used in the workbook.** It survives only as a Canva feed value, where it is the number text hex the carousel prints, which is data rather than styling. Dark text in the workbook is `#085040`.
-- **Tab colors**, so the seven tabs are distinguishable at a glance: Configuration `#5d4170`, Canva Feed `#085040`, Deliverables `#8a64a9`, Statistics `#724485`, Officer Tables `#e9ebd4`, Archive `#58756a`, Log `#8b74a1`. That is the palette exactly, minus the page background, with no reuse. An eighth tab forces a reuse decision, which is worth knowing now rather than then.
+- **Tab colors**, so the seven numbered tabs are distinguishable at a glance: Configuration `#5d4170`, Canva Feed `#085040`, Deliverables `#8a64a9`, Statistics `#724485`, Officer Tables `#e9ebd4`, Archive `#58756a`, Log `#8b74a1`. That is the palette exactly, minus the page background, with no reuse. **The two hidden machine tabs forced the reuse decision this note predicted, and it is taken rather than worked around: `_Engine` and `_Views` both take the page background `#F8FBFD`**, because a tab outside the reading order should not claim a colour from it.
 - **There is no green and no red in this palette, so a good state cannot be a colour pair.** The mapping, which is `01 | Canva Feed`'s already and is reused verbatim by both views so the workbook reads as one system: good and nothing to do takes **no treatment at all**, body `#085040` on `#F8FBFD` at plain weight; a number worth the eye that is not a fault takes `#8a64a9`; something that needs attention or is blocking takes bold `#724485` on `#e9ebd4`; something superseded, not applicable or not recorded takes `#8b74a1`; a broken lookup renders the literal `!ERR`, which is flagged and counted. The premium look is the restraint: a tab is calm by default and only an exception is decorated, and everything else is typography and space.
 - Every contract string in section 6 is computed once, server side, in `IS9WD_Core.js`. The React app renders strings and never derives them. This is the single rule that stops the front end drifting from the Canva contract.
 
@@ -218,7 +225,7 @@ IS9WD_Core.js               pure functions, no Apps Script globals, Node testabl
 IS9WD_Config.js             named ranges, Configuration read and write
 IS9WD_Setup.js              build or repair
 IS9WD_Feed.js               writes every Canva Feed formula
-IS9WD_Stats.js              writes 03 | Statistics and 04 | Officer Tables
+IS9WD_Stats.js              writes _Views, 03 | Statistics and 04 | Officer Tables
 IS9WD_Items.js              item create, edit, delete, status change
 IS9WD_Api.js                doGet, doPost, IS9WD_rpc, the router, token resolution
 IS9WD_Serve.js              fallback only (7.7), NOT built: would serve App.html
@@ -285,21 +292,15 @@ Apps Script HTML files stay flat at the repo root; subdirectory HTML names pushe
 
 ## 3. Workbook structure (exact tab names, in order)
 
-1. `00 | Configuration`
-2. `01 | Canva Feed` (live formulas only, never typed into)
+1. `00 | Configuration` (only what a president sets)
+2. `01 | Canva Feed` (live formulas only, never typed into, **never hidden**)
 3. `02 | Deliverables` (the one data tab)
-4. `03 | Statistics` (a computed view, live formulas only, 6A)
-5. `04 | Officer Tables` (a computed view, live formulas only, 6B)
+4. `03 | Statistics` (a dashboard, 6A)
+5. `04 | Officer Tables` (a computed document, 6B)
 6. `05 | Archive` (append only)
 7. `06 | Log` (hidden, append only)
-
-**Why the two views were inserted at 03 and 04 rather than appended after the Log.** The one hard constraint is that `01 | Canva Feed` stays at position 2, so a truncated connector read loses the Archive and the Log before it loses a contract string (10.1), and inserting leaves it there. Total read size is identical wherever the two tabs sit: the order only decides what a short read drops, and nothing programmatic reads the Archive, the Log or either view during the Sunday run, so among positions 3 to 7 this is a reading order choice and not a safety one. The reading order for a person is settings, the machine contract, entry, the two views, history, the hidden log, and the numbers are the sort key in the tab bar, so the numbers have to carry it. The alternative, numbering them 05 and 06 and leaving the Archive and the Log alone, leaves a visible gap in the bar (00, 01, 02, 03, then 05, because 04 is the hidden Log) to save one rename of a hidden tab.
-
-**What renumbering the Archive and the Log costs, and why it is safe.** Setup resolves every tab by developer metadata key first, so it finds the existing Archive under `IS9WD_TAB_ARCHIVE` whatever the tab bar says, and no empty twin is created and no row is stranded. Two things make it complete. First, setup now **renames** a metadata-resolved sheet to the canonical name when the name it currently carries is one this project wrote, which it recognises by the `NN | Something` shape; any other name is one Ethan chose by hand and is left alone, and the rename is skipped outright if another sheet already holds the target name. Without the rename, `03 | Archive` would sit in the tab bar beside `03 | Statistics` with its own banner reading `05 | ARCHIVE`. Second, **no formula anywhere references a tab by name**: the five diagnostics cells are written as `=IS9WD_FEED_TOTAL` and friends rather than as `='01 | Canva Feed'!C3`, so the renumbering touches no formula. 4.9 below is corrected accordingly.
-
-The nine committee tabs from v1 are gone. Canva page numbers come from the directory's `Carousel order` column through the master page mapping in 6.3, not from tab numbers and no longer from a `Page` column typed into the directory. The nine committees now hold master pages 02, 04, 06, 08, 10, 12, 14, 16 and 18, each with its continuation page immediately after it.
-
-**Tabs are found by developer metadata first, then by exact name.** Setup stamps each sheet with developer metadata key `IS9WD_TAB_<KEY>` (`CONFIG`, `FEED`, `ITEMS`, `STATS`, `TABLES`, `ARCHIVE`, `LOG`) the first time it sees it, and afterwards resolves every tab by that key. Only if no sheet carries the key does it fall back to the exact name, and then it stamps it. Without this, renaming `02 | Deliverables` in the tab bar makes the next `Build or repair workbook` create an empty twin under the old name, leaving 2,000 real rows stranded on a sheet nothing reads, with no error. On a freshly created spreadsheet the default `Sheet1` is **renamed** into `00 | Configuration` rather than left beside it, or the workbook ships with six tabs and the acceptance check in 13.3 counts wrong.
+8. `_Engine` (hidden: every setting that exists for the code, 4B)
+9. `_Views` (hidden: the helper band both computed views read, 6C)
 
 ```js
 const IS9WD_TAB = {
@@ -309,37 +310,108 @@ const IS9WD_TAB = {
   STATS:  '03 | Statistics',
   TABLES: '04 | Officer Tables',
   ARCHIVE:'05 | Archive',
-  LOG:    '06 | Log'
+  LOG:    '06 | Log',
+  ENGINE: '_Engine',
+  VIEWS:  '_Views'
 };
 ```
 
-`04 | Officer Tables` rather than anything with "committee" in it, because five of the fourteen are offices and the workbook's own vocabulary for the mixed set is `Committee or office`. `03 | Statistics` takes Ethan's own word.
+**The two hidden machine tabs, decided by Ethan on 2026-09-27.** His instruction was "you may add tabs for your use but hide it", and the reason he gave was the one that matters: the workbook "looks overwhelming and coded for you and not for me". So everything that exists for the code rather than for a president moved off the tabs he reads:
+
+- **`_Engine`** takes the four urgency window hex pairs, the status list and the undo window, the job schedule, the three carousel capacity numbers, the mail and app plumbing, the eight statistics thresholds, the eleven diagnostics rows, the directory's five machinery columns and the 52 row weekly sign-off store. `00 | Configuration` keeps the week, the trimester dates, the A.Y. label, the fourteen people, seven switches, three addresses and this week's sign-off, and it ends on **row 67** rather than row 168.
+- **`_Views`** takes the hidden helper band that `03 | Statistics` used to carry in columns M to Y, the ranked block's sort, the trend block's two helpers, the three build markers, and the `OPERATIONAL HEALTH` and `SCHEDULED JOBS` blocks. The dashboard is therefore **twelve visible columns and no hidden column at all**.
+
+**Nothing was deleted and nothing was hardcoded, and that is the whole reason the move was cheap.** Every value that moved keeps its named range, its owner and its validation, so every formula, every email, every endpoint action and `IS9WD_readConfig_` are unchanged: all of them read by name. This is the second time the naming rule of 2.5 was collected on, and it is the strongest argument in the document for keeping it.
+
+**Both hidden tabs are written by the same code that wrote them before.** `IS9WD_Setup.js` owns `_Engine`, through the same two block writers and the same two painters that write `00 | Configuration`: a block descriptor carries a `tab`, and the writer follows it. `IS9WD_Stats.js` owns `_Views`, and `IS9WD_viewsResize_` is the first of its three entry points.
+
+**Hiding is not a security boundary and never was.** The Canva reader account reads every cell of every tab, hidden or not, which is exactly why no token is ever in one (7.3). `_Engine` is hidden because it is not Ethan's to read, not because it is secret.
+
+**`01 | Canva Feed` is the one tab that may never be hidden.** Whether the Drive connector includes a hidden tab in its read is **unmeasured**, and the entire Sunday run depends on reading that tab, so hiding it would risk the one thing this build exists for. The self test asserts it is visible, by name, in its own sentence.
+
+**Why the two views were inserted at 03 and 04 rather than appended after the Log.** The one hard constraint is that `01 | Canva Feed` stays at position 2, so a truncated connector read loses the Archive and the Log before it loses a contract string (10.1), and inserting leaves it there. The two hidden tabs sit at positions 8 and 9, after the Log, so the seven numbered tabs keep 1 to 7. The reading order for a person is settings, the machine contract, entry, the two views, history, and then nothing else he needs.
+
+**What renumbering the Archive and the Log cost, and why it was safe.** Setup resolves every tab by developer metadata key first, so it finds the existing Archive under `IS9WD_TAB_ARCHIVE` whatever the tab bar says, and no empty twin is created and no row is stranded. Two things make it complete. First, setup **renames** a metadata-resolved sheet to the canonical name when the name it currently carries is one this project wrote, which it recognises from an explicit list of former names; any other name is one Ethan chose by hand and is left alone, and the rename is skipped outright if another sheet already holds the target name. Second, **no formula anywhere references a tab by name**: the diagnostics cells are written as `=IS9WD_FEED_TOTAL` and friends rather than as `='01 | Canva Feed'!C3`, so the renumbering touched no formula.
+
+**Tabs are found by developer metadata first, then by exact name.** Setup stamps each sheet with developer metadata key `IS9WD_TAB_<KEY>` (`CONFIG`, `FEED`, `ITEMS`, `STATS`, `TABLES`, `ARCHIVE`, `LOG`, `ENGINE`, `VIEWS`) the first time it sees it, and afterwards resolves every tab by that key. Only if no sheet carries the key does it fall back to the exact name, and then it stamps it. Without this, renaming `02 | Deliverables` in the tab bar makes the next `Build or repair workbook` create an empty twin under the old name, leaving 2,000 real rows on a sheet nothing reads, with no error. On a freshly created spreadsheet the default `Sheet1` is **renamed** into `00 | Configuration` rather than left beside it, or the workbook ships with ten tabs and the acceptance check in 13.3 counts wrong.
+
+The nine committee tabs from v1 are gone. Canva page numbers come from the directory's `Carousel order` column through the master page mapping in 6.3, not from tab numbers.
+
+`04 | Officer Tables` rather than anything with "committee" in it, because five of the fourteen are offices and the workbook's own vocabulary for the mixed set is `Committee or office`. `03 | Statistics` takes Ethan's own word. The two hidden tabs carry a leading underscore so they read as outside the numbered order at a glance.
 
 ---
 
-## 4. `00 | Configuration`
+## 4. `00 | Configuration`: what a president sets
 
-Block titles in column A of the title row, labels in column A, values in column B, notes to the right. Setup writes the blocks at the rows below, but **code never reads a cell address**: every value carries a named range and setup creates or repoints those names. Moving a block later means re-running `Build or repair workbook`, not editing code.
+Ethan's instruction of 2026-09-27, verbatim: *"for the things i need to encode, put a cream background on it, for the configuration and canva feed, explain what it does so in layman terms, as if i don't know anything about how to code. This is per cell i need to fill up in for"*, and *"Make the entire sheet more premium looking and aesthetic, it looks overwhelming and coded for you and not for me"*.
 
-### 4.1 WEEK SETTINGS (title A3, rows 4 to 14)
+**Where the old numbering went.** Six of section 4's blocks moved to `_Engine`, and this document still points at them by their old numbers in places written before the move. The map, once, so every old pointer leads somewhere:
 
-| Cell | Label | Named range | Default or formula |
+| Was | Is now | Block |
+|---|---|---|
+| 4.1 | 4.1 and 4.2 | the week, split into what is calculated and what he sets |
+| 4.2 | **4B.2** | urgency windows |
+| 4.3 | 4.3 | trimester dates |
+| 4.4 | **4B.3** | the status list and the undo window |
+| 4.5 A | **4B.10** | the weekly sign-off store |
+| 4.5 B | 4.7 | this week's sign-off, the five derived cells |
+| 4.6, the switches | 4.5 and 4.6 | the seven switches, and the three addresses |
+| 4.6, the capacity numbers | **4B.5** | carousel capacity |
+| 4.6, the plumbing | **4B.6** | mail and app plumbing |
+| 4.6, the eight thresholds | **4B.7** | statistics thresholds |
+| 4.7 | **4B.4** | the schedule |
+| 4.8, the seven columns | 4.4 | the people |
+| 4.8, the five machinery columns | **4B.9** | directory machinery |
+| 4.9 | **4B.8** | diagnostics |
+
+
+Both sentences are implemented as rules rather than as intentions, and both are acceptance checks (13.3) and self test assertions (13.4).
+
+### 4.0 The cream rule, and the four columns
+
+**`#e9ebd4` means exactly one thing on a settings or entry tab: this cell is yours to type into.** Nothing else on those tabs carries that fill, ever.
+
+| Column | Holds | Width |
+|---|---|---|
+| A | the block title on a title row, the label on a value row, the `Key` in the directory | 320 |
+| B | the value, and the directory's `Committee or office` | 300 |
+| C | **the plain English hint**, and the directory's `Full name` | 420 |
+| D | the check or the guard note, and the directory's `Position label` | 300 |
+| E | the directory's `Email` | 260 |
+| F | the directory's `On the carousel` | 120 |
+| G | the directory's `Check` | 320 |
+
+Seven columns, not twelve. Column C is the widest on the tab because it carries the sentence beside every cell he types into, and a hint that clips is a hint nobody reads.
+
+**Four things happen to every cell Ethan is expected to fill.** They happen together, from one descriptor, so none of them can be forgotten for one cell:
+
+1. the fill `#e9ebd4`;
+2. the plain English sentence visible beside it in column C, `#58756a` at 9 point, wrapped;
+3. the same sentence as the cell's own **note**, which is what he gets by clicking or hovering;
+4. its data validation, which is what stops the wrong kind of value.
+
+**And two things happen to every cell he must never fill:** it takes the page background rather than cream, and it carries the note `Worked out by the sheet. Do not type here.` The note matters more than it looks: without it, the only thing telling a reader not to type there is the absence of a fill.
+
+**Banding is withdrawn from every block that holds an input column, and existing bandings are removed rather than left.** This is the cost of the cream rule and it is worth paying: row banding alternates `#F8FBFD` and `#e9ebd4`, so a banded block would put cream under half of its calculated cells and destroy the one rule a first time reader can learn in one second.
+
+**The hint sits under the heading, not beside it.** Every block is a spacer, then a 38 px band carrying only the title, then a 26 px hint row carrying the block's own plain English sentence, then the rows. On a table block the hint row carries **one sentence per column**, aligned over the column it describes. The earlier device of riding the help at the end of the band cell in a lighter colour is withdrawn: it read as decoration on the band rather than as an instruction.
+
+**How the writing is judged.** No jargon. The words *named range*, *array*, *boolean*, *string* and *formula* do not appear in a single hint. Each one says what to type and what happens if it is wrong, in that order, and it says the consequence in Ethan's terms: not "the feed renders `WEEK --`" but "the carousel says WEEK -- and no email is sent".
+
+### 4.1 THE WEEK THIS WORKBOOK IS ON (title A4, hint A5, rows 6 to 11)
+
+Six calculated cells, no inputs. Every one of them takes the accent, carries the calculated note and is guarded (5.6).
+
+| Cell | Label | Named range | Formula |
 |---|---|---|---|
-| B4 | Today override (blank uses today) | `IS9WD_TODAY_OVERRIDE` | blank. Date validation, reject input. `C4` shows `Override is not a date` when `AND(B4<>"",NOT(ISNUMBER(B4)))`. |
-| B5 | Effective today | `IS9WD_EFFECTIVE_TODAY` | `=IF(IS9WD_TODAY_OVERRIDE<>"",INT(IS9WD_TODAY_OVERRIDE),TODAY())` |
-| B6 | Week start (Monday) | `IS9WD_WEEK_START` | `=IS9WD_EFFECTIVE_TODAY+1-(WEEKDAY(IS9WD_EFFECTIVE_TODAY+1,2)-1)` |
-| B7 | Week end (Sunday) | `IS9WD_WEEK_END` | `=IS9WD_WEEK_START+6` |
-| B8 | Active trimester | `IS9WD_TERM_ACTIVE` | see 4.3 |
-| B9 | Active trimester start | `IS9WD_TERM_START` | see 4.3 |
-| B10 | Week number | `IS9WD_WEEK_NUMBER` | `=IF(IS9WD_WEEK_NUMBER_OVERRIDE<>"",IS9WD_WEEK_NUMBER_OVERRIDE,IF(NOT(IS9WD_IN_TERM),"",IFERROR(INT((IS9WD_WEEK_START-IS9WD_TERM_START)/7)+1,"")))` |
-| B11 | In term | `IS9WD_IN_TERM` | `=IS9WD_TERM_ACTIVE<>""` |
-| B12 | A.Y. label | `IS9WD_AY_LABEL` | `A.Y. 2026 - 2027` |
-| B13 | Entry cutoff (display text) | `IS9WD_CUTOFF_TEXT` | `Saturday 8 PM before the week starts` |
-| B14 | Week number override (blank uses the calculation) | `IS9WD_WEEK_NUMBER_OVERRIDE` | blank. Whole number validation, 1 to 30, reject input. `C14` reads `Week number override is set: the calculation is ignored` whenever it is non-blank. |
+| B6 | Today | `IS9WD_EFFECTIVE_TODAY` | `=IF(IS9WD_TODAY_OVERRIDE<>"",INT(IS9WD_TODAY_OVERRIDE),TODAY())` |
+| B7 | The week starts (a Monday) | `IS9WD_WEEK_START` | `=IS9WD_EFFECTIVE_TODAY+1-(WEEKDAY(IS9WD_EFFECTIVE_TODAY+1,2)-1)` |
+| B8 | The week ends (a Sunday) | `IS9WD_WEEK_END` | `=IS9WD_WEEK_START+6` |
+| B9 | Week number | `IS9WD_WEEK_NUMBER` | `=IF(IS9WD_WEEK_NUMBER_OVERRIDE<>"",IS9WD_WEEK_NUMBER_OVERRIDE,IF(NOT(IS9WD_IN_TERM),"",IFERROR(INT((IS9WD_WEEK_START-IS9WD_TERM_START)/7)+1,"")))` |
+| B10 | Trimester this week falls in | `IS9WD_TERM_ACTIVE` | the `INDEX`/`MATCH` over `IS9WD_TERM_CAL` |
+| B11 | Inside a trimester right now | `IS9WD_IN_TERM` | `=IS9WD_TERM_ACTIVE<>""`, and `D11` says in plain words what a FALSE costs |
 
-**The week number is a single cell with two guards.** `B10` is what every printed week number reads, so an override there covers the week line, every tagline, every email subject and the app, with nothing else to change. The **override** exists because IS9's own numbering drifts from any arithmetic: a suspended week, a retreat week, or a numbering Ethan inherited mid-term. Filling `B14` wins outright. The **`IS9WD_IN_TERM` guard** is what keeps a blank term calendar honest: without it, `IS9WD_TERM_START` resolves to `""`, the subtraction reads it as zero, and `Week number` prints a five digit number derived from the 1899 date epoch instead of going blank. Blank is the state the feed renders as `WEEK --` (6.4).
-
-Both overrides are read only in two places besides their own cells: the diagnostics block (4.9) and the Sunday brief, which names each one that is set (8.5c). A leftover override is the single most likely way this workbook publishes a confidently wrong carousel, so it is never invisible.
+`IS9WD_TERM_START` is **not** on this tab any more: nothing prints it, only the week number formula divides by it, so it is one row of `WEEK PLUMBING` on `_Engine` (4B.1).
 
 **Week rule.** Week start is the Monday of the week containing **effective today plus one day**. It rolls over on Sunday.
 
@@ -350,151 +422,188 @@ Both overrides are read only in two places besides their own cells: the diagnost
 | Sat 2026-09-26 | Mon 2026-09-21 | Sun 2026-09-27 |
 | Sun 2026-09-27 | Mon 2026-09-28 | Sun 2026-10-04 |
 
-v1's rule rolled over on Saturday. This one does not, deliberately: a Saturday 8 PM cutoff has to sit inside the week it closes.
+v1's rule rolled over on Saturday. This one does not, deliberately: a Saturday 8 PM cutoff has to sit inside the week it closes. Week number is blank outside the term calendar; the feed renders that as `WEEK --` (6.4) and the dispatcher pauses (8.2).
 
-Week number is blank outside the term calendar. The feed renders that as `WEEK --` (6.4) rather than a collapsed string, and the dispatcher pauses (8.2).
+### 4.2 WHAT YOU SET ABOUT THE WEEK (title A13, hint A14, rows 15 to 18)
 
-### 4.2 URGENCY WINDOWS (title A16, header row 17, values 18 to 21)
+Four inputs, all cream, all with a note and a hint.
 
-Header: `Window` | `Dates` | `Station hex` | `Number text hex`.
-
-| Row | Window | Dates | Station hex | Number text hex |
-|---|---|---|---|---|
-| 18 | OVERDUE | deadline before week start | `#e9ebd4` | `#1C2120` |
-| 19 | W1 | Monday to Tuesday of the week | `#e9ebd4` | `#1C2120` |
-| 20 | W2 | Wednesday to Sunday of the week | `#8a64a9` | `#F8FBFD` |
-| 21 | W3 | after week end | `#085040` | `#F8FBFD` |
-
-Named ranges `IS9WD_WINDOW_NAMES` = `A18:A21`, `IS9WD_HEX` = `C18:D21`. Colors live in cells so they change without code. Unchanged from v1.
-
-**Every hex is validated, because these four rows are the only Configuration values that reach Canva as machine input rather than as text.** The Canva tool rejects a malformed hex outright, and a rejection arrives in the middle of the weekly run, several pages in. `E18`, filled down through `E21`: `=IF(AND(REGEXMATCH($C18,"^#[0-9A-Fa-f]{6}$"),REGEXMATCH($D18,"^#[0-9A-Fa-f]{6}$")),"OK","Hex is not #RRGGBB")`. `IS9WD_selfTest()` fails on any row that is not `OK`, and so does the Sunday brief. Three character shorthand (`#fff`), a missing `#` and a stray space are the three real cases, and all three look correct at a glance in a cell.
-
-### 4.3 TERM CALENDAR (title A23, header row 24, values 25 to 27)
-
-Header: `Trimester` | `Start (a Monday)` | `End` | `Check`.
-
-Named ranges `IS9WD_TERM_CAL` = `A25:C27`, `IS9WD_TERM_STARTS` = `B25:B27`, `IS9WD_TERM_ENDS` = `C25:C27`.
-
-`D25`, filled down: `=IF($B25="","",IF(WEEKDAY($B25,2)<>1,"Start is not a Monday",IF($C25<$B25,"End is before start","OK")))`
-
-`IS9WD_TERM_ACTIVE` (B8): `=IFERROR(INDEX($A$25:$A$27,MATCH(1,ARRAYFORMULA(($B$25:$B$27<=IS9WD_WEEK_START)*($C$25:$C$27>=IS9WD_WEEK_START)),0)),"")`
-
-`IS9WD_TERM_START` (B9): the same `INDEX` over `$B$25:$B$27`.
-
-Week numbers restart at 01 in each trimester. Automation pauses whenever `IS9WD_IN_TERM` is FALSE, which covers breaks between trimesters and the whole period before Ethan fills the calendar.
-
-**Term 1 starts Monday 2026-09-07.** Ethan confirmed on 2026-09-27 that the week beginning Monday 2026-09-28 is Week 04, and three weeks back from that Monday is 2026-09-07. That is the value to enter in `B25` at setup: `2026-09-07`, with `A25` reading `Term 1`. The arithmetic is worth writing down once, because it is the one number that shifts every week label in the workbook: `INT((2026-09-28 minus 2026-09-07) / 7) + 1` is `INT(21 / 7) + 1`, which is `4`.
-
-**Terms 2 and 3 ship blank, and `C25` may have to ship provisional.** The full trimester calendar does not exist yet. What the workbook does in that state, stated so nobody discovers it in December:
-
-- **A blank `End` on Term 1 is not a harmless blank.** `IS9WD_TERM_ACTIVE` matches on `Start <= week start` **and** `End >= week start`, and a blank `End` reads as zero, so a blank end date makes `In term` FALSE in the middle of Term 1: the week number goes blank, every week line and tagline renders `WEEK --`, the dispatcher sends nothing, and every app write is refused with `OUT_OF_TERM`. So `C25` must carry a date even if the official one is not published. Enter a provisional end, generously late rather than early, and correct it when the calendar lands. The `Check` column cannot catch this, because a blank row is a legitimate state for rows 26 and 27.
-- **With rows 26 and 27 blank, the workbook is correct and quiet.** Outside Term 1's span `IS9WD_IN_TERM` is FALSE, which is the same state as a between-trimesters break: the feed still renders, every count is still right, the week line reads `WEEK --`, and nothing is emailed or written. This is deliberate. The failure mode it prevents is worse than a pause: a week number computed from a term that has not been defined, printed on a published carousel.
-- Filling rows 26 and 27 later needs no code and no rebuild. It is two rows of dates, and `D26` and `D27` verify each start is a Monday.
-
-### 4.4 STATUS LIST (title A29, header row 30, statuses 31 and 32, undo window row 34)
-
-Header: `Status` | `Terminal` | `Chip hex` | `Chip text hex`.
-
-| Row | Status | Terminal |
-|---|---|---|
-| 31 | `Open` | FALSE |
-| 32 | `Accomplished` | TRUE (checkbox) |
-
-Named ranges `IS9WD_STATUS_LIST` = `A31:A32`, `IS9WD_STATUS_TERMINAL` = `B31:B32`, `IS9WD_STATUS_HEX` = `C31:D32`. Setup re-points all three, so a third status later is an edit here plus one `Build or repair workbook`, not a code change. Do not leave a blank row inside the list: `MATCH` against a blank would make a blank status look like a known one.
-
-Row 33 stays empty. `A34` is the label `Undo window (seconds)` and `B34` the value, named range `IS9WD_UNDO_SECONDS`, default `60`, integer validation. It is a setting rather than a constant because settings live in Configuration. `0` disables unticking altogether, which is a supported state: only Ethan could then reopen an item.
-
-This block is the only place a status label exists. It feeds the column F dropdown, the server-side validation, the checkbox colors in the app, and the `Active` formula in 5.1. Rules: exactly one row is terminal, and a status already used by an item must not be renamed (rename it and every item holding it becomes `Missing status`, which is flagged, not silent).
-
-### 4.5 WEEKLY SIGN-OFF (derived cells at title A36, rows 37 to 41; the per-week store at title A115, header row 116, rows 117 to 168)
-
-**Decided by Ethan on 2026-09-27: the sign-off is per week, not a static setting.** The Prepared by and Checked by names change every week. Four fixed Configuration cells would therefore print last week's names on this week's carousel, with nothing anywhere to say so, and the error is invisible at exactly the moment it is published. v1's four static inputs are removed and nothing reads them any more.
-
-**A. The store** (title A115, header row 116, values 117 to 168), one row per week, keyed on that week's Monday. The block moved down by three rows when the switches block took the three carousel capacity numbers, and down eight more when it took the eight statistics settings (4.6). Both moves had to land before Gate A, because setup may widen an append only block and may never migrate its rows: today the store holds zero filled rows, so both moves cost nothing.
-
-Header: `Week start` | `Prepared by name` | `Prepared by position` | `Checked by name` | `Checked by position` | `Set at` | `Check`.
-
-Named ranges `IS9WD_SIGNOFF` = `A117:F168`, `IS9WD_SIGNOFF_WEEKS` = `A117:A168`, `IS9WD_SIGNOFF_PREPARED_NAME` = `B117:B168`, `IS9WD_SIGNOFF_PREPARED_POSITION` = `C117:C168`, `IS9WD_SIGNOFF_CHECKED_NAME` = `D117:D168`, `IS9WD_SIGNOFF_CHECKED_POSITION` = `E117:E168`, `IS9WD_SIGNOFF_SET_AT` = `F117:F168`.
-
-- 52 rows, one academic year of weeks. The block sits at the **bottom** of Configuration precisely so it can grow downward without moving a single block above it. `Build or repair workbook` re-points the ranges and appends 52 more rows whenever fewer than four blank rows remain, so it can never silently run out mid-trimester.
-- `Week start` is date formatted and must be a Monday. `G117` filled down: `=IF($A117="","",IF(WEEKDAY($A117,2)<>1,"Week start is not a Monday",IF(COUNTIF($A$117:$A$168,$A117)>1,"Duplicate week","OK")))`. A duplicate week would make `MATCH` pick the first row and silently ignore a correction typed into the second. `IS9WD_selfTest()` fails on any row that is not `OK` or blank.
-- `Set at` is a code-written timestamp. The row is written by `setSignoff` (7.4) or typed by hand.
-- The store is **append or replace by week, never cleared**, which is what lets the Archive record who signed off on which week (10.1) after the names have moved on.
-
-**B. The derived cells** (title A36, rows 37 to 41) keep v1's four named range names, so every formula in section 6 and every email that already reads them is unchanged. They are now lookups of the current week rather than typed text.
-
-| Cell | Label | Named range | Formula |
+| Cell | Label | Named range | Default and validation |
 |---|---|---|---|
-| B37 | Prepared by name (this week) | `IS9WD_PREPARED_NAME` | `=IFERROR(INDEX(IS9WD_SIGNOFF_PREPARED_NAME,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")` |
-| B38 | Prepared by position (this week) | `IS9WD_PREPARED_POSITION` | the same shape over `IS9WD_SIGNOFF_PREPARED_POSITION` |
-| B39 | Checked by name (this week) | `IS9WD_CHECKED_NAME` | the same shape over `IS9WD_SIGNOFF_CHECKED_NAME` |
-| B40 | Checked by position (this week) | `IS9WD_CHECKED_POSITION` | the same shape over `IS9WD_SIGNOFF_CHECKED_POSITION` |
-| B41 | Sign-off set for this week | `IS9WD_SIGNOFF_SET` | `=AND(IS9WD_PREPARED_NAME<>"",IS9WD_PREPARED_POSITION<>"",IS9WD_CHECKED_NAME<>"",IS9WD_CHECKED_POSITION<>"")` |
+| B15 | Academic year, printed on the carousel | `IS9WD_AY_LABEL` | `A.Y. 2026 - 2027` |
+| B16 | Deadline for entering next week, printed in emails | `IS9WD_CUTOFF_TEXT` | `Saturday 8 PM before the week starts` |
+| B17 | Pretend today is a different date | `IS9WD_TODAY_OVERRIDE` | blank, date validation, reject input |
+| B18 | Force a week number | `IS9WD_WEEK_NUMBER_OVERRIDE` | blank, whole number 1 to 30, reject input |
 
-All five are formulas, so all five are in the warning-only guard list (5.6) and nobody types into them. `C37` reads `Sign-off not set for this week` while `IS9WD_SIGNOFF_SET` is FALSE.
+**The two overrides are the single most likely way this workbook publishes a confidently wrong carousel, so neither is ever invisible.** Each one's hint opens with "Leave this empty almost always" and closes with what to do when it is not. `D17` says either `That is not a date. Clear the cell or pick a date.` or, when it is set, `This is switched on, so the whole sheet is pretending.` `D18` says `This is switched on, so the week number above is ignored.` Both are also named in the Sunday brief (8.5c), both appear on `_Views`' operational health row, and the Today override additionally tags the feed's `Feed as of` cell (6.5) and pauses the dispatcher.
 
-**C. `Ready for Canva` reads NO until the current week's sign-off is set** (6.4 Block A). Decided, not proposed: the alternative is silently printing last week's names on a published carousel, and a blocked run that says why is cheaper than a published page with the wrong signature. Appendix A2 item 5 is withdrawn.
+**The week number is one cell with two guards.** `B9` is what every printed week number reads, so an override covers the week line, every tagline, every email subject and the app with nothing else to change. The `IS9WD_IN_TERM` guard is what keeps a blank term calendar honest: without it, `IS9WD_TERM_START` resolves to `""`, the subtraction reads it as zero, and `Week number` prints a five digit number derived from the 1899 date epoch instead of going blank.
 
-**D. How Ethan sets it.** One card in the admin view, for the current week start. For each of Prepared by and Checked by: a **picker listing all 14 directory entries** in hierarchy order (4.8) by name, with that entry's `Position label` prefilled into the position field and **editable**, plus free text for a name outside the 14, which is the case for a faculty adviser or an outgoing officer. Saving calls `setSignoff` (7.4), which writes or replaces the row for that week and stamps `Set at`. The picker opens prefilled with the previous week's values as a convenience and **stores nothing until Ethan saves**, so the readiness gate still bites every week rather than being satisfied by last week's row. The store is plain cells, so with the app down Ethan types the row by hand, which is the same hand-usable rule as 2.2.
+### 4.3 TRIMESTER DATES (title A20, hint A21, header row 22, values 23 to 25)
 
-One thing to look at on the first run: the directory's `Position label` is upper case (`VICE PRESIDENT`), while the title page prints the prepared-by position **as typed** and v1's worked example shows `Vice President`. So an unedited prefill publishes an upper case position. The field is editable and what the cell holds is exactly what the carousel prints, so there is nothing hidden here, but it is a choice Ethan should make once rather than discover. Appendix B item 10.
+Header: `Trimester` | `First day (a Monday)` | `Last day` | `Check`. Named ranges `IS9WD_TERM_CAL` = `A23:C25`, `IS9WD_TERM_STARTS` = `B23:B25`, `IS9WD_TERM_ENDS` = `C23:C25`.
 
-**E. The Sunday brief states the current week's sign-off** (8.5c), with both names and both positions, so a wrong one is correctable from the phone that received the email, before the run rather than after it.
+The three input columns are cream with a note each. `D23`, filled down with `PASTE_FORMULA`, is a template rather than a typed address:
 
-### 4.6 SWITCHES (title A42, rows 43 to 75)
+```
+=IF($B{row}="","",IF(WEEKDAY($B{row},2)<>1,
+  "The start is not a Monday. Pick the Monday that trimester begins.",
+  IF($C{row}<$B{row},"The end is before the start. Check both dates.","OK")))
+```
+
+**Term 1 starts Monday 2026-09-07.** Ethan confirmed on 2026-09-27 that the week beginning Monday 2026-09-28 is Week 04, and three weeks back from that Monday is 2026-09-07. `INT((2026-09-28 minus 2026-09-07) / 7) + 1` is `INT(21 / 7) + 1`, which is `4`.
+
+**A blank `Last day` on the trimester in progress is not a harmless blank,** and the column's hint says so in the strongest terms it can: an empty cell there makes `In term` FALSE in the middle of Term 1, blanks the week number, renders every week line as `WEEK --`, stops every email and refuses every app write with `OUT_OF_TERM`. If the official date is not published, enter a generous later one and correct it. The `Check` column cannot catch this, because a blank row is a legitimate state for the other two.
+
+### 4.4 THE PEOPLE (title A27, hint A28, header row 29, values 30 to 43)
+
+**Fourteen rows, seven columns.** Header: `Key` | `Committee or office` | `Full name` | `Position label` | `Email` | `On the carousel` | `Check`.
+
+Named ranges: `IS9WD_DIRECTORY` = `A30:G43`, `IS9WD_DIR_KEY` = `A30:A43`, `IS9WD_DIR_NAME` = `B30:B43`, `IS9WD_DIR_VP` = `C30:C43`, `IS9WD_DIR_POSITION` = `D30:D43`, `IS9WD_DIR_EMAIL` = `E30:E43`, `IS9WD_DIR_PUBLISHES` = `F30:F43`. Every name is v1's and keeps its meaning.
+
+**Five columns moved to `_Engine` and the reason is Ethan's, not mine.** `Carousel order`, `Hierarchy order`, `Token prefix`, `Token issued` and `Revoked` are all machinery: two are write-once ordinals the master page arithmetic depends on, two are a token's identification, and one is set from a menu action. He asked for exactly that to be out of his way. They live in `DIRECTORY MACHINERY` on `_Engine` (4B.8), **in the same row order with the same Key**, and the two halves are joined by row position.
+
+**The join is by row, and a mismatch is reported rather than resolved.** `IS9WD_readDirectory_` zips the two blocks by index and collects a `keyMismatch` list; the self test fails on it by name. A join by lookup on the Key was rejected: a mistyped Key on one tab would then read as a different officer on the other, which is a silent wrong answer, where a mismatch is a loud one. The rule that follows is written into both tabs' hint rows: **never insert, delete or reorder a row on either half.**
+
+| Row | Key | Committee or office | Position label | On the carousel |
+|---|---|---|---|---|
+| 30 | `K01` | Partnerships | VICE PRESIDENT | TRUE |
+| 31 | `K02` | Publications | VICE PRESIDENT | TRUE |
+| 32 | `K03` | Marketing and Advocacy | VICE PRESIDENT | TRUE |
+| 33 | `K04` | Membership | VICE PRESIDENT | TRUE |
+| 34 | `K05` | Team Management | VICE PRESIDENT | TRUE |
+| 35 | `K06` | Investment Strategy & Education | VICE PRESIDENT | TRUE |
+| 36 | `K07` | Investment Research | VICE PRESIDENT | TRUE |
+| 37 | `K08` | Documentation | VICE PRESIDENT | TRUE |
+| 38 | `K09` | Finance | VICE PRESIDENT | TRUE |
+| 39 | `K10` | President | PRESIDENT | FALSE |
+| 40 | `K11` | Executive Vice President for Externals | EXECUTIVE VICE PRESIDENT FOR EXTERNALS | FALSE |
+| 41 | `K12` | Executive Vice President for Internals | EXECUTIVE VICE PRESIDENT FOR INTERNALS | FALSE |
+| 42 | `K13` | Executive Vice President for Investments | EXECUTIVE VICE PRESIDENT FOR INVESTMENTS | FALSE |
+| 43 | `K14` | Executive Vice President for Operations | EXECUTIVE VICE PRESIDENT FOR OPERATIONS | FALSE |
+
+- **`Key` is never edited**, and its hint says why in one sentence: it is the name of that person's private link. It is the Script Properties key (7.3) and the argument to `IS9WD_linkFor_()`. It is guarded on both tabs.
+- **`On the carousel`** is the renamed `Publishes`, because "publishes" is jargon for a checkbox and "on the carousel" is what it does. It is the one input cell in the workbook that is deliberately **unguarded**, because it is the cell Ethan is meant to edit to change the publish set and a warning prompt there would be a prompt on the intended action.
+- **`Full name` and `Email` are deliberately blank in this document.** The directory is fourteen students' names and DLSU addresses and this file is committed to a public repo (2.6). Ethan pastes all fourteen names into `C30:C43` and all fourteen addresses into `E30:E43` at Gate A.
+- **`Check` is written in plain words**, because he reads it rather than debugging it: `No name yet`, `No email yet`, `On the carousel with no slide number: ask before changing this`, `Two rows share one slide number`, `Slide number is out of range`, `No private link yet: run Build or repair workbook`, `Your own admin link` on `K10`, `Link is <n> days old`, `Link revoked`, or `OK`. The five machinery columns it tests are reached by name through `INDEX(IS9WD_DIR_CAROUSEL, ROW()-29)` rather than by letter, which is what lets the column live on a different tab from the values it checks.
+- **`K10`, the President's row, is Ethan's own and carries no member token.** He holds the admin token and nothing else (7.3), so setup writes no token for that row, `Token prefix` stays blank on `_Engine`, `Check` reads `Your own admin link`, and `IS9WD_linkFor_('K10')` returns the admin link.
+- There is **no Link column**. One server-side helper, `IS9WD_linkFor_(key)`, is the only thing that builds a link.
+
+### 4.5 SWITCHES (title A45, hint A46, rows 47 to 53)
+
+Seven tick boxes and nothing else. Each one is cream, each one carries a note, and each hint says what a tick means and what clearing it costs.
 
 | Cell | Label | Named range | Default |
 |---|---|---|---|
-| B43 | Automation on | `IS9WD_AUTOMATION_ON` | TRUE |
-| B44 | Test mode (every email goes to the admin) | `IS9WD_TEST_MODE` | TRUE |
-| B45 | Monday assignment email on | `IS9WD_MAIL_MONDAY` | TRUE |
-| B46 | Daily digest email on | `IS9WD_MAIL_DAILY` | TRUE |
-| B47 | Sunday brief email on | `IS9WD_MAIL_SUNDAY` | TRUE |
-| B48 | Error alert email on | `IS9WD_MAIL_ALERT` | TRUE |
-| B49 | Send as no reply (Workspace only) | `IS9WD_MAIL_NOREPLY` | FALSE |
-| B50 | App on | `IS9WD_APP_ON` | TRUE |
-| B51 | Slots per Canva page | `IS9WD_SLOTS_PER_PAGE` | 10. Whole number 1 to 50, reject input. The number of item frames the master page physically carries. |
-| B52 | Maximum Canva pages per committee | `IS9WD_MAX_PARTS` | 2. Whole number 1 to 4, reject input. Raising it needs a master rebuild before it can be used (6.3). |
-| B53 | Publishable items per committee (derived) | `IS9WD_PUBLISH_MAX` | `=IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS`, which is 20. A formula, guarded by `C53`. |
-| B54 | Publish a page for a committee with no items | `IS9WD_PUBLISH_EMPTY_PAGES` | TRUE, which reproduces the v1 behaviour: an empty committee still gets a page reading `No deliverables this week`. FALSE drops that page from the carousel, which is the only relief valve if the slide count ever mattered, and at 19 pages it cannot (6.1 item 8). |
-| B55 | Email quota reserve | `IS9WD_QUOTA_RESERVE` | 100 |
-| B56 | Retire accomplished after days | `IS9WD_RETIRE_DAYS` | 14 |
-| B57 | Token age warning days | `IS9WD_TOKEN_WARN_DAYS` | 120 |
-| B58 | Admin email | `IS9WD_ADMIN_EMAIL` | blank. Ethan pastes his DLSU address at setup. No address is written into the repo (2.6). |
-| B59 | Automation owner email | `IS9WD_AUTOMATION_OWNER` | blank, the same address |
-| B60 | Reply-to email | `IS9WD_REPLY_TO` | blank, the same address |
-| B61 | Sender display name | `IS9WD_SENDER_NAME` | `IS9 Deliverables Tracker` |
-| B62 | App base URL | `IS9WD_APP_BASE_URL` | blank, pasted after the first Pages build |
-| B63 | Endpoint URL (/exec) | `IS9WD_ENDPOINT_URL` | blank, pasted after the first deployment |
-| B64 | Transport (`fetch` or `gsrun`) | `IS9WD_TRANSPORT` | `fetch` |
-| B65 | Canva reader email (Drive connector fallback) | `IS9WD_READER_EMAIL` | blank, Ethan fills **only if** the DLSU account cannot read the Sheet through the connector (2.2). Recorded only, never used by code. Blank is the good outcome: it means no share was needed. |
-| B66 | Last heartbeat | `IS9WD_HEARTBEAT` | written by the dispatcher |
-| B67 | Last dispatcher owner | `IS9WD_LAST_OWNER` | written by the dispatcher |
-| B68 | Statistics: trend weeks | `IS9WD_STATS_TREND_WEEKS` | 8. Whole number 2 to 26, reject input. A layout setting: it decides the trend block's height, so `C68` guards it against `IS9WD_STATS_TREND_BUILT` (6A). |
-| B69 | Statistics: fewest items past their deadline before a rate is scored | `IS9WD_STATS_MIN_JUDGED` | 3. Whole number 1 to 50. Below it, `On time` is blank rather than 100% off one item. |
-| B70 | Statistics: days without a tick before an officer reads as silent | `IS9WD_STATS_SILENT_DAYS` | 7. Whole number 1 to 60. |
-| B71 | Statistics: days late before the worst-late number flags | `IS9WD_STATS_LATE_DAYS` | 3. Whole number 1 to 60. |
-| B72 | Statistics: slack allowed against the week's pace | `IS9WD_STATS_PACE_SLACK` | 0.15, formatted `0%`. A number 0 to 1, reject input, so a typed `15` cannot become 1500%. |
-| B73 | Statistics: on-time target | `IS9WD_STATS_ONTIME_TARGET` | 0.8, formatted `0%`, the same validation. |
-| B74 | Statistics: weeks of row room left before it flags | `IS9WD_STATS_ROOM_WEEKS_WARN` | 4. Whole number 1 to 52. |
-| B75 | Rows reserved per officer on `04 \| Officer Tables` | `IS9WD_STATS_OFFICER_ROWS` | 13, which shows 12 items because one row is the overflow notice. Whole number 3 to 40. A layout setting, so `C75` guards it against `IS9WD_OT_ROWS_BUILT` (6B). |
+| B47 | Run the automatic jobs | `IS9WD_AUTOMATION_ON` | TRUE |
+| B48 | Test mode: send every email to me instead | `IS9WD_TEST_MODE` | TRUE |
+| B49 | Monday email: this week's list | `IS9WD_MAIL_MONDAY` | TRUE |
+| B50 | Daily email: due tomorrow or late | `IS9WD_MAIL_DAILY` | TRUE |
+| B51 | Sunday email: your own summary | `IS9WD_MAIL_SUNDAY` | TRUE |
+| B52 | Email me when something breaks | `IS9WD_MAIL_ALERT` | TRUE |
+| B53 | Officers' phone links work | `IS9WD_APP_ON` | TRUE |
 
-**The eight statistics settings, and why they are settings.** Every threshold on `03 | Statistics` and both row counts on the two views are here, so a number Ethan disagrees with is one edit and never a push. Two of them decide a layout rather than a threshold, and a layout setting changed without a rebuild would otherwise show a stale tab with nothing saying so, so each one carries a guard note in column C comparing the setting against the value setup actually built, and the self test fails on the mismatch:
+Every label is rewritten from the v1 wording for the same reason the `Check` strings are: `Monday assignment email on` describes the code and `Monday email: this week's list` describes what arrives. Test mode defaults ON, matching the EBEXECOM email engine, and turning it off is a menu action with a confirm dialog naming how many people will receive mail on the next run.
 
-```
-C68  =IF(IS9WD_STATS_TREND_WEEKS<>IS9WD_STATS_TREND_BUILT,
-        "Run Build or repair workbook: the trend weeks do not match the tab","OK")
-C75  =IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,
-        "Run Build or repair workbook: the reserved rows do not match the tab","OK")
-```
+`IS9WD_MAIL_NOREPLY` is not here: it works only on a Workspace account and it is plumbing, so it is on `_Engine` (4B.6).
 
-**Inserting eight rows moved four blocks down, and one of them is append only.** `SCHEDULE` moves from title A69 to A77 and rows 71 to 75 become 79 to 83; `DIRECTORY` from A77 to A85 and rows 79 to 92 become 87 to 100; `DIAGNOSTICS` from A94 to A102 and rows 95 to 105 become 103 to 113; the sign-off store from A107 to A115, header 108 to 116, first row 109 to 117, last row 160 to 168, and its `Check` formula's literal addresses move with it. **Nothing else changed, because everything is read by name**, which is the whole payoff of the naming rule and the first time it was collected on.
+### 4.6 ADDRESSES AND LINKS (title A55, hint A56, rows 57 to 59)
 
-The store is the exception worth stating: setup may widen an append only block and may never migrate its rows, so a filled store row at the old first row would fall outside the block and outside every named range over it. Today the store holds **zero** filled rows, so the cost of the move is zero. **It has to land before Gate A**, because after it the move is a migration setup cannot perform.
+| Cell | Label | Named range | Default |
+|---|---|---|---|
+| B57 | Your own email address | `IS9WD_ADMIN_EMAIL` | blank, and `D57` says so until it is filled |
+| B58 | Web address of the officers' page | `IS9WD_APP_BASE_URL` | blank, pasted after the first Pages build |
+| B59 | Web address the page talks to | `IS9WD_ENDPOINT_URL` | blank, pasted after the first deployment |
 
-**The three capacity numbers, and why they are three.** `IS9WD_MAX_OPEN` is gone. It did two jobs at once, the count the endpoint refused past and the number of frames on a Canva page, and a continuation page requires those to be different numbers (5.4). So there are three: the physical page size, the number of pages a committee may own, and the product, which is the most items a committee can publish. Nothing keys on a status label in this build, and by the same principle nothing keys on the coincidence that a cap happens to equal a page size.
+All three are blank on purpose: an address or an endpoint typed into this spec would be an address or an endpoint committed to a public repo (2.6). The hints say what each one is in a president's terms: the endpoint is "the door between the officers' page and this sheet: if it is empty or wrong, ticking a box on a phone does nothing".
 
-**Three numbers can disagree, so `C53` is a guard, not a comment.** `B53` is a formula, and a formula is exactly what a multi-cell paste replaces with a typed value; after that the workbook would compute slot keys for items that no Canva page can hold, and nothing would say so. `C53`:
+### 4.7 THIS WEEK'S SIGN-OFF (title A61, hint A62, rows 63 to 67)
+
+**Decided by Ethan on 2026-09-27: the sign-off is per week, not a static setting.** The Prepared by and Checked by names change every week. Four fixed Configuration cells would therefore print last week's names on this week's carousel, with nothing anywhere to say so, and the error is invisible at exactly the moment it is published.
+
+All five cells are calculated lookups of this week's row of the store, which is on `_Engine` (4B.9), so none of them is cream and all five carry the calculated note.
+
+| Cell | Label | Named range | Formula |
+|---|---|---|---|
+| B63 | Prepared by, name | `IS9WD_PREPARED_NAME` | `=IFERROR(INDEX(IS9WD_SIGNOFF_PREPARED_NAME,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")` |
+| B64 | Prepared by, position | `IS9WD_PREPARED_POSITION` | the same shape over `IS9WD_SIGNOFF_PREPARED_POSITION` |
+| B65 | Checked by, name | `IS9WD_CHECKED_NAME` | the same shape over `IS9WD_SIGNOFF_CHECKED_NAME` |
+| B66 | Checked by, position | `IS9WD_CHECKED_POSITION` | the same shape over `IS9WD_SIGNOFF_CHECKED_POSITION` |
+| B67 | Signed off for this week | `IS9WD_SIGNOFF_SET` | `=AND(...all four are non-blank...)` |
+
+`D63` reads, in plain words, `Nobody has signed off on this week yet, so the carousel is held back. Set Prepared by and Checked by in the officers' page.` **`Ready for Canva` reads NO until this week's sign-off is set** (6.4 Block A): decided, not proposed, because the alternative is silently printing last week's names on a published carousel. Appendix A2 item 5 is withdrawn.
+
+**How Ethan sets it.** One card in the admin view, for the current week start. For each of Prepared by and Checked by: a **picker listing all 14 directory entries** in hierarchy order by name, with that entry's `Position label` prefilled and editable, plus free text for a name outside the 14, which is the case for a faculty adviser or an outgoing officer. Saving calls `setSignoff` (7.4), which writes or replaces the row for that week and stamps `Set at`. The picker opens prefilled with the previous week's values and **stores nothing until Ethan saves**, so the readiness gate still bites every week. The store is plain cells, so with the app down he types the row by hand on `_Engine`.
+
+---
+
+## 4B. `_Engine`: every setting that exists for the code
+
+Hidden, nine columns, ends on the sign-off store's live last row. It carries the same two block shapes as `00 | Configuration` and is written by the same writer and the same painter: a block descriptor names its own `tab`.
+
+**The cream rule applies here too, and that is deliberate rather than incidental.** A hidden tab is still a tab somebody will one day have to edit, probably in a hurry, probably a successor. So every input cell on it is cream with a note and a hint, and every calculated cell says it is calculated. The self test asserts it on both tabs with the same code.
+
+| Block | Title | Rows | Named ranges |
+|---|---|---|---|
+| 4B.1 | WEEK PLUMBING | 6 | `IS9WD_TERM_START` |
+| 4B.2 | URGENCY WINDOWS | 11 to 14 | `IS9WD_WINDOW_NAMES`, `IS9WD_HEX` |
+| 4B.3 | STATUS LIST | 19 to 20, undo on 22 | `IS9WD_STATUS_LIST`, `IS9WD_STATUS_TERMINAL`, `IS9WD_STATUS_HEX`, `IS9WD_UNDO_SECONDS` |
+| 4B.4 | SCHEDULE | 27 to 31 | `IS9WD_SCHEDULE` |
+| 4B.5 | CAROUSEL CAPACITY | 35 to 38 | `IS9WD_SLOTS_PER_PAGE`, `IS9WD_MAX_PARTS`, `IS9WD_PUBLISH_MAX`, `IS9WD_PUBLISH_EMPTY_PAGES` |
+| 4B.6 | MAIL AND APP PLUMBING | 42 to 52 | `IS9WD_MAIL_NOREPLY`, `IS9WD_QUOTA_RESERVE`, `IS9WD_RETIRE_DAYS`, `IS9WD_TOKEN_WARN_DAYS`, `IS9WD_AUTOMATION_OWNER`, `IS9WD_REPLY_TO`, `IS9WD_SENDER_NAME`, `IS9WD_TRANSPORT`, `IS9WD_READER_EMAIL`, `IS9WD_HEARTBEAT`, `IS9WD_LAST_OWNER` |
+| 4B.7 | STATISTICS THRESHOLDS | 56 to 63 | the eight below |
+| 4B.8 | DIAGNOSTICS | 67 to 77 | `IS9WD_DIAG_LAST_RUN`, `_QUOTA`, `_SELFTEST`, `_DEPLOYMENT`, `_OVERRIDES` |
+| 4B.9 | DIRECTORY MACHINERY | 82 to 95 | `IS9WD_DIR_ENGINE`, `IS9WD_DIR_CAROUSEL`, `IS9WD_DIR_HIERARCHY`, `IS9WD_DIR_PREFIX`, `IS9WD_DIR_ISSUED`, `IS9WD_DIR_REVOKED` |
+| 4B.10 | WEEKLY SIGN-OFF STORE | 100 to 151, grows | `IS9WD_SIGNOFF` and the six column names |
+
+### 4B.2 URGENCY WINDOWS
+
+| Row | Window | Dates | Station hex | Number text hex |
+|---|---|---|---|---|
+| 11 | OVERDUE | deadline before week start | `#e9ebd4` | `#1C2120` |
+| 12 | W1 | Monday to Tuesday of the week | `#e9ebd4` | `#1C2120` |
+| 13 | W2 | Wednesday to Sunday of the week | `#8a64a9` | `#F8FBFD` |
+| 14 | W3 | after week end | `#085040` | `#F8FBFD` |
+
+**Every hex is validated, because these four rows are the only settings that reach Canva as machine input rather than as text.** The Canva tool rejects a malformed hex outright, and a rejection arrives in the middle of the weekly run, several pages in. `E11`, filled down: `=IF(AND(REGEXMATCH($C{row},"^#[0-9A-Fa-f]{6}$"),REGEXMATCH($D{row},"^#[0-9A-Fa-f]{6}$")),"OK","Hex is not #RRGGBB")`. Three character shorthand, a missing `#` and a stray space are the three real cases, and all three look correct at a glance. A hex cell is never painted with the colour it holds: two of them hold `#1C2120`, which appears nowhere in the workbook.
+
+### 4B.3 STATUS LIST
+
+| Row | Status | Terminal |
+|---|---|---|
+| 19 | `Open` | FALSE |
+| 20 | `Accomplished` | TRUE (checkbox) |
+
+Row 21 stays empty. `A22` is the label `Undo window (seconds)` and `B22` the value, default `60`, integer validation. `0` disables unticking altogether, which is a supported state: only Ethan could then reopen an item.
+
+This block is the only place a status label exists. It feeds the `Status` dropdown on the data tab, the server-side validation, the checkbox colours in the app, and the `Active` formula in 5.1. Rules: exactly one row is terminal, and a status already used by an item must not be renamed. Setup re-points all three ranges, so a third status later is an edit here plus one `Build or repair workbook`.
+
+### 4B.4 SCHEDULE
+
+Header: `Job key` | `Runs` | `Day` | `Hour` | `Catch-up hours` | `On` | `Check` | `Last run` | `Last status`.
+
+| Row | Job key | Runs | Day | Hour (Manila) | Catch-up | On |
+|---|---|---|---|---|---|---|
+| 27 | `MONDAY_ASSIGNMENTS` | Weekly | Monday | 7 | 6 | TRUE |
+| 28 | `DAILY_DIGEST` | Daily | Any | 18 | 4 | TRUE |
+| 29 | `SUNDAY_BRIEF` | Weekly | Sunday | 19 | 4 | TRUE |
+| 30 | `ARCHIVE_WEEK` | Weekly | Saturday | 22 | 2 | TRUE |
+| 31 | `RETIRE_ACCOMPLISHED` | Weekly | Saturday | 23 | 2 | TRUE |
+
+`Runs` is a dropdown (`Daily`, `Weekly`), `Day` a dropdown of the seven English weekday names plus `Any`, both reject input, so a typo cannot silently turn a weekly job into one that never runs. `Check` reads `Row does not parse` when `Runs` is `Weekly` and `Day` is `Any`, or `Hour` is not an integer 0 to 23. There is **no HEARTBEAT row**: the heartbeat is dispatcher behaviour on every run (8.4), and a schedule row would have capped it at once a day through its done key. `ARCHIVE_WEEK` runs on **Saturday**, not Sunday, because the week rule rolls over on Sunday: a Saturday run still sees the week that is ending.
+
+### 4B.5 CAROUSEL CAPACITY
+
+| Cell | Label | Named range | Default |
+|---|---|---|---|
+| B35 | Slots per Canva page | `IS9WD_SLOTS_PER_PAGE` | 10, whole number 1 to 50 |
+| B36 | Maximum Canva pages per committee | `IS9WD_MAX_PARTS` | 2, whole number 1 to 4 |
+| B37 | Publishable items per committee (derived) | `IS9WD_PUBLISH_MAX` | `=IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS`, guarded by `D37` |
+| B38 | Publish a page for a committee with no items | `IS9WD_PUBLISH_EMPTY_PAGES` | TRUE |
+
+**Three numbers, because a continuation page requires them to be different numbers** (5.4): the physical page size, the number of pages a committee may own, and the product. `IS9WD_MAX_OPEN` is gone; it did two jobs at once.
+
+**Three numbers can disagree, so `D37` is a guard rather than a comment.** `B37` is a formula, and a formula is exactly what a multi-cell paste replaces with a typed value; after that the workbook would compute slot keys for items no Canva page can hold, and nothing would say so.
 
 ```
 =IF(NOT(ISNUMBER(IS9WD_PUBLISH_MAX)),"Publishable maximum is not a number",
@@ -503,103 +612,86 @@ The store is the exception worth stating: setup may widen an append only block a
    "OK"))
 ```
 
-It is not decoration: the feed's `Capacity check` cell reads the same condition, `Ready for Canva` reads **NO** while it is not `OK`, and `IS9WD_selfTest()` fails on it (6.4, 13.4). This is the finding the pagination review rated highest after the readiness filter, because the failure is silent truncation: items ranked past the publishable maximum would get keys that match no page and no block, and no flag would fire.
+The feed's `Capacity check` cell reads **this cell's own formula string**, taken from the block descriptor rather than retyped, `Ready for Canva` reads NO while it is not `OK`, and `IS9WD_selfTest()` fails on it. This is the finding the pagination review rated highest after the readiness filter, because the failure is silent truncation.
 
-Test mode defaults ON, matching the EBEXECOM email engine. Turning it off is a menu action with a confirm dialog naming how many people will receive mail on the next run.
+### 4B.7 STATISTICS THRESHOLDS
 
-`IS9WD_TRANSPORT` is the one cell that records which shape is live. It reads `fetch`, because Shape A is decided (7.1). `IS9WD_linkFor_(key)` reads it. **No token is stored on this tab.** Tokens live in Script Properties, see 7.3. The three blank email cells and the two blank URL cells are blank on purpose: an address or an endpoint typed into this spec would be an address or an endpoint committed to a public repo.
+**Every threshold the dashboard reads is here, and none of them is on the dashboard.** That is Ethan's instruction of 2026-09-27: `03 | Statistics` is "literally for viewing".
 
-### 4.7 SCHEDULE (title A77, header row 78, values 79 to 83)
+| Cell | Label | Named range | Default |
+|---|---|---|---|
+| B56 | Trend weeks | `IS9WD_STATS_TREND_WEEKS` | 8, whole number 2 to 26, guarded by `D56` |
+| B57 | Fewest items past their deadline before a rate is scored | `IS9WD_STATS_MIN_JUDGED` | 3, whole number 1 to 50 |
+| B58 | Days without a tick before an officer reads as silent | `IS9WD_STATS_SILENT_DAYS` | 7, whole number 1 to 60 |
+| B59 | Days late before the worst-late number flags | `IS9WD_STATS_LATE_DAYS` | 3, whole number 1 to 60 |
+| B60 | Slack allowed against the week's pace | `IS9WD_STATS_PACE_SLACK` | 0.15, formatted `0%`, a number 0 to 1 |
+| B61 | On-time target | `IS9WD_STATS_ONTIME_TARGET` | 0.8, formatted `0%`, the same validation |
+| B62 | Weeks of row room left before it flags | `IS9WD_STATS_ROOM_WEEKS_WARN` | 4, whole number 1 to 52 |
+| B63 | Rows reserved per officer on `04 \| Officer Tables` | `IS9WD_STATS_OFFICER_ROWS` | 21, whole number 3 to 40, guarded by `D63` |
 
-Header: `Job key` | `Runs` | `Day` | `Hour` | `Catch-up hours` | `On` | `Check` | `Last run` | `Last status`.
+The two percentages use the `NUM` validation rather than the number-between criterion, because number-between on a percent formatted cell accepts `15` and stores 1500%, which is exactly the typo it guards.
 
-| Row | Job key | Runs | Day | Hour (Manila) | Catch-up | On |
-|---|---|---|---|---|---|---|
-| 71 | `MONDAY_ASSIGNMENTS` | Weekly | Monday | 7 | 6 | TRUE |
-| 72 | `DAILY_DIGEST` | Daily | Any | 18 | 4 | TRUE |
-| 73 | `SUNDAY_BRIEF` | Weekly | Sunday | 19 | 4 | TRUE |
-| 74 | `ARCHIVE_WEEK` | Weekly | Saturday | 22 | 2 | FALSE |
-| 75 | `RETIRE_ACCOMPLISHED` | Weekly | Saturday | 23 | 2 | FALSE |
+**Two of the eight decide a layout rather than a threshold**, so each carries a guard comparing the setting against the value setup actually built, and the self test fails on the mismatch:
 
-Named range `IS9WD_SCHEDULE` = `A71:I75`. `Runs` is a dropdown (`Daily`, `Weekly`), `Day` is a dropdown of the seven English weekday names plus `Any`, both reject input, so a typo cannot silently turn a weekly job into one that never runs. `Check` mirrors the term calendar's: `Row does not parse` when `Runs` is `Weekly` and `Day` is `Any`, or `Hour` is not an integer 0 to 23. `Last run` and `Last status` are written by code.
+```
+D56  =IF(IS9WD_STATS_TREND_WEEKS<>IS9WD_STATS_TREND_BUILT,
+        "Run Build or repair workbook: the trend weeks do not match the tab","OK")
+D63  =IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,
+        "Run Build or repair workbook: the reserved rows do not match the tab","OK")
+```
 
-There is **no HEARTBEAT row**. The heartbeat is dispatcher behaviour on every run (8.4), not a once-a-day job, and a schedule row would have capped it at once a day through its done key.
+Both markers live on `_Views` now (6C), which changes nothing: they are read by name.
 
-`ARCHIVE_WEEK` runs on **Saturday**, not Sunday, because the week rule rolls over on Sunday: a Saturday run still sees the week that is ending. Both it and `RETIRE_ACCOMPLISHED` default OFF; both are menu actions from day one.
+### 4B.8 DIAGNOSTICS
 
-### 4.8 PEOPLE DIRECTORY (title A85, header row 86, values 87 to 100)
-
-**Fourteen rows, decided by Ethan on 2026-09-27.** Nine are the carousel committees. Five are Ethan and the four EVPs, who have deliverables in the tool and **no** Canva page. Counts, the emails, the links and the app work identically for all 14. Only the feed filters, and it filters on `Publishes`, never on a blank page number. The block moved down by three rows because the switches block now carries the three carousel capacity numbers (4.6).
-
-**The publish set stays at nine, and the reason is arithmetic.** It is stated in full at 6.1 item 8 and summarised here because this is the table someone would edit to change it: nine publishing committees give a master design of 19 pages and a carousel of 10 to 19 slides, which is inside Instagram's manual limit of 20 at every possible input. Fourteen would give 29 in the worst case, which cannot be posted as one carousel by any route. Raising the publish set is two cells per row here plus a supervised master rebuild, and it is safe only if the arithmetic in 6.1 item 8 is redone first.
-
-Header: `Key` | `Carousel order` | `Committee or office` | `Full name` | `Position label` | `Email` | `Token prefix` | `Token issued` | `Revoked` | `Check` | `Publishes` | `Hierarchy order`.
-
-| Row | Key | Carousel order | Committee or office | Position label | Publishes | Hierarchy order |
-|---|---|---|---|---|---|---|
-| 79 | `K01` | 1 | Partnerships | VICE PRESIDENT | TRUE | 6 |
-| 80 | `K02` | 2 | Publications | VICE PRESIDENT | TRUE | 7 |
-| 81 | `K03` | 3 | Marketing and Advocacy | VICE PRESIDENT | TRUE | 8 |
-| 82 | `K04` | 4 | Membership | VICE PRESIDENT | TRUE | 9 |
-| 83 | `K05` | 5 | Team Management | VICE PRESIDENT | TRUE | 10 |
-| 84 | `K06` | 6 | Investment Strategy & Education | VICE PRESIDENT | TRUE | 11 |
-| 85 | `K07` | 7 | Investment Research | VICE PRESIDENT | TRUE | 12 |
-| 86 | `K08` | 8 | Documentation | VICE PRESIDENT | TRUE | 13 |
-| 87 | `K09` | 9 | Finance | VICE PRESIDENT | TRUE | 14 |
-| 88 | `K10` | blank | President | PRESIDENT | FALSE | 1 |
-| 89 | `K11` | blank | Executive Vice President for Externals | EXECUTIVE VICE PRESIDENT FOR EXTERNALS | FALSE | 2 |
-| 90 | `K12` | blank | Executive Vice President for Internals | EXECUTIVE VICE PRESIDENT FOR INTERNALS | FALSE | 3 |
-| 91 | `K13` | blank | Executive Vice President for Investments | EXECUTIVE VICE PRESIDENT FOR INVESTMENTS | FALSE | 4 |
-| 92 | `K14` | blank | Executive Vice President for Operations | EXECUTIVE VICE PRESIDENT FOR OPERATIONS | FALSE | 5 |
-
-**Three columns replace v1's `Page`, and each does exactly one job.**
-
-- **`Carousel order`**, an integer 1 to 9 on the publishing rows and blank on the other five, is the officer ordinal `i` in the master page mapping of 6.3: a committee owns master pages `1 + (i-1) * IS9WD_MAX_PARTS + 1` and `+ 2`, so carousel order 1 owns pages 02 and 03, order 2 owns 04 and 05, and order 9 owns 18 and 19. **Setup writes it once and never rewrites it**, for the same reason `Key` is never rewritten: inserting or removing an officer must not silently renumber every master page after them, because the master design's pages are physical and fixed. A committee that leaves keeps its ordinal and its pair sits unused, which costs two master pages and nothing else.
-- **`Publishes`**, a checkbox, is the publish set. It is what the feed filters on and what `Publish key` on the data tab reads (5.1), and it is the one cell that decides whether a row reaches Canva at all. Making it a flag rather than a blank page number is what keeps nine versus fourteen a Configuration question rather than a formula rewrite.
-- **`Hierarchy order`**, an integer 1 to 14, is the order **every list a person reads** is sorted by: the admin view's committee picker, the sign-off picker, the Sunday brief, the link list and the preflight (7.8, 8.5c, 9). Decided by Ethan on 2026-09-27: the President, then the four EVPs in the fixed order Externals, Internals, Investments, Operations, then the nine committees in their existing order. The carousel is **not** sorted by it, because only the nine committees publish and they keep their existing order among themselves.
-
-**Why the rows themselves are still in key order.** Hierarchy order is a column, not a re-sort of the block. The keys are the token identities (7.3) and the standing rule is that a key is never edited and the rows are never reordered; moving the President's row to the top would renumber every key, invalidate the Script Properties layout and rewrite a dozen cross-references in this document for a cosmetic gain. So the block stays `K01` to `K14` in row order and the hierarchy lives in column L. Recorded as a ruling in Appendix C, R6.
-
-**Three committee names are corrected from v1:** `Publications` not `Publication`, `Membership` not `Memberships`, and `Investment Strategy & Education` not `Investments Strategy & Literacy`. The Canva headline is `UPPER()` of this column, so these spellings are exactly what those pages print. Carousel order 3 keeps the word `and`, giving `MARKETING AND ADVOCACY`. Carousel order 6 keeps the ampersand, giving `INVESTMENT STRATEGY & EDUCATION`. The committees' order among themselves is v1's and does not change; their **master page numbers** do, from 02 to 10 to the pairs above, because each one now owns two pages.
-
-**`Full name` and `Email` are deliberately blank in this document.** The directory is personal data, 14 students' names and DLSU addresses, and this file is committed to a public repo (2.6). So the roster lives only in the Sheet: Ethan pastes all 14 names into `D79:D92` and all 14 addresses into `F79:F92` at setup, from the roster he confirmed on 2026-09-27. Every address is at `dlsu.edu.ph`. Gate A records that the paste is done and that `Check` reads `OK` on the 13 member rows and `Admin link` on `K10`, never what was pasted.
-
-Named ranges: `IS9WD_DIRECTORY` = `A79:L92`, `IS9WD_DIR_KEY` = `A79:A92`, `IS9WD_DIR_CAROUSEL` = `B79:B92`, `IS9WD_DIR_NAME` = `C79:C92`, `IS9WD_DIR_VP` = `D79:D92`, `IS9WD_DIR_POSITION` = `E79:E92`, `IS9WD_DIR_EMAIL` = `F79:F92`, `IS9WD_DIR_PREFIX` = `G79:G92`, `IS9WD_DIR_ISSUED` = `H79:H92`, `IS9WD_DIR_REVOKED` = `I79:I92`, `IS9WD_DIR_PUBLISHES` = `K79:K92`, `IS9WD_DIR_HIERARCHY` = `L79:L92`. Every range name is v1's and keeps its meaning except that **`IS9WD_DIR_PAGE` is retired**: `IS9WD_DIR_NAME` is still the committee or office, `IS9WD_DIR_VP` still the person.
-
-- **`Key` is the token's identity**, written by setup as `K01` to `K14` in row order and **never** rewritten. It stays the first column because it is the only stable identifier on the row: a carousel order can be left empty, a name can be corrected, and neither may change what a live link resolves to. It is the Script Properties key (7.3) and the argument to `IS9WD_linkFor_()`.
-- **`K10`, the President's row, is Ethan's own and carries no member token.** He holds the admin token and nothing else (7.3), so setup writes no token for that row, `Token prefix` stays blank, `Check` reads `Admin link` instead of `No token`, and `IS9WD_linkFor_('K10')` returns the admin link. That is what keeps any email to Ethan carrying exactly one link. His items are otherwise ordinary items: they count, they are emailed, they appear in the app and in the Sunday brief, and they never reach Canva.
-- `Position label` defaults to `VICE PRESIDENT` on the nine committee rows, and to the office in upper case on the other five.
-- `Token prefix` is the **first 6 characters** of the live token, written by code, for identification only. The token itself is never in a cell. `Revoked` is a checkbox; a revoked token is refused immediately while the prefix stays readable so the log still makes sense.
-- `Check` reads, in order: `No name` or `No email` while either is blank; `Publishes with no carousel order` when `Publishes` is TRUE and `Carousel order` is blank; `Carousel order duplicated` when the same integer appears twice; `Carousel order out of range` when it is not a whole number between 1 and the count of publishing rows; `No token` when the prefix is blank on any row except `K10`; `Admin link` on `K10`; `Token is <n> days old` past `IS9WD_TOKEN_WARN_DAYS`; `Revoked`; or `OK`. The three carousel-order strings are new, and they exist because the master page mapping is arithmetic over that integer: a duplicate or a gap sends two committees to one page, or leaves a page nobody writes to. `IS9WD_selfTest()` fails on any of the three, and the feed's `Plan check` cell repeats the test so it also holds `Ready for Canva` at NO (6.4).
-- There is **no Link column**. One server-side helper, `IS9WD_linkFor_(key)`, is the only thing that builds a link, so the shape from 7.7 can never be wrong in one place and right in another. Links are read from `Show the links` in the menu, from the admin app payload, and from the emails.
-
-v1's `Tab name`, `Extra editor emails` and the separate `Admin editors` block are all gone: no committee tabs, no VP Sheet access, one editor.
-
-### 4.9 DIAGNOSTICS (title A102, rows 103 to 113)
-
-Read only. The block moved down from row 86 because the directory needs 14 rows (4.8), down three rows because the switches block took the three carousel capacity numbers, and down eight more when it took the eight statistics settings (4.6). Nothing here recomputes what the feed already computes: the first five cells are plain references to feed cells, so a fix lands in one place.
-
-**Corrected 2026-09-27.** This table used to print the five feed references in the literal form `='01 | Canva Feed'!C3`. That was never what the code writes and it is now actively misleading, because the Archive and the Log were renumbered: a reader could conclude that renumbering a tab breaks a formula. Nothing in this workbook references a tab by name. The five cells are written as their named ranges, which is also why the renumbering touched no formula at all (section 3).
+Read only. The first six are plain pointers at cells that already exist, so a fix lands in one place; the last five are code written and carry named ranges of their own. **Nothing in this workbook references a tab by name**, which is why the renumbering of the Archive and the Log touched no formula.
 
 | Cell | Label | Source |
 |---|---|---|
-| B103 | Total active deliverables | `=IS9WD_FEED_TOTAL` |
-| B104 | Rows with a flag | `=IS9WD_FEED_FLAGGED` |
-| B105 | Ready for Canva | `=IS9WD_FEED_READY` |
-| B106 | Feed errors | `=IS9WD_FEED_ERRORS` |
-| B107 | Carousel pages this week | `=IS9WD_FEED_PAGES` |
-| B108 | Rows used of 2000 | `=COUNTIF(IS9WD_DEL_ID,"?*")` |
-| B109 | Last dispatcher run | code |
-| B110 | Last remaining mail quota | code (`MailApp.getRemainingDailyQuota()` is not callable from a formula) |
-| B111 | Last self test result | code |
-| B112 | Live deployment access last checked | code, the literal strings recorded in 13.3 |
-| B113 | Today override and week number override | code writes one line naming each one that is set, or `not set`. Both are also named in the Sunday brief (8.5c) and the Today override tags the feed's `Feed as of` cell (6.5). |
+| B67 | Total active deliverables | `=IS9WD_FEED_TOTAL` |
+| B68 | Rows with a flag | `=IS9WD_FEED_FLAGGED` |
+| B69 | Ready for Canva | `=IS9WD_FEED_READY` |
+| B70 | Feed errors | `=IS9WD_FEED_ERRORS` |
+| B71 | Carousel pages this week | `=IS9WD_FEED_PAGES` |
+| B72 | Rows used of 2000 | `=COUNTIF(IS9WD_DEL_ID,"?*")` |
+| B73 | Last dispatcher run | code |
+| B74 | Last remaining mail quota | code (`MailApp.getRemainingDailyQuota()` is not callable from a formula) |
+| B75 | Last self test result | code |
+| B76 | Live deployment access last checked | code, the literal strings recorded in 13.3 |
+| B77 | Today override and week number override | code writes one line naming each one that is set, or `not set` |
 
-`03 | Statistics` does not replace this block and does not read from it twice: its `OPERATIONAL HEALTH` block reads the same five code-written diagnostics cells by name and adds the reading that says what to do about each one (6A).
+`_Views`' `OPERATIONAL HEALTH` block reads these same five code-written cells by name and adds the reading that says what to do about each one (6C).
 
-The last row exists because both overrides are silent by nature: each one makes the workbook confidently report a week that is not the real one, and neither shows up anywhere a reader would look. The two override cells were merged into one line to make room for `Carousel pages this week`, because the block cannot grow: the weekly sign-off store starts at row 107 and must keep its room to grow downward (4.5). The Today override additionally pauses the dispatcher (8.2).
+### 4B.9 DIRECTORY MACHINERY
 
-The five feed references are plain pointers at feed cells, so a fix lands in one place. Their addresses moved with the feed's own rewrite: values on the feed now sit in **column C**, because column A carries the machine key on every row (6.3). `Carousel pages this week` is here rather than in the feed's own summary alone because it is the number Ethan will want to see before a run, and `Master pages required` is printed in the Sunday brief beside the design id every week (8.5c).
+Header: `Key` | `Carousel order` | `Hierarchy order` | `Token prefix` | `Token issued` | `Revoked`. Fourteen rows, 82 to 95, in the same order and with the same Key as `THE PEOPLE`.
+
+- **`Carousel order`**, an integer 1 to 9 on the publishing rows and blank on the other five, is the officer ordinal `i` in the master page mapping of 6.3: a committee owns master pages `1 + (i-1) * IS9WD_MAX_PARTS + 1` and `+ 2`. **Setup writes it once and never rewrites it**, because the master design's pages are physical: inserting or removing an officer must not silently renumber every master page after them. A committee that leaves keeps its ordinal and its pair sits unused, which costs two master pages and nothing else.
+- **`Hierarchy order`**, an integer 1 to 14, is the order **every list a person reads** is sorted by: the admin view's committee picker, the sign-off picker, the Sunday brief, the link list, the preflight, the dashboard's officer table and the fourteen sections of `04 | Officer Tables`. Decided by Ethan on 2026-09-27: the President, then the four EVPs in the fixed order Externals, Internals, Investments, Operations, then the nine committees in their existing order. The carousel is **not** sorted by it.
+- **`Key` is mirrored here for legibility and carries no name of its own**: `IS9WD_DIR_KEY` is the column on `00 | Configuration`. The self test asserts the two columns hold the same fourteen keys in the same order, which is what makes the join by row position safe.
+- **`Token prefix`** is the **first 6 characters** of the live token, written by code, for identification only. The token itself is never in a cell, because the Canva reader account reads every tab, hidden or not. `Token issued` is the date it was minted. `Revoked` is a checkbox; a revoked token is refused immediately while the prefix stays readable so the log still makes sense.
+- The whole block is guarded (5.6), and `Carousel order` and `Hierarchy order` are guarded for the same reason `Key` is.
+
+v1's `Tab name`, `Extra editor emails`, the separate `Admin editors` block and `IS9WD_DIR_PAGE` are all gone: no committee tabs, no VP Sheet access, one editor.
+
+### 4B.10 WEEKLY SIGN-OFF STORE
+
+Header: `Week start` | `Prepared by name` | `Prepared by position` | `Checked by name` | `Checked by position` | `Set at` | `Check`. Rows 100 to 151, 52 rows, one academic year of weeks.
+
+**It is the last block on `_Engine` for the reason it was the last block on `00 | Configuration`:** setup may widen an append only block and may never migrate its rows, so nothing may ever sit below it. `Build or repair workbook` re-points the ranges and appends 52 more rows whenever fewer than four blank rows remain, so it can never silently run out mid-trimester.
+
+`G100`, filled down, is a template so no row number is typed:
+
+```
+=IF($A{row}="","",IF(WEEKDAY($A{row},2)<>1,"Week start is not a Monday",
+  IF(COUNTIF($A${first}:$A${last},$A{row})>1,"Duplicate week","OK")))
+```
+
+`{last}` is substituted from the **live** last row, not the declared one, which is what keeps the duplicate-week test covering a grown store: without it, a duplicate typed into week 53 would read `OK`.
+
+**The move from `00 | Configuration` to `_Engine` was free, and it had to land before Gate A.** Setup may widen an append only block and may never migrate its rows, so a filled row at the old first row would fall outside the block and outside every named range over it. The store holds **zero** filled rows today. After Gate A the same move would be a migration setup cannot perform.
+
+`Set at` is a code-written timestamp. The row is written by `setSignoff` (7.4) or typed by hand. The store is **append or replace by week, never cleared**, which is what lets the Archive record who signed off on which week (10.1) after the names have moved on.
 
 ---
 
@@ -610,8 +702,13 @@ One row per item, for all 14 directory entries. This tab replaces the nine commi
 - Row 1: banner `02 | DELIVERABLES`, fill `#085040`, text `#F8FBFD`. Corrected 2026-09-27 to the uniform rule in 2.5: a section band is always `#085040` and a column header is always `#5d4170`, on every tab. See Appendix C R12.
 - Row 2: instruction text:
   > One row per deliverable. Enter as many as the week really holds: nothing is refused. A committee's first 20 active items reach the carousel, ten to a page across two pages; the rest are tracked, emailed and reported, and the Sunday brief names them. Tick an item off rather than deleting it. Anything active with a past deadline shows as overdue.
-- Row 3: table header, fill `#5d4170`, text `#F8FBFD`. Corrected with the banner above.
-- Rows 4 to 2003: 2,000 pre-formatted rows. Freeze through row 3, freeze column A.
+- Row 3: table header, fill `#5d4170`, text `#F8FBFD`. Corrected with the banner above. Each header cell carries its column's plain English sentence as a **note**.
+- Row 4: **the hint row**, added 2026-09-27. One plain English sentence per column, 9 point `#58756a`, wrapped, 26 px, inside the frozen pane. It is the entry tab's half of Ethan's per-cell explanation instruction, and the honest half: 17 columns times 2,000 rows is 34,000 notes, which is a minute of every build and a heavier file for a sentence that is already on screen one row above the column. The settings tabs, where a cell is a setting rather than a column, do carry a note per cell (4.0).
+- Rows 5 to 2004: 2,000 pre-formatted rows. **Freeze through row 4**, so the hint row never scrolls away. No frozen column, on this tab as on every other (2.5).
+
+**The cream rule, and what it cost this tab.** The five columns Ethan types into, `Committee`, `Title of Task`, `Deadline`, `Remark` and `Status`, carry the fill `#e9ebd4`; the twelve the machine owns carry the page background. **Row banding is withdrawn from the tab**, because banding alternates `#F8FBFD` and `#e9ebd4` and would have put cream under every second cell of the twelve machine columns, which says the opposite of what cream means. Five columns of colour against twelve of paper is what makes 2,000 rows legible at a glance, and it is a better answer than banding was.
+
+**The blocking flag rule changed with it.** A blocking flag used to fill the whole row `#e9ebd4` with bold `#724485` text. The fill is withdrawn on this tab and the bold strong purple text carries the signal on its own, because a flagged row filled cream would say "all seventeen of these cells are yours to type into". Recorded as a ruling in Appendix C.
 
 ### 5.1 Columns
 
@@ -731,9 +828,11 @@ There are no per-VP protections and no per-range editor lists. Ethan owns and ed
 - `02 | Deliverables` columns J to Q, rows 4 to 2003.
 - `01 | Canva Feed`, the whole tab.
 - `03 | Statistics` and `04 | Officer Tables`, the whole tab each. Both are script owned end to end and are never typed into, so each takes one whole tab guard for the same reason the feed does.
-- `00 | Configuration`: B5:B11, C14, D25:D27, E18:E21, B37:B41, C37, B53 and C53 (the derived publishable maximum and its guard, 4.6), J87:J100 (the directory `Check` column), G87:I100 (the token prefixes, issue dates and revoked flags), A87:B100 (the keys and the carousel order, both written once and never rewritten), L87:L100 (the hierarchy order), rows 103 to 113, and F117:G168 (the sign-off `Set at` and `Check` columns).
+**The guard list is built from the block descriptors rather than typed**, which is what keeps it correct through a move: every row carrying a formula, every guard note beside one, every `Check` column on either settings tab, the directory's `Key` column on `00 | Configuration`, the whole of `DIRECTORY MACHINERY` on `_Engine`, and the sign-off store's `Set at` column. On the shipping layout that is `00 | Configuration` B6:B11, D11, D17, D18, D23:D25, A30:A43, G30:G43 and B63:B67 with D63; and `_Engine` B6, E11:E14, G27:G31, B37 with D37, B51:B52, D56, D63, B67:B72, A82:F95 and F100:F151.
 
-`Publishes` (K87:K100) is deliberately **not** protected: it is the one cell Ethan is meant to edit to change the publish set, and a warning prompt on it would be a prompt on the intended action (4.8). The eight statistics settings at B68:B75 are Ethan's to edit and are not protected either; their two guard notes at C68 and C75 are script written and are covered by the same rule that covers every other `Check` cell.
+**Not one cream cell is guarded, and that is the rule rather than an omission.** Cream means "this cell is yours to type into" (4.0), and a warning prompt on one would contradict the fill. `On the carousel` was already the named exception for that reason; the cream rule generalises it to every input cell in the workbook.
+
+`On the carousel` (F30:F43) is deliberately **not** protected: it is the one cell Ethan is meant to edit to change the publish set, and a warning prompt on it would be a prompt on the intended action (4.4). The eight statistics thresholds on `_Engine` are his to edit and are not protected either; their two guard notes at D56 and D63 are script written and are covered by the same rule that covers every other `Check` cell.
 - `05 | Archive` and `06 | Log`, the whole tab each.
 
 `06 | Log` is hidden. Warning-only protection is a guard rail for the owner, not a security boundary.
@@ -829,7 +928,15 @@ v1's sort is "overdue first (oldest first), then by deadline ascending, then by 
 
 ### 6.3 Physical layout
 
-`A1` holds the literal text `01 | Canva Feed`, because the Drive connector strips tab names and the tab has to identify itself from cell content. `B1` holds the start sentinel, `C1` the feed as of text and `D1` the feed stamp, all three described in 6.5. None of the four is one of the strings in 6A to 6D.
+`A1` holds the literal text `01 | Canva Feed`, because the Drive connector strips tab names and the tab has to identify itself from cell content. `B1` holds the start sentinel, `C1` the feed as of text and `D1` the feed stamp, all three described in 6.5. **`E1` holds the plain English explanation** added on 2026-09-27. None of the five is one of the strings in 6A to 6D.
+
+**The plain English explanation, and why it is a cell in row 1 rather than a row of its own.** Ethan's instruction was that `01 | Canva Feed` gets a short explanation saying what the tab is for, that it fills itself, and that it is what Claude reads every Sunday. This tab has no cells he fills, so it gets no cream and no per-cell hints; what it gets is one sentence, in `E1`, at hint size in the band's help colour, overflowing right across F to M:
+
+> What this tab is for: it is the words and the colours the Instagram carousel prints. It fills itself from the deliverables you enter and from 00 | Configuration, so there is nothing to type here and nothing to tidy up. Every Sunday Claude reads this one tab and updates the Canva design from it, which is why the wording here is exact and why this tab is never hidden.
+
+The same sentence is the **note on `A1`**, which is what a person gets by clicking the tab's own name.
+
+It rides in `E1` rather than in a row of its own, and that is not a cosmetic choice: section 6.3 fixes every row number on this tab and the nine sentinels are how a truncated connector read is detected, so there is no free row to take and inserting one would move every sentinel, every named range and every key in this section. `E1` is inside the banner's own filled span, it is read by the connector like any other cell, and it moves nothing.
 
 **Column A carries a machine key on every block row, and every value sits in a named column** (A2 item 8, accepted). Block A's keys are `A.TOTAL`, `A.FLAGGED`, `A.READY`, `A.ERRORS`, `A.PAGES`, `A.EXPORT`, `A.MASTER`, `A.NOTPUB`, `A.CAPACITY`, `A.PLAN`, `A.FLAGCAP`. The title block's are `B.WEEKLINE`, `B.LEGEND1`, `B.LEGEND2`, `B.LEGEND3`, `B.PREPNAME`, `B.PREPPOS`, `B.CHKNAME`, `B.CHKPOS`. An officer row is `B.C01` to `B.C09` by carousel order, a plan row is `PLAN.P01` to `PLAN.P19` by master page, a page header row is `C.P02.HEAD` to `C.P19.HEAD`, a slot row is `C.P02.S01` to `C.P19.S10`, and a flag row is `D.` plus the item id, for example `D.D0007`. Header rows key as `HEADER` and sentinel rows as `SENTINEL`, which are the only two keys that repeat, and the sentinel's own text in column B is what distinguishes one from another. There are **nine sentinels**: the start sentinel shares row 1 with `A1` so the tab's name and its version sit in the same line, then one before each of the seven blocks, then the end sentinel on the last row. **The keys are per row rather than per cell**, which is the one place this diverges from A2 item 8's illustration (`B.C02.COUNT`): every block here is a table with a header row, so a row key plus a column name is already a lookup, and a key per cell would triple the tab for nothing.
 
@@ -935,7 +1042,7 @@ Named ranges over the visible blocks, so nothing in this section or in `IS9WD_Fe
 - C8 Export page list: `=TEXTJOIN(",",TRUE,ARRAYFORMULA(IF(IS9WD_PLAN_USED=TRUE,VALUE(IS9WD_PLAN_PAGE),"")))`. Plain ascending integers, `1,2,4,5,6,8,10,12,14,16,18` on the worked week below, which is exactly what the export operation's page list takes. Integers rather than the plan's two digit text, because a leading zero in a page number is a page number the tool may reject.
 - C9 Master pages required: `=1+COUNTIF(IS9WD_DIR_PUBLISHES,TRUE)*IS9WD_MAX_PARTS`, which is 19.
 - C10 Items not published: `=SUM(IS9WD_NOTPUB)`, the whole workbook's total of active titled items that ranked past `IS9WD_PUBLISH_MAX` in their committee. Normally 0. It is a number rather than a flag, because an item that does not fit a slide is not a mistake (5.4).
-- C11 Capacity check: the same condition as Configuration `C53` (4.6), read from the feed so the run and the brief have it in the same read.
+- C11 Capacity check: the same condition as `_Engine`'s `D37` (4B.5), taken from that cell's own formula string in the block descriptor rather than retyped, and read from the feed so the run and the brief have it in the same read.
 - C12 Plan check: `=IFERROR(INDEX(FILTER({$V$25:$V$33;$S$36:$S$54},{$V$25:$V$33;$S$36:$S$54}<>"OK"),1,1),"OK")`, the first problem any officer row or plan row reports, or `OK`.
 - C13 Flag list check: `=IF(IS9WD_FEED_FLAGGED>ROWS(IS9WD_FLAGS),"Flag list truncated by "&(IS9WD_FEED_FLAGGED-ROWS(IS9WD_FLAGS))&" rows","OK")`.
 
@@ -1098,109 +1205,137 @@ Connector behaviour, verified 2026-09-21 by probing `read_file_content` on a liv
 
 ---
 
-## 6A. `03 | Statistics`
+## 6A. `03 | Statistics`: the dashboard
 
-A computed view. Every cell is a formula over `02 | Deliverables`, `05 | Archive` and `00 | Configuration`: no new source of truth, nothing typed, and no Apps Script writing a value a formula could produce. `IS9WD_Stats.js` owns the tab, and `Build or repair workbook` calls it through `IS9WD_setupCall_` so a missing push cannot take the build down, which is the protection `IS9WD_Feed.js` already has.
+Ethan's instruction of 2026-09-27, verbatim: *"for the statistics, i don't it to be a configuration, i want to see KPIs and Charts, literally for viewing"*.
+
+So the tab is four things and nothing else: **eight big number tiles**, **one table of sentences**, **the seven readiness gates**, and **three tables each followed by a real embedded chart**. Not one threshold is on it; they are all on `_Engine` (4B.7). Not one hidden column is on it; they are all on `_Views` (6C). Nothing on it is typed and nothing on it is a form.
+
+Every cell is a formula over `02 | Deliverables`, `05 | Archive`, `00 | Configuration`, `_Engine` and `_Views`: no new source of truth, and no Apps Script writing a value a formula could produce. `IS9WD_Stats.js` owns the tab, and `Build or repair workbook` calls it through `IS9WD_setupCall_` so a missing push cannot take the build down.
 
 **Neither view may ever gate the Canva run.** Readiness stays at seven gates and reads the feed alone. `IS9WD_STATS_ERRORS` and `IS9WD_STATS_GATE_AGREE` fail the **self test** and appear in the Sunday brief, and they do nothing else. A view that breaks must not stop publication, and the reverse would make the carousel hostage to a statistics formula.
 
-Three rules from elsewhere apply here unchanged, and each one is load bearing. **A1 carries the tab's own name**, because the Drive connector strips tab names (6.5). **The last row carries the literal end marker `IS9WD STATS END`**, so a truncated read is self evident rather than merely short: one row, against the feed's nine sentinels. And **nothing is merged** (2.5).
+Three rules from elsewhere apply here unchanged, and each one is load bearing. **A1 carries the tab's own name**, because the Drive connector strips tab names (6.5). **The last row carries the literal end marker `IS9WD STATS END`**, so a truncated read is self evident rather than merely short. And **nothing is merged** (2.5): a tile is a wide column, a big type size and overflow wrap, never a merge.
 
 ### 6A.1 The screen budget
 
-Twelve visible columns, A to L, and thirteen hidden helpers, M to Y. Each width serves that column's widest real value across every block and the rest clip, exactly as Configuration already does.
+Twelve visible columns, A to L, and no hidden ones.
 
 | Col | Width | Serves |
 |---|---|---|
-| A | 260 | officer names (`Executive Vice President for Investments` is the widest at 40 characters) and the measure labels |
-| B | 250 | `Attention` strings, and the measure values |
-| C | 65 | `Due`, and the `Reading` column, which overflows right |
-| D | 65 | `Done` |
-| E | 65 | `Rate` |
-| F | 80 | `Overdue` |
-| G | 85 | `Worst late` |
-| H | 75 | `Silent` |
-| I | 75 | `On time` |
-| J | 70 | `Judged` |
-| K | 80 | `Avg days` |
-| L | 100 | `Not on carousel` |
+| A | 250 | officer names, measure labels, and the first tile of each tile row |
+| B | 230 | `Attention` strings, the numbers in the sentence table, and the rest of the first tile |
+| C to L | 80 each, except G 90 and L 110 | the ten numeric officer columns, and tiles two, three and four |
 
-Total 1,170 px. A 1366 px laptop shows roughly 1,284 px of grid after the row number gutter, so the widest block fits with room and nothing needs horizontal scroll. **That is the whole answer to reading this tab with no frozen column** (2.5). The `Reading` column in the three-column blocks is 65 px and relies on overflow wrap across D to L, which is why no row of those blocks puts content in D to L. It is the device the feed's own band rows use.
+Total **1,180 px**. A 1366 px laptop shows roughly 1,284 px of grid after the row number gutter, so the widest block fits with room and nothing needs horizontal scroll. **That is the whole answer to reading this tab with no frozen column** (2.5).
+
+The first two columns are wide because they carry an officer name and an `Attention` sentence. The consequence for the tiles is deliberate rather than tolerated: **tile 1 of each row is wide (480 px) and tiles 2, 3 and 4 are even with each other (240 to 270 px)**, so the two longest strings on the tab, the week line and the readiness verdict, get the room they need and the six numeric tiles look like a set.
 
 ### 6A.2 Row map, all of it computed
 
 | Rows | Contents | Height |
 |---|---|---|
-| 1 | Banner `03 \| STATISTICS` | 40 |
-| 2 | Help line | 24 |
-| 3 | Spacer | 12 |
-| 4 to 16 | `THIS WEEK`: band, header, 11 measure rows | 34, 30, 26 |
-| 17 | Spacer | 12 |
-| 18 to 33 | `BY OFFICER`: band, header, 14 officer rows | 34, 30, 26 |
-| 34 | Spacer | 12 |
-| 35 to 50 | `TRACK RECORD, RANKED`: band, header, 14 rows | 34, 30, 26 |
-| 51 | Spacer | 12 |
-| 52 to 61 | `TREND, LAST <n> WEEKS`: band, header, 8 rows | 34, 30, 26 |
-| 62 | The sparkline, and the note that replaces it when there is nothing to draw | 34 |
-| 63 | Spacer | 12 |
-| 64 to 72 | `READINESS GATES`: band, header, 7 gate rows | 34, 30, 26 |
-| 73 | Spacer | 12 |
-| 74 to 86 | `OPERATIONAL HEALTH`: band, header, 11 rows | 34, 30, 26 |
-| 87 | Spacer | 12 |
-| 88 to 94 | `SCHEDULED JOBS`: band, header, 5 job rows | 34, 30, 26 |
-| 95 | `IS9WD STATS END`, the tab's own error count in C, the gate agreement in E | 26 |
-| M to Y | The hidden helper band | |
+| 1 | Banner `03 \| STATISTICS` | 46 |
+| 2 | Help line | 34 |
+| 4 | Band `THIS WEEK AT A GLANCE` | 38 |
+| 5 | Hint row | 26 |
+| 6, 7, 8 | Tile row 1: value, label, note | 46, 22, 22 |
+| 10, 11, 12 | Tile row 2: value, label, note | 46, 22, 22 |
+| 14 to 22 | `WHAT NEEDS ATTENTION`: band, hint, header, 6 rows | 38, 26, 30, 26 |
+| 24 to 33 | `READINESS GATES`: band, hint, header, 7 gate rows | 38, 26, 30, 26 |
+| 35 to 51 | `BY OFFICER`: band, hint, header, 14 officer rows | 38, 26, 30, 26 |
+| 53 to 69 | Chart 1: band, hint, caption, 14 reserved rows | 38, 26, 26, 26 |
+| 71 to 87 | `TRACK RECORD, RANKED`: band, hint, header, 14 rows | 38, 26, 30, 26 |
+| 89 to 105 | Chart 2: band, hint, caption, 14 reserved rows | |
+| 107 to 117 | `TREND, LAST <n> WEEKS`: band, hint, header, 8 rows | |
+| 119 to 135 | Chart 3: band, hint, caption, 14 reserved rows | |
+| 136 | `IS9WD STATS END`, the tab's own error count in C, the gate agreement in E | 26 |
 
-**95 rows at the shipping settings, and not one of the counts is typed.** `IS9WD_statsLayout_` computes every row number from `IS9WD_DIR_ROWS`, `IS9WD_STATS_TREND_WEEKS`, the schedule block's span and the three block lists in `IS9WD_Config.js`. `Build or repair workbook` rewrites the six blocks, the hidden band and the error scan together or none of them, the same rule the feed's resize keeps.
+**136 rows at the shipping settings, and not one of the counts is typed.** `IS9WD_statsLayout_` computes every row number from `IS9WD_DIR_ROWS`, `IS9WD_STATS_TREND_WEEKS`, the declared tile rows and the declared chart list. Every spacer is 18 px, up from 12: more air was Ethan's instruction.
 
 ### 6A.3 Two windows, named once so nothing is ambiguous
 
 Every number on this tab uses one of two windows, and the label says which.
 
-- **This week**: deadline between `IS9WD_WEEK_START` and `IS9WD_WEEK_END`. Used by `Due`, `Done` and `Rate`.
-- **Everything current**: every titled row on the data tab, whatever its deadline. Used by `Overdue`, `Worst late`, `Silent`, `On time`, `Judged`, `Avg days` and `Not on carousel`.
+- **This week**: deadline between `IS9WD_WEEK_START` and `IS9WD_WEEK_END`. Used by `Due`, `Done` and `Rate`, and by the first four tiles.
+- **Everything current**: every titled row on the data tab, whatever its deadline. Used by `Overdue`, `Worst late`, `Silent`, `On time`, `Judged`, `Avg days` and `No slide`.
 
-The difference is deliberate and it is the first thing a reader would otherwise get wrong. An item overdue from two weeks ago still needs chasing, so `Overdue` is not week-windowed. Row 6 states the week, so no number below it is orphaned, and the first measure's `Reading` reconciles against the feed in words: the feed's `Total active deliverables` counts every active titled item regardless of deadline, so the two numbers differ by design and the tab says so rather than leaving Ethan to discover it.
+The difference is deliberate and it is the first thing a reader would otherwise get wrong. An item overdue from two weeks ago still needs chasing, so `Overdue` is not week-windowed. The week tile states the week, so no number below it is orphaned.
 
 **Everything current is bounded by retirement.** `RETIRE_ACCOMPLISHED` clears rows A to I after `IS9WD_RETIRE_DAYS` (10.1), so every lifetime measure here covers the un-retired window only. History lives in the Archive, which is what the trend block reads. The tab's help line says so.
 
-### 6A.4 `THIS WEEK`, rows 6 to 16
+### 6A.4 The eight tiles
 
-Label in A, value in B, reading in C. Each row also writes a boolean into hidden column M, and **one** conditional format rule reads it: `=$M6=TRUE` over `B6:C16` gives the flag treatment. One rule instead of eleven scoped rules, and each row still owns its own threshold in its own helper cell. Every row is keyed on a machine key in `IS9WD_STATS_WEEK_ROWS`, so a list that grew a row throws on the unknown key rather than writing eleven formulas one row out of place.
+Three cells per tile in three rows: the number at 22 point bold in `#085040`, the label at 9 point in `#58756a`, and one short line under it in the same. No fill, no border, no merge. Keyed on a machine key in `IS9WD_STATS_TILES`, so a list that grew a tile throws on the unknown key rather than painting eight tiles one position out of place.
 
-| Row | Measure | Named range | Flagged when | Why it earns its place |
+| Tile | Label | Named range | Flagged when | Why it earns its place |
 |---|---|---|---|---|
-| 6 | The week | `IS9WD_STATS_WEEK` | out of term | Every number below is scoped to this week, and a reader who has to guess which week is reading a different report from the one on screen. Out of term, every number below is arithmetic over a week the calendar does not contain. |
-| 7 | Active this week | `IS9WD_STATS_ACTIVE_WEEK` | never | The denominator a reader holds in their head. Its reading is the reconciliation against the feed. |
-| 8 | Accomplished this week | `IS9WD_STATS_DONE_WEEK` | never | Reads the derived `Active` flag, never a status label. An item ticked this week whose deadline was last week counts against last week's load. |
-| 9 | Completion against pace | `IS9WD_STATS_PACE` | behind the elapsed fraction of the week by more than `IS9WD_STATS_PACE_SLACK` | A naked completion percentage is 0% on Monday morning by construction, which is a vanity number. Against elapsed time it becomes ahead or behind, which is actionable. This is the one measure that was rescued rather than killed. |
-| 10 | Overdue now | `IS9WD_STATS_OVERDUE_NOW` | above 0 | The chase list's size, and the reading names who to chase first. It reads the `Check` column rather than restating the rule, because a second definition of overdue can drift from the flag Ethan sees on the data tab. |
-| 11 | Due in the next two days | `IS9WD_STATS_DUE_SOON` | never | Exactly what the daily digest emails out (section 5), so it says what landed in thirteen inboxes this morning. A busy Wednesday is not a fault. |
-| 12 | Officers with nothing entered this week | `IS9WD_STATS_NO_ITEMS` | above 0 | **The most actionable number on the tab**, because it is Ethan's own omission and nobody else's: he enters every item, so an officer with nothing has nothing to tick and gets no Monday email. It names them, because a count of four is not an action and four names are. |
-| 13 | Officers silent for `<n>` days or more | `IS9WD_STATS_SILENT` | above 0 | The only available proxy for whether a private link is being used at all. The honest caveat is in the help line: a status change by Ethan from the Sheet resets it too, so silence is evidence and not proof. The action is concrete either way. |
-| 14 | Blocking flags on publishing rows | `IS9WD_STATS_BLOCKING` | above 0 | The eight names and the `"?*"` filter are copied from 6.4's readiness criterion, including both load bearing halves: `IS9WD_DEL_PUBKEY` and not `IS9WD_DEL_PAGE`, and `"?*"` and not `"<>"`. The eight names come from Core's own list, so a ninth flag counts itself. |
-| 15 | Items past the carousel | `IS9WD_STATS_PAST_CAROUSEL` | never, and given the accent instead | An item that does not fit a slide is not a mistake (5.4), and the feed already treats the same number that way. It is the one carousel number a president acts on before Sunday: cut, reprioritise, or accept. |
-| 16 | Ready for Canva | `IS9WD_STATS_READY` | reads `NO` | The feed publishes the verdict but not the reason, and the Sunday brief names the gate too late to fix it. The reading points at the gates block below. |
+| 1 | THIS WEEK | `IS9WD_STATS_WEEK` | out of term | Every number beside it is scoped to this week, and a reader who has to guess which week is reading a different report from the one on screen. |
+| 2 | STILL TO DO | `IS9WD_STATS_ACTIVE_WEEK` | never | The denominator a reader holds in their head. |
+| 3 | DONE | `IS9WD_STATS_DONE_WEEK` | never | Reads the derived `Active` flag, never a status label. An item ticked this week whose deadline was last week counts against last week's load. |
+| 4 | AGAINST PACE | `IS9WD_STATS_PACE` | behind the elapsed fraction of the week by more than `IS9WD_STATS_PACE_SLACK` | A naked completion percentage is 0% on Monday morning by construction, which is a vanity number. Against elapsed time it becomes ahead or behind, which is actionable. This is the one measure that was rescued rather than killed. |
+| 5 | CANVA | `IS9WD_STATS_READY` | reads anything but `READY` | `READY` or `NOT READY` rather than the feed's own sentence, because a tile is read from across a desk. The note names the gate that holds it. |
+| 6 | LATE NOW | `IS9WD_STATS_OVERDUE_NOW` | above 0 | The chase list's size. It reads the `Check` column rather than restating the rule, because a second definition of overdue can drift from the flag Ethan sees on the data tab. |
+| 7 | DUE IN 2 DAYS | `IS9WD_STATS_DUE_SOON` | never | Exactly what the daily digest emails out, so it says what landed in thirteen inboxes this morning. A busy Wednesday is not a fault. |
+| 8 | OFFICERS WITH NOTHING | `IS9WD_STATS_NO_ITEMS` | above 0 | **The most actionable number on the tab**, because it is Ethan's own omission and nobody else's: he enters every item, so an officer with nothing has nothing to tick and gets no Monday email. |
 
-Row 13's label is itself a formula, `="Officers silent for "&IS9WD_STATS_SILENT_DAYS&" days or more"`, so a label that names a setting cannot go stale.
+**A flagged tile takes bold `#724485` text and no fill**, which is this tab's one departure from the workbook's usual flag treatment. A cream filled tile reads as a box rather than as a number, and the whole point of a tile is the number. Each tile's rule is scoped to that tile's own three cells across its own span, so a flag on one tile cannot decorate the tile beside it. It is recorded as a ruling in Appendix C.
 
-### 6A.5 `BY OFFICER`, rows 20 to 33
+**A tile note is short, and short is a constraint rather than a preference:** a tile is 240 px wide and the line clips. Anything that needs a sentence belongs in the block below, which is exactly what that block is for.
 
-Fourteen rows in **hierarchy order** (4.8: the President, the four EVPs, then the nine committees), because hierarchy order is the order every list a person reads is sorted by. The five offices are ordinary rows here, exactly as 5.4 says they are everywhere except Canva.
+### 6A.5 `WHAT NEEDS ATTENTION`, rows 17 to 22
 
-Identity comes from **one spilling sort into the hidden band**, and the visible column is a plain pointer at it, so display formatting never fights the sort:
+Three columns: `What`, `Number`, and one sentence saying what to do. The sentence sits in an 80 px column and overflows right across D to L, which is why no row of the block puts anything in D to L. It is the device the feed's own band rows use.
+
+| Row | What | Named range | The sentence |
+|---|---|---|---|
+| 17 | Late right now | reads the tile | names who to chase first and how many days late they are |
+| 18 | Officers with nothing entered for this week | reads the tile | **names them**, because a count of four is not an action and four names are |
+| 19 | Officers silent for `<n>` days or more | `IS9WD_STATS_SILENT` | names them, and says a link can be reissued from the menu |
+| 20 | Flags blocking the carousel | `IS9WD_STATS_BLOCKING` | names the first offender from the feed's own flag list |
+| 21 | Tasks with no slide | `IS9WD_STATS_PAST_CAROUSEL` | names who, and says this is not a fault: cut, reprioritise, or accept |
+| 22 | Ready for Canva | reads the tile | names the gate that holds it |
+
+Row 19's label is itself a formula, `="Officers silent for "&IS9WD_STATS_SILENT_DAYS&" days or more"`, so a label that names a setting cannot go stale.
+
+**Three of the six carry a measure of their own and three point at a tile**, so every one of the eleven measures is named exactly once on the tab. Row 21 takes the accent rather than the flag treatment, because an item that does not fit a slide is not a mistake (5.4) and the feed already treats the same number that way.
+
+**Row 19's honest caveat is in the tab's help line:** a status change by Ethan from the Sheet resets the silence clock too, so silence is evidence and not proof. The action is concrete either way.
+
+**`IS9WD_STATS_BLOCKING`** uses the eight names and the `"?*"` filter from 6.4's readiness criterion, including both load bearing halves: `IS9WD_DEL_PUBKEY` and not `IS9WD_DEL_PAGE`, and `"?*"` and not `"<>"`. The eight names come from Core's own list, so a ninth flag counts itself.
+
+**There is no hidden flag column on this tab any more**, so the eight tiles and the six sentence rows each carry their own conditional format rule, fourteen in all. That is the honest replacement for one rule reading one hidden boolean column: the column is gone because Ethan asked for the hidden columns to be out of his way, and fourteen scoped rules cost nothing at recalculation time.
+
+### 6A.6 `READINESS GATES`, rows 27 to 33
+
+Three columns: `Gate`, `State`, and one sentence saying what the gate reads and what to do about it. Six of the seven states are a plain read of a cell that already exists, which is what keeps this from being a second copy of 6.4.
+
+| Row | Gate | State |
+|---|---|---|
+| 27 | In term | `=IF(IS9WD_IN_TERM,"PASS","HOLD")` |
+| 28 | Sign-off set for this week | `=IF(IS9WD_SIGNOFF_SET,"PASS","HOLD")` |
+| 29 | Capacity check | reads `IS9WD_FEED_CAPCHECK` |
+| 30 | Plan check | reads `IS9WD_FEED_PLANCHECK` |
+| 31 | Flag list check | reads `IS9WD_FEED_FLAGCHECK` |
+| 32 | Feed errors | reads `IS9WD_FEED_ERRORS` |
+| 33 | Blocking flags on publishing rows | reads `IS9WD_STATS_BLOCKING`, so the eight flag names exist once on this tab |
+
+**The duplication is closed by a check, not by trust.** `E136`, named `IS9WD_STATS_GATE_AGREE`:
 
 ```
-M20 =IFERROR(ARRAY_CONSTRAIN(SORT(FILTER(
-       {IS9WD_DIR_NAME,IS9WD_DIR_VP,IS9WD_DIR_POSITION,IS9WD_DIR_CAROUSEL,IS9WD_DIR_HIERARCHY},
-       IS9WD_DIR_KEY<>""),5,TRUE),14,5),"!ERR")
+=IF((COUNTIF(IS9WD_STATS_GATE_STATE,"HOLD")>0)=(RIGHT(IFERROR(IS9WD_FEED_READY,""),2)="NO"),
+   "OK","Gates disagree with Ready for Canva")
 ```
 
-spilling into M to Q, with `14` written by setup from `IS9WD_DIR_ROWS`. Then one broadcast formula per column: `COUNTIFS`, `SUMIFS`, `MINIFS`, `MAXIFS` and `SUMIF` all take an array criterion under `ARRAYFORMULA`, which is what makes a fourteen row block cost one formula per column instead of fourteen lookups per column.
+**It reads the FEED's verdict, not the tile beside it,** and that is a correction rather than a detail: the tile renders `READY` or `NOT READY` from the feed's sentence, so comparing the gates against the tile would compare a copy with a copy. The self test fails on anything but `OK`. **That is the only thing that can tell a stale copy of the gate list from a correct one**, and it is why the block is allowed to exist at all.
+
+### 6A.7 `BY OFFICER`, rows 38 to 51
+
+Fourteen rows in **hierarchy order** (4B.9), because hierarchy order is the order every list a person reads is sorted by. The five offices are ordinary rows here, exactly as 5.4 says they are everywhere except Canva.
 
 | Col | Header | Named range | What it is |
 |---|---|---|---|
-| A | Committee or office | `IS9WD_STATS_OFF_NAME` | a pointer at the sort |
+| A | Committee or office | `IS9WD_STATS_OFF_NAME` | a pointer at the identity sort on `_Views` |
 | B | Attention | `IS9WD_STATS_OFF_ATTENTION` | one broadcast precedence string, first match wins, `OK` at the bottom |
 | C | Due | `IS9WD_STATS_OFF_DUE` | active, titled, deadline inside this week |
 | D | Done | `IS9WD_STATS_OFF_DONE` | the same with `IS9WD_DEL_ACTIVE,FALSE` |
@@ -1208,20 +1343,24 @@ spilling into M to Q, with `14` written by setup from `IS9WD_DIR_ROWS`. Then one
 | F | Overdue | `IS9WD_STATS_OFF_OVERDUE` | a count of the `Overdue` flag, never a second definition of it |
 | G | Worst late | `IS9WD_STATS_OFF_LATE` | days between today and the earliest active deadline, 0 rather than negative |
 | H | Silent | `IS9WD_STATS_OFF_SILENT` | days since the last status change, or `never` |
-| I | On time | `IS9WD_STATS_OFF_ONTIME` | 6A.6 |
+| I | On time | `IS9WD_STATS_OFF_ONTIME` | 6A.8 |
 | J | Judged | `IS9WD_STATS_OFF_JUDGED` | titled items with a real deadline already in the past |
 | K | Avg days | `IS9WD_STATS_OFF_AVGDAYS` | below |
-| L | Not on carousel | `IS9WD_STATS_OFF_NOTPUB` | read from the feed by carousel ordinal, blank on an officer who does not publish |
+| L | No slide | `IS9WD_STATS_OFF_NOTPUB` | read from the feed by carousel ordinal, blank on an officer who does not publish |
 
-**`Attention` is the column Ethan scans, which is why it is second from the left** (2.5: with no frozen column, the left edge is the only part of a wide table that is always visible). It is the officer row equivalent of the workbook's own `Check` idiom: `Nothing entered for this week`, then `Overdue: n`, then `Blocked: n flagged`, then `Silent n days` or `Never ticked`, then `Past the carousel by n`, then `Behind pace`, then `OK`. `AND` does not broadcast, so the last condition multiplies instead.
+`Not on carousel` is renamed `No slide`, for the reason `Publishes` became `On the carousel`: the shorter phrase says the same thing in words a reader does not have to decode.
 
-**`Avg days` measures creation to the last status change**, using the identity that a sum of differences equals a difference of sums when the filter is identical, which is what lets `SUMIFS` stand in for an `AVERAGEIFS` over a computed range. `Status at` is rewritten on every status change (5.1), so for a currently accomplished item this is the accomplishment. It is a **behaviour signal rather than a performance measure**: an average near 0 means the officer ticks the moment Ethan enters the item, which is a data quality smell worth seeing. **It is the first column to cut if recalculation bites**, and cutting it saves three of the block's broadcast families.
+**`Attention` is the column Ethan scans, which is why it is second from the left** (2.5: with no frozen column, the left edge is the only part of a wide table that is always visible). It is the officer row equivalent of the workbook's own `Check` idiom: `Nothing entered for this week`, then `Overdue: n`, then `Blocked: n flagged`, then `Silent n days` or `Never ticked`, then `No slide for n`, then `Behind pace`, then `OK`. `AND` does not broadcast, so the last condition multiplies instead.
 
-Eight hidden helpers, R to Y, one broadcast formula each: `IS9WD_STATS_OFF_LOAD`, `_FIRSTDUE`, `_LASTTICK`, `_SILENT_N`, `_BLOCKING`, `_ACTIVE_ALL`, `_DONE_ALL`, `_TOTAL`. `_SILENT_N` uses `9999` rather than blank so silence can be compared numerically without a text guard. `_BLOCKING` counts per officer **without restating the eight names**: `"?*"` counts every non-blank `Check` and `Overdue` is subtracted, so it stays correct the day a ninth flag is added. The last three exist for `04 | Officer Tables`, which reads them rather than recomputing them.
+**Identity comes from one spilling sort on `_Views`, and column A is a plain pointer at it**, so display formatting never fights the sort. Then one broadcast formula per column: `COUNTIFS`, `SUMIFS`, `MINIFS`, `MAXIFS` and `SUMIF` all take an array criterion under `ARRAYFORMULA`, which is what makes a fourteen row block cost one formula per column instead of fourteen lookups per column.
 
-Conditional formatting: `Attention` other than `OK`, `Overdue` above 0, `Worst late` at or above `IS9WD_STATS_LATE_DAYS`, `Silent` at or above `IS9WD_STATS_SILENT_DAYS` or reading `never`, `Rate` behind pace, and `On time` below `IS9WD_STATS_ONTIME_TARGET` all take the flag treatment. A `Rate` of exactly 1 and a non-zero `Not on carousel` take the accent, because neither is a fault.
+**`Avg days` measures creation to the last status change**, using the identity that a sum of differences equals a difference of sums when the filter is identical, which is what lets `SUMIFS` stand in for an `AVERAGEIFS` over a computed range. It is a **behaviour signal rather than a performance measure**: an average near 0 means the officer ticks the moment Ethan enters the item, which is a data quality smell worth seeing. **It is the first column to cut if recalculation bites.**
 
-### 6A.6 The fair ranking, and the honesty column
+Conditional formatting: `Attention` other than `OK`, `Overdue` above 0, `Worst late` at or above `IS9WD_STATS_LATE_DAYS`, `Silent` at or above `IS9WD_STATS_SILENT_DAYS` or reading `never`, `Rate` behind pace, and `On time` below `IS9WD_STATS_ONTIME_TARGET` all take the flag treatment. A `Rate` of exactly 1 and a non-zero `No slide` take the accent, because neither is a fault.
+
+**Every threshold in every one of those rules is wrapped in `INDIRECT`.** A conditional format rule may not reference another sheet, and all four of those thresholds are on `_Engine` now. `IS9WD_statsRuleName_` applies the wrapper to **every** named range in **every** rule this module writes, including the ones that happen to be local, because a wrapper applied selectively is a wrapper somebody forgets. This is the bug that stopped `04 | Officer Tables` being built at all in the previous revision.
+
+### 6A.8 The fair ranking, and the honesty column
 
 A count ranks the busiest committee last every week. A completion rate is noise at two items. The comparator that is independent of workload is **the share of an officer's items whose deadline has already passed that were accomplished on or before that deadline.** The denominator is `Judged`; the numerator is those that are terminal and whose `Status at` fell before the end of the deadline day.
 
@@ -1229,11 +1368,11 @@ A count ranks the busiest committee last every week. A completion rate is noise 
 
 **`Judged` is displayed, and a rate is suppressed entirely below `IS9WD_STATS_MIN_JUDGED` rather than printed as 0% or 100% off one item.** An officer three weeks into a term has nothing to rank, and the tab says so instead of inventing a verdict. That is what makes the ranking fair.
 
-**`TRACK RECORD, RANKED`, rows 37 to 50.** One spilling sort into the hidden band and five visible pointers: `Rank`, `Officer`, `On time`, `Judged`, `Note`. The `-1` substitution for an unscored officer is what puts them at the bottom of a descending sort, because an empty string sorts as text and text sorts before numbers descending, which would have put every unscored officer first. It is displayed as blank, never as `-1`, and a rule mutes any row whose `Note` is filled, so the unscored tail reads as not applicable rather than as last place. The block is deliberately separate from the officer table, because that table stays in hierarchy order and a rank number buried in hierarchy order is not a ranking anyone can read.
+**`TRACK RECORD, RANKED`, rows 74 to 87.** Five visible pointers at the sort on `_Views`: `Rank`, `Officer`, `On time`, `Judged`, `Note`. The `-1` substitution for an unscored officer is what puts them at the bottom of a descending sort, because an empty string sorts as text and text sorts before numbers descending, which would have put every unscored officer first. It is displayed as blank, never as `-1`, and a rule mutes any row whose `Note` is filled, so the unscored tail reads as not applicable rather than as last place. The block is deliberately separate from the officer table, because that table stays in hierarchy order and a rank number buried in hierarchy order is not a ranking anyone can read.
 
 **This is a league table of fourteen people and the Canva reader account can read it** (2.2). Nothing personal leaks, but a ranking is a judgement, so: it is named `TRACK RECORD, RANKED`, an officer with too small a sample is suppressed rather than ranked, and it never reaches the feed, an email or Canva. Ethan's call to keep it, recorded in Appendix C.
 
-### 6A.7 `TREND`, rows 54 to 62, and its honest limits
+### 6A.9 `TREND`, rows 110 to 117, and its honest limits
 
 **What the Archive can and cannot support**, because the block is designed around it. The snapshot path archives the feed's **visible** rows and the feed excludes terminal items, so a snapshot row's status is always active: snapshot rows structurally cannot say what was accomplished (10.1). Only the retire path records an accomplishment, once per ID, with a real `Deadline` and a real `Status at`. Therefore:
 
@@ -1241,107 +1380,99 @@ A count ranks the busiest committee last every week. A completion rate is noise 
 - Weekly **accomplishment** is available only for items that have been **retired**, bucketed by the week their deadline fell in.
 - Weekly **overdue at week end** cannot be reconstructed at all. It is not offered.
 
-Rows are oldest first, so the sparkline reads left to right in time. Columns: `Week`, `Week start`, `Published`, `Accomplished`, `On time`, `Recorded`. Two hidden helpers carry the week's Monday, generated by `SEQUENCE`, and that week's own term start, looked up by `SUMIFS` over the term calendar rather than from `IS9WD_TERM_START`, **so a week inside a previous trimester numbers against its own trimester instead of against the current one**. `Recorded` reads `Not archived`, `Snapshot only` or `Archived`, and the two source strings are interpolated by setup from `IS9WD_ARCHIVE.SOURCE_SNAPSHOT` and `.SOURCE_RETIRED`, exactly the way the readiness formula interpolates the eight `Check` names: one definition, in code.
+Rows are oldest first, so the chart under the block reads left to right in time. Columns: `Week`, `Week start`, `Published`, `Accomplished`, `On time`, `Recorded`. Two hidden helpers on `_Views` carry the week's Monday, generated by `SEQUENCE`, and that week's own term start, looked up by `SUMIFS` over the term calendar rather than from `IS9WD_TERM_START`, **so a week inside a previous trimester numbers against its own trimester instead of against the current one**. `Recorded` reads `Not archived`, `Snapshot only` or `Archived`, and the two source strings are interpolated by setup from `IS9WD_ARCHIVE.SOURCE_SNAPSHOT` and `.SOURCE_RETIRED`: one definition, in code.
 
 `On time` is the one per-row block on the tab, eight `SUMPRODUCT`s, because comparing two ranges row by row is what no broadcast criterion can express.
 
-**Row 62 is the sparkline, or an instruction.** `ARCHIVE_WEEK` and `RETIRE_ACCOMPLISHED` both ship OFF (4.7) and they are the only writers of the Archive, so until one runs every trend row reads `Not archived`. The block is designed to say that rather than print a misleading zero: the sparkline cell stays blank and the note beside it names the switch to turn on. **The sparkline renders as one blank cell in a connector read**, which is one labelled blank cell and is stated in the tab's help line.
+**The single sparkline is withdrawn, and the chart replaces it.** The reason is Ethan's instruction: a real chart beats a sparkline at everything except fitting inside one cell, and the trend block no longer needs to. `SPARKLINE` stays available for a genuine per-row inline trend, and there is not one on this tab: no row of any block carries a series of its own. The note that the sparkline rendered as one blank cell in a connector read goes with it.
 
-### 6A.8 `READINESS GATES`, rows 66 to 72
+### 6A.10 The three charts
 
-Three columns: `Gate`, `State`, and one sentence saying what the gate reads and what to do about it. Six of the seven states are a plain read of a cell that already exists, which is what keeps this from being a second copy of 6.4:
+Built with the Apps Script chart builder, `sheet.newChart()` into `sheet.insertChart()`, anchored over a reserved band of blank rows. A chart is an **overlay** rather than a range: it does not consume cells, so the rows underneath it are deliberately empty, because anything written there would be hidden by the chart and invisible to a reader while still being counted by the error scan.
 
-| Row | Gate | State |
-|---|---|---|
-| 66 | In term | `=IF(IS9WD_IN_TERM,"PASS","HOLD")` |
-| 67 | Sign-off set for this week | `=IF(IS9WD_SIGNOFF_SET,"PASS","HOLD")` |
-| 68 | Capacity check | reads `IS9WD_FEED_CAPCHECK` |
-| 69 | Plan check | reads `IS9WD_FEED_PLANCHECK` |
-| 70 | Flag list check | reads `IS9WD_FEED_FLAGCHECK` |
-| 71 | Feed errors | reads `IS9WD_FEED_ERRORS` |
-| 72 | Blocking flags on publishing rows | reads `IS9WD_STATS_BLOCKING`, the measure in row 14, so the eight flag names exist once on this tab |
+| Chart | Type | Data | Reads |
+|---|---|---|---|
+| 1 | column | `BY OFFICER` A, C and D, header row included | Due against done per committee, this week. A tall Due bar beside a short Done bar is the committee to chase. |
+| 2 | bar | `TRACK RECORD` B and C, header row included | The fairness adjusted track record. A bar rather than a column, because fourteen officer names read straight along the vertical axis and do not need slanting. |
+| 3 | line | `TREND` B, C and D, header row included | Week by week, oldest on the left, because the point is the shape over time. |
 
-**The duplication is closed by a check, not by trust.** `E95`, named `IS9WD_STATS_GATE_AGREE`:
+Each range **includes its own header row** and `setNumHeaders(1)` reads the series names out of it, so a legend says `Due` and `Done` rather than `Series 1` and `Series 2`.
 
-```
-=IF((COUNTIF(IS9WD_STATS_GATE_STATE,"HOLD")>0)=(RIGHT(IS9WD_STATS_READY,2)="NO"),
-   "OK","Gates disagree with Ready for Canva")
-```
+**Every option is either a palette colour or Poppins**, because a chart is part of the workbook rather than a guest in it: series `#085040` and `#8a64a9`, the ranked chart `#5d4170` with no legend, gridlines `#e9ebd4`, all text `#58756a`, background `#F8FBFD`, title `#085040` at 13 point bold. 1,120 px wide by 330 px high, which fits inside the twelve columns and inside a 14 row band at 26 px.
 
-The self test fails on anything but `OK`. **That is the only thing that can tell a stale copy of the gate list from a correct one**, and it is why the block is allowed to exist at all.
+**EVERY CHART IS REMOVED BEFORE ANY IS INSERTED.** `insertChart` appends: it has no by-name form and no replace form, so a build run twice would leave six charts stacked on three anchors, a build run three times nine, and **nothing on screen would say so** until the file was slow. `IS9WD_statsRemoveCharts_` removes every chart on the tab first, which is safe because the tab is script owned end to end and nothing else ever puts a chart on it. The self test asserts the count against the declared list, not against a number (13.4).
 
-### 6A.9 `OPERATIONAL HEALTH`, rows 76 to 86, and `SCHEDULED JOBS`, rows 90 to 94
+**A chart with no data yet is still inserted and still renders as an empty chart.** It is never a broken object and it is never skipped, because a missing chart looks like a missing feature. The **caption row above it** is a formula that says, in plain words, either what the chart is showing or what will fill it:
 
-The health block is the same three columns and the same single-rule helper pattern as `THIS WEEK`. Rows: `Ready for Canva`, `Carousel pages this week`, `Export page list`, `Master pages required`, `Automation last run`, `Automation and test mode`, `Last self test`, `Mail quota at the last run`, `Overrides, and the links`, `Rows used of 2000`, and `Weeks of row room left`.
+- chart 1, with nothing entered: `Nothing is entered for this week yet, so the chart below is empty. It fills the moment you enter deliverables on 02 | Deliverables.`
+- chart 2, with nobody scored: `No officer has enough tasks past a deadline to be scored yet, so the chart below is empty. It fills as tasks pass their deadlines and are ticked off.`
+- chart 3, with an empty archive: `No week has been archived yet, so the chart below is empty. Switch ARCHIVE_WEEK on, or run Archive this week from the IS9 Deliverables menu.`
 
-Four of them are worth a note.
+Otherwise each one states what it is showing and, for chart 2 and chart 3, the caveat a reader would otherwise get wrong: a blank bar means too few tasks to judge rather than a score of zero, and `Accomplished` counts only retired tasks so it reads low until retirement runs. The self test fails on a blank caption.
 
-- **`Automation last run`** flags when the cell holds no timestamp at all or when the timestamp is more than two hours old, because the trigger is hourly (8.1).
-- **`Last self test`** tests the summary line for the phrase the self test writes when something failed. That phrase is declared once, in `IS9WD_Config.js`, and both files read it from there: two copies of it are two strings that drift, and the drift would read as a healthy self test on the tab whose job is to say otherwise.
-- **`Master pages required`** is never flagged, and takes the accent instead. A formula cannot know how many pages the Canva master physically holds, so a test against a number in code would be either always true or always false. What it can do is print the number the master must reach and say that raising a capacity number needs a master rebuild before it can be used (6.3).
-- **`Rows used of 2000` and `Weeks of row room left`** are the two that matter most here. 10.1's planning figure fills 2,000 rows in about seven weeks at 280 items a week, and these turn that from a paragraph in a document into a number on a screen with weeks on it. The second is `=ROUND(free rows / (items created in the last 28 days / 4),0)` and flags below `IS9WD_STATS_ROOM_WEEKS_WARN`.
-
-`SCHEDULED JOBS` is four spills out of `IS9WD_SCHEDULE` itself, using `INDEX(range,0,col)` to take a whole column of a multi-column named range: `Job key`, `Last run`, `On`, `Last status`. The order puts `Last run` second against the reading order elsewhere on the tab, because a timestamp needs 250 px and column C is 65: the value has to sit where it fits. A failed run takes the flag treatment and a job switched off is muted, because off is superseded and not broken.
-
-**This block is what replaces "emails sent".** Whether the Monday job ran and whether it failed is actionable; how many messages it sent is not, and counting them would mean giving `06 | Log` named ranges and depending on a stable action string.
-
-### 6A.10 What was killed, and why
+### 6A.11 What was killed, and why
 
 | Killed | Why |
 |---|---|
 | Total items ever, items created this term, lifetime accomplished | No action follows any of them. |
 | Progress percentage per item | Out of scope, SPEC section 1. |
 | Average items per committee | Punishes nothing, changes nothing. |
-| Emails sent | Not available without giving the Log named ranges and a stable action string, and not actionable anyway. Replaced by `SCHEDULED JOBS`. |
+| Emails sent | Not available without giving the Log named ranges and a stable action string, and not actionable anyway. Replaced by `SCHEDULED JOBS` on `_Views`. |
 | Busiest weekday, deadline distribution | Interesting, no action. |
 | Age of the oldest open item | Subsumed. An old item with a far-future deadline is not yet late, so nothing follows. `Worst late` carries the actionable half. |
-| A workload leaderboard by raw item count | Ranks the busiest committee last every week, by construction. Replaced by `On time`, 6A.6. |
-| Per-officer sparklines | 112 `COUNTIFS` over a growing Archive, for a picture the connector cannot read. One sparkline in the trend block instead. |
+| A workload leaderboard by raw item count | Ranks the busiest committee last every week, by construction. Replaced by `On time`, 6A.8. |
+| Per-officer sparklines | 112 `COUNTIFS` over a growing Archive, for a picture the connector cannot read. |
+| The one trend sparkline | Replaced by chart 3, which does the same job better and larger. |
+| `OPERATIONAL HEALTH` and `SCHEDULED JOBS` on this tab | Both are the machine reporting on itself: useful when something is wrong, noise on a dashboard. Moved to `_Views`, every named range intact. |
+| The eight thresholds on this tab | Ethan's instruction: this tab is for viewing. Moved to `_Engine` (4B.7). |
+| The hidden helper band, columns M to Y | Ethan's instruction: hidden helper columns move to a hidden tab where they are not in his way. Moved to `_Views`. |
 
-### 6A.11 Error handling
+### 6A.12 Error handling
 
-The same rule as the feed and for the same reason: both tabs are inside the same connector read, and a blank caused by a broken named range is indistinguishable from a legitimately empty cell. **Every fallback is the visible sentinel `!ERR`**, except in the four places where blank is the contract: an unscored rank, an unused trend row, `Not on carousel` on an officer who does not publish, and an officer with no items. Every cross-tab read of a feed cell is wrapped, so a feed that was never sized surfaces the sentinel rather than a bare `#NAME?`.
+The same rule as the feed and for the same reason: both tabs are inside the same connector read, and a blank caused by a broken named range is indistinguishable from a legitimately empty cell. **Every fallback is the visible sentinel `!ERR`**, except in the four places where blank is the contract: an unscored rank, an unused trend row, `No slide` on an officer who does not publish, and an officer with no items. Every cross-tab read of a feed cell is wrapped, so a feed that was never sized surfaces the sentinel rather than a bare `#NAME?`.
 
-`C95`, named `IS9WD_STATS_ERRORS`, counts both: `=SUMPRODUCT(--ISERROR($A$1:$Y$94))+SUMPRODUCT(--($A$1:$Y$94="!ERR"))`. It stops one row short of the end row for the reason the feed's stops two short of its own: the count lives on that row and a scan over itself is circular. The first conditional format rule on the tab, before all others so it wins on any cell it touches, is `=A1="!ERR"` over the whole tab.
+`C136`, named `IS9WD_STATS_ERRORS`: `=SUMPRODUCT(--ISERROR($A$1:$L$135))+SUMPRODUCT(--($A$1:$L$135="!ERR"))`. It stops one row short of the end row for the reason the feed's stops two short of its own: the count lives on that row and a scan over itself is circular. The first conditional format rule on the tab, before all others so it wins on any cell it touches, is `=A1="!ERR"` over the whole tab.
 
-### 6A.12 Recalculation cost
+### 6A.13 Recalculation cost
 
 | Block | Range reads per recalculation |
 |---|---|
 | The existing `Rank` column on the data tab, for comparison | about 560,000 |
-| `THIS WEEK` | about 30,000 |
+| The eight tiles and the six sentence rows | about 30,000 |
 | `BY OFFICER`, nine broadcast metric columns | about 250,000 |
 | `BY OFFICER`, `Avg days` | about 84,000 |
 | `BY OFFICER`, `On time` via `MMULT` | about 58,000 |
 | `TREND` over the archive span | about 190,000 |
-| `OPERATIONAL HEALTH` | about 8,000 |
+| `_Views` operational health | about 8,000 |
 | `04 \| Officer Tables`, fourteen spills | about 224,000 |
 
-**About 845,000 added against 560,000 today, so recalculation roughly doubles**, and every tick from a phone triggers it because the data tab changes. `setRecalculationInterval(HOUR)` bounds only the volatile date functions; these are change driven. **The figure is arithmetic and not a measurement**, which is why 13.3 adds a timing check. The cuts, in order, if it bites: `Avg days` first, then `IS9WD_STATS_TREND_WEEKS` from 8 to 4, and `On time` last, because it is the fair ranking and it is the reason the block exists.
+**About 845,000 added against 560,000 today, so recalculation roughly doubles**, and every tick from a phone triggers it because the data tab changes. `setRecalculationInterval(HOUR)` bounds only the volatile date functions; these are change driven. **The figure is arithmetic and not a measurement**, which is why 13.3 adds a timing check. The three charts add nothing to it: a chart reads a range that is already computed. The cuts, in order, if it bites: `Avg days` first, then `IS9WD_STATS_TREND_WEEKS` from 8 to 4, and `On time` last, because it is the fair ranking and it is the reason the block exists.
 
 ---
 
 ## 6B. `04 | Officer Tables`
 
-Fourteen tables, one per directory entry, in hierarchy order: the President, the four EVPs, then the nine committees. Each is a band row carrying the officer, the position, the person and their counts, then a column header row, then their items. **The tab reads as a document**: a heading tells you whose section you are in and how big it is before you read a single row.
+Fourteen **numbered sections**, one per directory entry, in hierarchy order: the President, the four EVPs, then the nine committees. Each is a heading carrying the section number, the officer, the position, the person and their counts, then a column header row, then their items. **The tab reads as a document**: a numbered heading tells you whose section you are in, how big it is and how far there is to go before you read a single row.
 
-**This tab computes nothing that `03 | Statistics` already computes.** Every count in a band row is an `INDEX` into a named range on that tab, which is the rule 4.9 already follows for the feed. One source, two views, and they cannot disagree. Those counts are the all-items window, which is why `IS9WD_STATS_OFF_ACTIVE_ALL`, `_DONE_ALL` and `_TOTAL` exist in the statistics tab's helper band, and the help line says so. It is also why `IS9WD_statsResize_` runs **before** this tab is built.
+**It was empty before this revision, and that is what requirement 1 of 2026-09-27 was about.** The tab existed and the statistics build threw before reaching it, because a conditional format rule referenced a named range on another sheet, which Sheets refuses at the moment the rule is applied. The fix is 6A.7's: every named range inside every rule this module writes goes through `IS9WD_statsRuleName_` and comes out as `INDIRECT("NAME")`. The harness in 13.4 refuses a cross-sheet rule outright, so the class of bug cannot come back silently.
+
+**This tab computes nothing that `03 | Statistics` already computes.** Every count in a heading is an `INDEX` into a named range on `_Views`, which is the rule 4B.8 already follows for the feed. One source, two views, and they cannot disagree. Those counts are the all-items window, which is why `IS9WD_STATS_OFF_ACTIVE_ALL`, `_DONE_ALL` and `_TOTAL` exist in the helper band, and the help line says so. It is also why this is the **last** of the three entry points: `_Views` first, then the dashboard, then this.
 
 ### 6B.1 Which items, and the sort
 
 **Every titled item on the data tab for that officer, active first then accomplished, each group by deadline ascending then ID ascending.**
 
 - **Every item, not a week window.** The data tab is already bounded by retirement, so "everything on it" means "everything current". A week window here would hide the overdue item from two weeks ago, which is the one thing Ethan most needs to see in a read-through.
-- **Accomplished items show.** Hiding them makes the block look emptier than the week was, and they are the only visible evidence that a private link is being used at all, which matters when Ethan enters every item himself.
+- **Accomplished items show.** Hiding them makes the section look emptier than the week was, and they are the only visible evidence that a private link is being used at all, which matters when Ethan enters every item himself.
 - **Deadline then ID is the `Rank` rule** (5.4), tie-broken on ID rather than on row position for exactly the same reason: a single sort of the data tab would otherwise silently reorder this tab with no data change. So **the order a human reads here equals the order Canva publishes**, which is worth having and is free.
 
 ### 6B.2 Columns
 
-Seven visible, one hidden. Total 1,075 px, inside the laptop budget with room, which is what makes the missing frozen column a non-issue here (2.5).
+Seven visible, one hidden. Total 1,095 px, inside the laptop budget with room, which is what makes the missing frozen column a non-issue here (2.5).
 
 | Col | Header | Width | Format |
 |---|---|---|---|
-| A | `Title of Task` | 340 | text, clip |
+| A | `Title of Task` | 360 | text, clip |
 | B | `Deadline` | 110 | `ddd, mmm d`, right |
 | C | `Days left` | 85 | `0;-0`, right |
 | D | `Status` | 110 | text |
@@ -1350,58 +1481,62 @@ Seven visible, one hidden. Total 1,075 px, inside the laptop budget with room, w
 | G | `ID` | 80 | text, centre |
 | H | the sort key | hidden | text |
 
-Title first because it is the thing you read; the band above already says whose table it is. Column H is hidden the way the data tab hides K to Q, and it is not decoration: it is what makes the whole block one spilling formula, and it is what the muted rule reads.
+Title first because it is the thing you read; the heading above already says whose section it is.
+
+**Column H is the one hidden column left on a tab a person reads, and it is the one that cannot move to `_Views` with the others.** It is not a helper: it is the eighth column of the very `SORT` that produces the seven visible ones, so it has to sit beside them on the same rows of the same sheet. It is what makes the whole section one spilling formula, and it is what the muted rule reads. Recorded as a ruling in Appendix C.
 
 ### 6B.3 Row map
 
 ```
-1                  Banner  04 | OFFICER TABLES                         h 40
-2                  Help line                                           h 24
+1                  Banner  04 | OFFICER TABLES                         h 46
+2                  Help line                                           h 34
 3                  Summary: what is not shown below                     h 26
-4                  Spacer                                              h 12
-then 14 blocks, each of R + 3 rows, R = IS9WD_STATS_OFFICER_ROWS:
-    band row       the officer line, one formula, overflow wrap         h 34
+4                  Spacer                                              h 18
+then 14 sections, each of R + 3 rows, R = IS9WD_STATS_OFFICER_ROWS:
+    heading row    the officer line, one formula, overflow wrap         h 38
     header row     the seven labels                                    h 30
     R - 1 rows     the items, one spilling formula in the first row     h 26
     1 row          the overflow notice, or blank                       h 26
-    1 row          spacer                                              h 12
+    1 row          spacer                                              h 18
 last row           IS9WD OFFICER TABLES END, and the error count in C   h 26
 ```
 
 **Frozen rows 3**, so the banner, the help line and the summary stay on screen however far down the tab runs. That is the best available substitute for the banned frozen column and a better use of a frozen pane than column A would have been.
 
-At the default `R = 13`: `3 + 1 + 14 * 16 + 1 = 229` rows, showing **12 items per officer**.
+At the shipping `R = 21`: `3 + 1 + 14 * 24 + 1 = 341` rows, showing **20 items per officer**, which is the most any committee can publish, so nothing is ever hidden at the shipping setting. `R = 13` costs 229 rows and shows 12, and it is the value to set the day the connector read gets tight: one edit on `_Engine` plus one `Build or repair workbook`, and setup resizes every section and re-points every range.
 
-**Why 13 and not 21.** A committee can publish 20 items, so `R = 21` is the value that guarantees nothing is ever hidden. It costs 340 rows instead of 229, which is 111 more rows in a Drive read whose truncation limit 6.5 calls the largest single risk in the revision. The worked week in 6.4 has committees at 3 to 8 items. So: default 13, and 21 is the value to set the day a heavy trimester makes the notice row a regular sight. One Configuration edit plus one `Build or repair workbook`, and setup resizes every block and re-points every range.
-
-**Variable-height blocks were rejected.** Sizing each block to its officer's current count would mean setup rewriting the tab's layout whenever a count changed, and every block below moving when one officer gained an item. Fixed blocks plus an explicit notice is the design that stays idempotent.
+**Variable-height sections were rejected.** Sizing each one to its officer's current count would mean setup rewriting the tab's layout whenever a count changed, and every section below moving when one officer gained an item. Fixed sections plus an explicit notice is the design that stays idempotent.
 
 ### 6B.4 How overflow is detected rather than hidden
 
 Three mechanisms, because silent truncation is the failure this design most has to avoid. `ARRAY_CONSTRAIN` alone would have dropped the rest without a word.
 
-1. **The notice row.** The spill is constrained to `R - 1` rows and the reserved row below it reads `+ n more not shown here. Raise Rows reserved per officer in 00 | Configuration, then run Build or repair workbook.` It takes the flag treatment when it is not blank.
-2. **The band row states the true total**, so a band reading 17 above 12 rows is visibly inconsistent even before the notice is read.
-3. **Row 3 states it from the top**, naming every officer and the number hidden, so nobody has to scroll fourteen blocks to find out. It is inside the frozen pane.
+1. **The notice row.** The spill is constrained to `R - 1` rows and the reserved row below it reads `+ n more not shown here. Raise Rows reserved per officer on _Engine, then run Build or repair workbook.` It takes the flag treatment when it is not blank.
+2. **The heading states the true total**, so a heading reading 25 above 20 rows is visibly inconsistent even before the notice is read.
+3. **Row 3 states it from the top**, naming every officer and the number hidden, so nobody has to scroll fourteen sections to find out that something was left out. It is inside the frozen pane.
 
 The self test asserts all three together, and it asserts the arithmetic: the notice's number must equal `total - (R - 1)`, and no officer may show fewer rows than their total without a notice. **That is the anti-silent-truncation assertion** (13.4).
 
-### 6B.5 The officer identity, and the band line
+### 6B.5 The officer identity, and the heading line
 
-Each band row carries its officer's **hierarchy ordinal as a literal in hidden column H**, written once by setup, and every formula in the block reads it. This is the feed's `IS9WD_OFFICER_ORDINAL` device (6.4), and it is what lets fourteen structurally identical blocks share one formula shape.
+Each heading row carries its officer's **hierarchy ordinal as a literal in hidden column H**, written once by setup, and every formula in the section reads it. This is the feed's `IS9WD_OFFICER_ORDINAL` device (6.4), and it is what lets fourteen structurally identical sections share one formula shape.
 
-The band line is one formula: the officer and the position uppercased, the person's name as typed, then `n active`, `n done`, `n overdue`, then `n past the carousel` when there is any, then `no deliverables entered` when the total is zero, then `n not shown below` when the total exceeds what fits. Overflow wrap, `#085040` fill across A to G, `#F8FBFD` text. **One cell of text running across a filled span, no merge**, which is how the bar look is achieved without the connector printing `[merged]` repeats.
+The heading is one formula, and it **opens with the section number**: `01 of 14`, then the officer and the position uppercased, then the person's name as typed, then `n to do`, `n done`, `n late`, then `n with no slide` when there is any, then `nothing entered yet` when the total is zero, then `n not shown below` when the total exceeds what fits. Overflow wrap, `#085040` fill across A to G, `#F8FBFD` text.
+
+**The section number is what makes the tab a document rather than fourteen stripes.** It is the change requirement 1 of 2026-09-27 asked for in the words "it must look like a document rather than a dump": a reader always knows where they are and how far there is to go, which is the one thing a run of identical bars cannot tell them.
+
+**One cell of text running across a filled span, no merge**, which is how the bar look is achieved without the connector printing `[merged]` repeats.
 
 ### 6B.6 The item spill
 
-One formula per block, in the first item row's column A. Four things in it are load bearing.
+One formula per section, in the first item row's column A. Four things in it are load bearing.
 
 - **The sort key is one column, not three sort arguments.** `0` or `1` for active or done, then the deadline serial zero padded to six digits, then the ID. One `SORT` argument, and the whole ordering rule is legible in one expression. A blank deadline gives `000000` and sorts first, which matches the feed's deliberate choice to put an item nobody can date at the top rather than buried (6.4).
-- **Both computed columns are wrapped in `ARRAYFORMULA`.** `IF` and `&` do not broadcast over a range inside an array literal; without the wrapper each column collapses to a scalar, the `{}` literal fails on a size mismatch, and the block goes permanently and silently blank. This is the exact failure 6.4 documents for Block D.
+- **Both computed columns are wrapped in `ARRAYFORMULA`.** `IF` and `&` do not broadcast over a range inside an array literal; without the wrapper each column collapses to a scalar, the `{}` literal fails on a size mismatch, and the section goes permanently and silently blank. This is the exact failure 6.4 documents for Block D.
 - **The key is column 8 and hidden**, so the display columns are in reading order and no `CHOOSECOLS` is needed: classic functions only, matching every other formula in the workbook.
-- **The `IF` on the total means one cell returns either a sentence or an array**, so an officer with nothing shows one muted sentence rather than twelve blank banded rows, and does not need a second cell.
+- **The `IF` on the total means one cell returns either a sentence or an array**, so an officer with nothing shows one muted sentence, `Nothing entered for this officer yet.`, rather than twenty blank banded rows, and does not need a second cell.
 
-**Cost.** One `FILTER` plus `SORT` over 2,000 rows and 8 columns per block, about 16,000 range reads each and 224,000 for fourteen. The alternative, twelve rows of eight `INDEX/MATCH` lookups per block, is about 190,000 **per block** and 2.7 million for the tab. That is the whole argument for one spilling formula per block, and it is a factor of twelve.
+**Cost.** One `FILTER` plus `SORT` over 2,000 rows and 8 columns per section, about 16,000 range reads each and 224,000 for fourteen. The alternative, twenty rows of eight `INDEX/MATCH` lookups per section, is about 190,000 **per section** and 2.7 million for the tab. That is the whole argument for one spilling formula per section, and it is a factor of twelve.
 
 ### 6B.7 How an accomplished item is distinguished, without keying on a status label
 
@@ -1411,11 +1546,99 @@ The rule reads the **first character of the sort key**, which derives from `IS9W
 =LEFT($H<first item row>,1)="1"   over  A<first>:G<last>   ->  muted #8b74a1
 ```
 
-Muted foreground across all seven columns, no strikethrough, matching the Archive's treatment of a retired row so the workbook reads as one system. The `Status` column also carries the label as text, so the word is there for anyone who wants it, **as display and never as a key**. Renaming the status in Configuration changes nothing, which 13.3 checks.
+Muted foreground across all seven columns, no strikethrough, matching the Archive's treatment of a retired row so the workbook reads as one system. The `Status` column also carries the label as text, so the word is there for anyone who wants it, **as display and never as a key**. Renaming the status on `_Engine` changes nothing, which 13.3 checks.
 
-Other rules per block: a blocking flag on `Flag`, then `Overdue` on `Flag`, both flagged, in that order so a row that is both reads as blocked; a negative `Days left` takes the accent, scoped to that column so it cannot collide with the flag rule; the notice row is flagged when it is not blank. Five rules per block plus the `!ERR` rule, 71 in all, written per block rather than as one multi-range rule per treatment, because a multi-range rule's relative anchor across fourteen ranges is undocumented and getting it wrong would mute the wrong rows on the tab whose muting is an acceptance check.
+Other rules per section: a blocking flag on `Flag`, then `Overdue` on `Flag`, both flagged, in that order so a row that is both reads as blocked; a negative `Days left` takes the accent, scoped to that column so it cannot collide with the flag rule; the notice row is flagged when it is not blank. Five rules per section plus the `!ERR` rule, 71 in all, written per section rather than as one multi-range rule per treatment, because a multi-range rule's relative anchor across fourteen ranges is undocumented and getting it wrong would mute the wrong rows on the tab whose muting is an acceptance check.
 
-Banding is applied per block over the item rows only, so a block reads as a table and the notice row and the spacer stay plain. That, plus the 34 px band and the 12 px spacer, is what makes the tab read as a document rather than as a dump.
+**Not one of the 71 rules reads a named range**, which is why this tab was the one that exposed the cross-sheet rule bug: everything it needs is a cell on the same sheet, so the bug arrived from `03 | Statistics` rather than from here.
+
+Banding is applied per section over the item rows only, so a section reads as a table and the notice row and the spacer stay plain. That, plus the 38 px heading and the 18 px spacer, is what makes the tab read as a document rather than as a dump.
+
+---
+
+## 6C. `_Views`: the helper band, and the machine reporting on itself
+
+Hidden, thirteen columns, script owned end to end, never typed into. It exists because of Ethan's instruction of 2026-09-27: hidden helper columns move to a hidden tab where they are not in his way. `IS9WD_Stats.js` owns it and `IS9WD_viewsResize_` is the **first** of that module's three entry points, because both visible views read it by name.
+
+### 6C.1 Row map
+
+| Rows | Block | Contents |
+|---|---|---|
+| 4 to 8 | `BUILD MARKERS` | band, hint, 3 rows |
+| 10 to 26 | `OFFICER IDENTITY AND HELPERS` | band, hint, header, 14 rows, 13 columns |
+| 28 to 44 | `RANKED SORT` | band, hint, header, 14 rows, 3 columns |
+| 46 to 56 | `TREND HELPERS` | band, hint, header, 8 rows, 2 columns |
+| 58 to 71 | `OPERATIONAL HEALTH` | band, hint, header, 11 rows, 4 columns |
+| 73 to 80 | `SCHEDULED JOBS` | band, hint, header, 5 rows, 4 columns |
+| 81 | `IS9WD VIEWS END`, the tab's own error count in C | |
+
+Every block carries a band, a hint row and a header exactly as a visible tab's does, and the reason is not symmetry: a hidden tab is still a tab somebody will one day have to read in a hurry, probably a successor, and an unlabelled grid of thirteen broadcast formulas is unreadable to anyone who did not write it.
+
+### 6C.2 `BUILD MARKERS`, rows 6 to 8
+
+Three cells, and **two of them are the only numbers `IS9WD_Stats.js` ever writes into a cell**. They are addresses and guards rather than data: a layout setting raised without a rebuild would spill a row into a spacer and produce a `#REF!`, and the guard note beside the setting on `_Engine` compares the two and says so.
+
+| Cell | Named range | What it is |
+|---|---|---|
+| B6 | `IS9WD_STATS_ELAPSED` | `=IF(IS9WD_EFFECTIVE_TODAY<IS9WD_WEEK_START,0,MIN(7,IS9WD_EFFECTIVE_TODAY-IS9WD_WEEK_START+1))`. On Sunday the week starts tomorrow, so elapsed is 0 and nothing can be behind pace, which is correct. |
+| B7 | `IS9WD_STATS_TREND_BUILT` | the trend row count setup actually built |
+| B8 | `IS9WD_OT_ROWS_BUILT` | the reserved row count `04 \| Officer Tables` was actually built with |
+
+`IS9WD_OT_ROWS_BUILT` used to live in the hidden column of `04 | Officer Tables`. It is here now with the other two markers, which changes nothing: both the guard note and the officer tables' own formulas read it by name.
+
+### 6C.3 `OFFICER IDENTITY AND HELPERS`, rows 13 to 26
+
+One spilling sort into A to E, then eight broadcast formulas in F to M.
+
+```
+A13 =IFERROR(ARRAY_CONSTRAIN(SORT(FILTER(
+       {IS9WD_DIR_NAME,IS9WD_DIR_VP,IS9WD_DIR_POSITION,IS9WD_DIR_CAROUSEL,IS9WD_DIR_HIERARCHY},
+       IS9WD_DIR_KEY<>""),5,TRUE),14,5),"!ERR")
+```
+
+**That array literal combines three columns from `00 | Configuration` with two from `_Engine`, and it is legal because all five are the same height.** It is also the reason the directory could be split across two tabs at all: without a cross-sheet array literal, the identity sort would have needed a join.
+
+| Col | Named range | What it is |
+|---|---|---|
+| A | `IS9WD_STATS_OFF_SORTNAME` | the sort's own first column, which the dashboard's column A points at |
+| B to E | `_VP`, `_POSITION`, `_CAROUSEL`, `_HIER` | the rest of the sort |
+| F | `_LOAD` | `Due` plus `Done` this week |
+| G | `_FIRSTDUE` | `MINIFS` over active titled deadlines |
+| H | `_LASTTICK` | `MAXIFS` over `Status at` |
+| I | `_SILENT_N` | days since the last tick, or `9999` |
+| J | `_BLOCKING` | every non-blank `Check` minus `Overdue` |
+| K, L, M | `_ACTIVE_ALL`, `_DONE_ALL`, `_TOTAL` | the all-items window `04 \| Officer Tables` reads |
+
+`_SILENT_N` uses `9999` rather than blank so silence can be compared numerically without a text guard. `_BLOCKING` counts per officer **without restating the eight flag names**: `"?*"` counts every non-blank `Check` and `Overdue` is subtracted, so it stays correct the day a ninth flag is added.
+
+**`MINIFS` and `MAXIFS` are the only two spreadsheet functions this workbook asks to broadcast under `ARRAYFORMULA` whose array-criterion behaviour is not documented.** If either returns a scalar instead, all fourteen rows quietly take the first officer's answer and nothing else notices, so the self test recomputes `_FIRSTDUE` from the items and compares (13.4).
+
+### 6C.4 `RANKED SORT` and `TREND HELPERS`
+
+The ranked sort is one spill of three columns, `IS9WD_STATS_RANK_KEY`, `_SCORE` and `_JUDGED`, with the `-1` substitution 6A.8 explains. The trend helpers are `IS9WD_STATS_TRENDMONDAY`, generated by `SEQUENCE` from `IS9WD_WEEK_START` backwards, and `IS9WD_STATS_TRENDTERM`, that week's own trimester start.
+
+### 6C.5 `OPERATIONAL HEALTH`, rows 61 to 71
+
+Label in A, value in B, reading in C, and a flag boolean in D that **one** conditional format rule reads: one rule instead of eleven scoped rules, and each row still owns its own threshold in its own formula. Rows: `Ready for Canva`, `Carousel pages this week`, `Export page list`, `Master pages required`, `Automation last run`, `Automation and test mode`, `Last self test`, `Mail quota at the last run`, `Overrides, and the links`, `Rows used of 2000`, and `Weeks of row room left`.
+
+Four of them are worth a note.
+
+- **`Automation last run`** flags when the cell holds no timestamp at all or when the timestamp is more than two hours old, because the trigger is hourly (8.1).
+- **`Last self test`** tests the summary line for the phrase the self test writes when something failed. That phrase is declared once, in `IS9WD_Config.js`, and both files read it from there: two copies of it are two strings that drift, and the drift would read as a healthy self test on the row whose job is to say otherwise.
+- **`Master pages required`** is never flagged, and takes the accent instead. A formula cannot know how many pages the Canva master physically holds, so a test against a number in code would be either always true or always false. What it can do is print the number the master must reach and say that raising a capacity number needs a master rebuild before it can be used (6.3).
+- **`Rows used of 2000` and `Weeks of row room left`** are the two that matter most. 10.1's planning figure fills 2,000 rows in about seven weeks at 280 items a week, and these turn that from a paragraph in a document into a number on a screen with weeks on it. The second is `=ROUND(free rows / (items created in the last 28 days / 4),0)` and flags below `IS9WD_STATS_ROOM_WEEKS_WARN`. `IS9WD_STATS_ROOM_WEEKS` is the named range the self test reads.
+
+**Why the whole block is on a hidden tab rather than on the dashboard.** It is the machine reporting on itself: every row of it is useful on the morning something is wrong and none of it is what a president looks at before Sunday. Ethan's instruction was that the dashboard is for viewing KPIs and charts, and eleven rows of plumbing on it is the opposite of that. Nothing was lost: every named range is intact, the self test reads them, and the Sunday brief can print them.
+
+### 6C.6 `SCHEDULED JOBS`, rows 76 to 80
+
+Four spills out of `IS9WD_SCHEDULE` itself, using `INDEX(range,0,col)` to take a whole column of a multi-column named range: `Job key`, `Last run`, `On`, `Last status`. The order puts `Last run` second against the reading order elsewhere, because a timestamp needs 210 px and the value has to sit where it fits. A failed run takes the flag treatment and a job switched off is muted, because off is superseded and not broken.
+
+**This block is what replaces "emails sent".** Whether the Monday job ran and whether it failed is actionable; how many messages it sent is not, and counting them would mean giving `06 | Log` named ranges and depending on a stable action string.
+
+### 6C.7 Error handling
+
+The same rule as the other two views: every fallback is `!ERR`, and `C81`, named `IS9WD_VIEWS_ERRORS`, counts both errors and sentinels over `A1:M80`. The self test fails on a non-zero count and names `Checks > Rebuild the views` as the fix, because that is the one action that rebuilds this tab on its own.
 
 ---
 
@@ -2071,25 +2294,31 @@ The seed remark `Send final name to Publication` is left exactly as v1 wrote it,
 
 **Workbook**
 
-- [auto] A fresh build creates all 7 tabs. A second run changes no item, no token and no archive row, and creates no duplicate tab. Both views are entirely script owned, so `user cells changed: 0` still holds and `IS9WD_setupSnapshot_` needs no new ranges.
+- [auto] A fresh build creates all **9** tabs, six visible and three hidden. A second run changes no item, no token and no archive row, and creates no duplicate tab. All three computed tabs are entirely script owned, so `user cells changed: 0` still holds; `IS9WD_setupSnapshot_` gained the `_Engine` blocks, because that is where the settings went.
+- [claude] **The cream rule, by eye and then by test.** Open `00 | Configuration` cold and confirm that every cell with a cream fill is one you would type into, that the sentence beside it in column C says what to type and what happens if it is wrong, that clicking the cell shows the same sentence as a note, and that no calculated cell is cream. Do the same on `_Engine`. Then confirm `02 | Deliverables` has exactly five cream columns, that row 4 carries one sentence per column, and that both row 3 and row 4 carry the same sentence as a note. `IS9WD_selfTest()` asserts all of it (13.4), so the eye check is for the wording rather than for the mechanics.
+- [claude] **The three charts.** Run `Build or repair workbook` three times and confirm `03 | Statistics` still holds exactly **three** charts, each anchored inside its own reserved band. This is the check for the one failure that compounds silently: `insertChart` appends, so a build that forgot to remove first would leave nine.
+- [claude] **An empty chart is still a chart.** On a workbook with no deliverables and no archive rows, confirm all three charts render as empty plots rather than as broken objects, and that the caption row above each one says in plain words what will fill it (6A.10).
+- [claude] **The hidden tabs.** Confirm `_Engine` and `_Views` are hidden, that `06 | Log` still is, and that **`01 | Canva Feed` is not**: whether the Drive connector reads a hidden tab is unmeasured and the Sunday run depends on that tab. Then unhide `_Engine` by hand, run `Build or repair workbook`, and confirm it is hidden again.
+- [claude] **The directory's two halves.** Confirm `IS9WD_DIR_KEY` on `00 | Configuration` and the `Key` column of `DIRECTORY MACHINERY` on `_Engine` hold the same fourteen keys in the same order. Then overwrite one key on `_Engine` by hand: `IS9WD_selfTest()` fails naming the row, because the join is by row position (4.4).
 - [claude] **The renumbering.** On a workbook built before this change, run `Build or repair workbook` and confirm it renames `03 | Archive` to `05 | Archive` and `04 | Log` to `06 | Log` by their developer metadata, creates no twin, and strands no row. Then rename `03 | Statistics` to something of your own in the tab bar and re-run: it repairs **that** sheet and leaves your name alone, because the rename only applies to a name of the project's own `NN | Something` shape (section 3).
-- [claude] **The store's move.** Run the build on a workbook created before this change and confirm the eight new switches land at B68:B75, the store's rows are where 4.5 now says, and the store's `Check` column still reads `OK` on every filled row. **With filled store rows this check is expected to fail until a migration exists**, which is why the settings have to land before Gate A (4.6).
-- [claude] Set `IS9WD_STATS_OFFICER_ROWS` to 21 without rebuilding: `C75` says to run `Build or repair workbook` and `IS9WD_selfTest()` fails. Rebuild: the tab grows to 340 rows, every block resizes, every range re-points, and the self test passes. Do the same with `IS9WD_STATS_TREND_WEEKS` and `C68`.
+- [claude] **The store's move to `_Engine`.** Run the build on a workbook created before this change and confirm the store's rows are where 4B.10 now says and its `Check` column reads `OK` on every filled row. **With filled store rows this check is expected to fail, because setup widens an append only block and never migrates one**, which is why the move had to land before Gate A (4B.10). Today the store holds zero filled rows, so the cost is zero.
+- [claude] Set `IS9WD_STATS_OFFICER_ROWS` to 13 on `_Engine` without rebuilding: `D63` says to run `Build or repair workbook` and `IS9WD_selfTest()` fails. Rebuild: the tab shrinks to 229 rows, every section resizes, every range re-points, and the self test passes. Do the same with `IS9WD_STATS_TREND_WEEKS` and `D56`, and confirm chart 3's range follows the trend block's new height.
 - [claude] Every named range in sections 4 and 5 resolves, and each `IS9WD_DEL_*` range spans exactly 2,000 rows. Every `IS9WD_DIR_*` range spans exactly 14 rows, `IS9WD_DIR_KEY` reads `K01` to `K14`, `IS9WD_DIR_CAROUSEL` holds the integers 1 to 9 and five blanks, `IS9WD_DIR_PUBLISHES` holds nine TRUE and five FALSE, and `IS9WD_DIR_HIERARCHY` holds 1 to 14 with no repeat. `IS9WD_DIR_PAGE` **must not resolve at all**: it is retired, and a formula still reading it is a formula that was not updated (4.8). Every `IS9WD_SIGNOFF_*` range spans the same number of rows, a multiple of 52, and all six ranges agree (4.5).
-- [claude] **The three capacity numbers.** Set `IS9WD_MAX_PARTS` to 1 with `IS9WD_PUBLISH_MAX` left at 20 by pasting a literal over `B53`: Configuration `C53` and the feed's `Capacity check` both read `Capacity numbers disagree: 10 times 1 is 10`, `Ready for Canva` reads NO, `IS9WD_selfTest()` fails, and `Build or repair workbook` refuses to resize the feed and says why (4.6, 6.4, 9). Restore `B53`'s formula and all three clear together. This is the check that stands in for the silent truncation the review rated highest: without it, ranks 11 to 20 would produce slot keys that match no page and no block, and nothing would fire.
-- [claude] **The directory's three carousel checks.** Blank one publishing row's `Carousel order`: its `Check` reads `Publishes with no carousel order`, the feed's `Plan check` names it, `Ready for Canva` reads NO. Duplicate another row's: `Carousel order duplicated`. Set one to 12: `Carousel order out of range`. Each one alone fails `IS9WD_selfTest()` (4.8).
+- [claude] **The three capacity numbers.** Set `IS9WD_MAX_PARTS` to 1 with `IS9WD_PUBLISH_MAX` left at 20 by pasting a literal over `B37` on `_Engine`: that tab's `D37` and the feed's `Capacity check` both read `Capacity numbers disagree: 10 times 1 is 10`, `Ready for Canva` reads NO, `IS9WD_selfTest()` fails, and `Build or repair workbook` refuses to resize the feed and says why (4.6, 6.4, 9). Restore `B37`'s formula and all three clear together. This is the check that stands in for the silent truncation the review rated highest: without it, ranks 11 to 20 would produce slot keys that match no page and no block, and nothing would fire.
+- [claude] **The directory's three carousel checks.** Blank one publishing row's `Carousel order` on `_Engine`: that officer's `Check` on `00 | Configuration` reads `On the carousel with no slide number: ask before changing this`, the feed's `Plan check` names it, `Ready for Canva` reads NO. Duplicate another row's: `Two rows share one slide number`. Set one to 12: `Slide number is out of range`. Each one alone fails `IS9WD_selfTest()`. **This is also the check that the `Check` column reaches across two tabs**, which it does through `INDEX(IS9WD_DIR_CAROUSEL, ROW()-29)` rather than by column letter (4.4).
 - [claude] Validation rejects a 41-character title, a 31-character remark, a non-date deadline, and a status not in the list. The status dropdown offers exactly `Open` and `Accomplished`. The committee dropdown offers all 14 directory entries.
 - [claude] **Paste past the validation**, which is the case validation cannot cover: paste a 41-character title, a 31-character remark, and a committee name that is not in the directory, each into a used row. They produce `Title too long`, `Remark too long` and `Unknown committee`, and each one forces `Ready for Canva: NO` (5.3).
 - [claude] `Build or repair workbook` on a workbook holding real items logs `user cells changed: 0`. Then change one item by hand, re-run, and confirm it still logs zero and the change is still there.
 - [claude] Rename `02 | Deliverables` in the tab bar, run `Build or repair workbook`, and confirm it repairs **that** sheet by its developer metadata and creates no second sheet (section 3).
 - [claude] Run `Apply sheet guards` twice: `List every protection` shows one protection per range in 5.6, each described `IS9WD guard: ...`, with domain edit off, and a protection added by hand on an unrelated range survives both runs.
-- [claude] The four hex cells: set one to `#fff` and confirm `E18` reads `Hex is not #RRGGBB` and `IS9WD_selfTest()` fails (4.2).
+- [claude] The four hex cells on `_Engine`: set one to `#fff` and confirm `E11` reads `Hex is not #RRGGBB` and `IS9WD_selfTest()` fails (4B.2).
 - [claude] The term calendar `Check` reads `Start is not a Monday` for a Tuesday start. The schedule `Check` reads `Row does not parse` for `Weekly` plus `Any`.
 - [claude] Create an item, delete it, run `Build or repair`, create another: the second ID is higher than the deleted one.
 - [claude] A hand-typed row holding only a committee and a title is flagged (`Missing ID`), not published, and `Build or repair` backfills its ID and `Open` with a log line.
 - [claude] Pasting `2026-09-21 17:00` and pasting the text `Sept 21` each produce `Deadline not a date` and `Ready for Canva: NO`.
 - [claude] Sorting the data range by Deadline changes no slot key.
-- [auto] No tab freezes a column, and every tab freezes exactly the header rows `IS9WD_FREEZE` names. Nothing on either view is merged.
+- [auto] No tab freezes a column, and every tab freezes exactly the header rows `IS9WD_FREEZE` names, including the four on `02 | Deliverables`. Nothing on any of the three computed tabs is merged, the KPI tiles included.
+- [claude] **The plain English explanation on the feed.** Confirm `E1` of `01 | Canva Feed` carries the sentence in 6.3, that `A1` carries it as a note, and that neither one displaced a sentinel: `B1` still reads `IS9WD FEED START v2` and the tab still ends on its end sentinel.
 
 **`03 | Statistics`**
 
@@ -2099,13 +2328,13 @@ The seed remark `Send final name to Publication` is left exactly as v1 wrote it,
 - [claude] With `IS9WD_TODAY_OVERRIDE` set to the Sunday before week start, `IS9WD_STATS_ELAPSED` is 0, `Completion against pace` reads `the week has not started`, and nothing is flagged behind pace. Move the override to the Thursday: elapsed reads 4 and an officer at 25% flags.
 - [claude] `On time` is blank for every officer with `Judged` below `IS9WD_STATS_MIN_JUDGED`, those officers collect at the bottom of the ranked block in muted text with no rank number, and the note names the minimum. Seed a fourth past-deadline item for one of them: a rate and a rank appear.
 - [claude] **The `MMULT` on-time formula equals a hand check.** For one officer, count by hand the past-deadline titled items and how many were ticked before the end of the deadline day, and confirm the cell matches. Then confirm the fourteen-cell `SUMPRODUCT` fallback returns the same fourteen values (6A.6).
-- [claude] **The broadcast assumption holds.** Confirm `COUNTIFS`, `SUMIFS`, `MINIFS`, `MAXIFS` and `SUMIF` each return fourteen values under `ARRAYFORMULA` on the live sheet, not one repeated value. If `MINIFS` or `MAXIFS` does not broadcast, the fallback is fourteen single cells per column and the cost figures in 6A.12 rise.
+- [claude] **The broadcast assumption holds.** Confirm `COUNTIFS`, `SUMIFS`, `MINIFS`, `MAXIFS` and `SUMIF` each return fourteen values under `ARRAYFORMULA` on the live sheet, not one repeated value. If `MINIFS` or `MAXIFS` does not broadcast, the fallback is fourteen single cells per column and the cost figures in 6A.13 rise.
 - [claude] Break a named range a view reads: `!ERR` appears, the tab's own error count counts it, the self test fails, and **`Ready for Canva` does not move.** Then break one the feed reads: readiness does move. **This pair is what proves a view cannot hold the carousel.**
 - [claude] Force one gate to HOLD by clearing this week's sign-off: `IS9WD_STATS_GATE_STATE` shows exactly one HOLD, row 16's reading names that gate, and `IS9WD_STATS_GATE_AGREE` reads `OK`. Then edit the gate list to omit a gate and confirm `_GATE_AGREE` catches the disagreement.
 - [claude] `Weeks of row room left` against a known created-at distribution matches a hand calculation, and flags below `IS9WD_STATS_ROOM_WEEKS_WARN`.
 - [claude] With the Archive empty, every trend row reads `Not archived`, the sparkline cell is blank, and the note tells Ethan to switch `ARCHIVE_WEEK` on. Run `Archive this week` once: that week's row flips to `Snapshot only` with a real `Published` count. Retire an accomplished item whose deadline was in that week: the row flips to `Archived` and `Accomplished` reads 1.
 - [claude] A trend week inside a previous trimester numbers against **its own** trimester, not the current one.
-- [claude] **Recalculation time.** Tick an item through the app with the seed loaded and time until the officer table settles. Record the figure; it is the number 6A.12's cut list is judged against.
+- [claude] **Recalculation time.** Tick an item through the app with the seed loaded and time until the officer table settles. Record the figure; it is the number 6A.13's cut list is judged against.
 
 **`04 | Officer Tables`**
 
@@ -2245,8 +2474,14 @@ Every readiness expectation below assumes **the current week's sign-off is set**
 
   And the assertions the two views add, in the order the suite runs them:
 
-  - **the seven tabs are in the order section 3 lists**, `01 | Canva Feed` is the second, and the workbook holds exactly seven;
-  - **no tab freezes a column**, `IS9WD_FREEZE` asks no tab to, and every tab freezes exactly the header rows it names. Ethan's instruction of 2026-09-27 made testable;
+  - **the nine tabs are in the order section 3 lists**, `01 | Canva Feed` is the second, and the seven numbered tabs hold positions 1 to 7;
+  - **`_Engine`, `_Views` and `06 | Log` are hidden and `01 | Canva Feed` is not**, the last in a sentence of its own, because whether the Drive connector reads a hidden tab is unmeasured and the Sunday run depends on that one tab;
+  - **the cream rule, on both settings tabs, cell by cell**: every Ethan owned or append owned cell carries the fill `#e9ebd4` and a note, every calculated cell carries neither and carries the calculated note instead, every input row carries visible hint text in column C, and every block carries its plain English line in the row under its band. A workbook that passes every other check and fails this one is correct and unreadable, which is the failure the 2026-09-27 revision was about;
+  - **the two halves of the directory hold the same fourteen keys in the same order**, because they are joined by row position and a mismatch would give an officer somebody else's slide number;
+  - **`03 | Statistics` holds exactly as many charts as `IS9WD_STATS_CHARTS` declares**, no two on one anchor row, every one inside its own reserved band, and every caption row non-blank. This is the assertion for the failure that compounds silently: `insertChart` appends, so a build run five times would leave fifteen;
+  - **no column on `03 | Statistics` is hidden**, because the helper band is on `_Views` now and a hidden column there would be hiding a KPI tile or a chart caption;
+  - **`_Views` reaches its end row and its last column, names itself in `A1`, ends on `IS9WD VIEWS END`, and its own error count reads 0**, with `Checks > Rebuild the views` named as the fix, because a broken helper band reads as a blank dashboard rather than as an error;
+  - **no tab freezes a column**, `IS9WD_FREEZE` asks no tab to, and every tab freezes exactly the header rows it names, the four on `02 | Deliverables` included. Ethan's instruction of 2026-09-27 made testable;
   - both views reach their end row and their last column, carry nothing below the end row, name themselves in `A1`, end on the literal `IS9WD STATS END` and `IS9WD OFFICER TABLES END`, and **contain no merged cell**;
   - no cell on either view reads as an error or as `!ERR`, and each tab's own error count reads 0 and agrees with the scan;
   - **`IS9WD_STATS_GATE_AGREE` reads `OK`**, every gate reads exactly `PASS` or `HOLD`, and the gates block holds as many rows as the gate list. This is the assertion that catches a stale copy of the seven gate list, and nothing else can;
@@ -2255,11 +2490,14 @@ Every readiness expectation below assumes **the current week's sign-off is set**
   - `IS9WD_STATS_OFF_TOTAL` equals `_ACTIVE_ALL` plus `_DONE_ALL` on every row, and the fourteen `_ACTIVE_ALL` values sum to the feed's `Total active deliverables`. **This is the cross check that the two windows are not quietly confused**, and it also catches an item filed under a committee no directory row names;
   - `_ONTIME` is blank on every row where `_JUDGED` is below `IS9WD_STATS_MIN_JUDGED`, and between 0 and 1 elsewhere;
   - for each publishing officer, `_NOTPUB` equals the feed's `Not published` for the same carousel order, and it is blank on every officer who does not publish;
+  - `_FIRSTDUE` recomputed from the items in JavaScript equals the cell on every officer, which is the assertion that catches `MINIFS` or `MAXIFS` failing to broadcast under `ARRAYFORMULA` and handing all fourteen rows the first officer's answer (6C.3);
   - the trend block holds exactly `IS9WD_STATS_TREND_WEEKS` rows, its week starts are Mondays seven days apart in ascending order, and the newest is `IS9WD_WEEK_START - 7`;
-  - `04 | Officer Tables` holds one band per directory row, each with a hierarchy ordinal literal in the hidden column, with no duplicate and no gap, and each band's first words are that ordinal's officer;
+  - `04 | Officer Tables` holds one numbered section per directory row, each with a hierarchy ordinal literal in the hidden column, with no duplicate and no gap, and each heading names that ordinal's officer;
   - **no officer shows fewer rows than `_TOTAL` unless that block's notice row is filled, the notice's number equals `_TOTAL - (R - 1)`, and row 3 agrees with both.** This is the anti-silent-truncation assertion (6B.4);
   - every sort key in every block begins with `0` or `1` and its middle six characters parse as a number, so nothing on that tab keys on a status label;
   - warning only: every trend row reading `Not archived`, which is what an empty Archive looks like and is expected until an archive job is switched on; and `Weeks of row room left` below `IS9WD_STATS_ROOM_WEEKS_WARN`.
+
+  **A throwaway Node harness stands behind all of this, and it is worth knowing it exists.** It loads every pushed source file into one `vm` context against a fake of the spreadsheet surface, runs `Build or repair workbook` **twice**, and then asserts over the captured cells what no test in a real sheet can assert cheaply: that the build raises no exception, that `user cells changed` is 0 on both runs, that every declared named range resolves and spans what the layout says, that the cream rule holds cell by cell on both settings tabs and column by column on the data tab, that exactly three charts exist after two builds, that every tab freezes the rows it should and no column, that the hidden tabs are hidden, and that no cell anywhere is painted `#1C2120`. Its fake **refuses a conditional format rule whose formula names another sheet**, which is the class of bug that left `04 | Officer Tables` empty, so that bug cannot come back silently. What it cannot do is evaluate a formula: it evaluates exactly one, the derived publishable maximum, because the build branches on it. Every check that needs a computed value is therefore still a 13.3 eye check or a live `IS9WD_selfTest()` run.
 
   Two assertions in the design were left to 13.3 rather than written here. **Readiness not moving when a view breaks** needs a forced break, so it is an acceptance check. **Every fill and font colour on both views being in `IS9WD_PALETTE`** is not assertable cheaply: a conditional format rule's colours are not readable back in a form worth comparing, so the palette is enforced where it is written, in `IS9WD_ROLE`, and no module outside `IS9WD_Config.js` names a hex.
 
@@ -2399,7 +2637,7 @@ Everything decided on 2026-09-27 has been removed from this list: the status mod
 13. **Whether `RETIRE_ACCOMPLISHED` should turn on at Phase 8**, which item 3 above now recommends rather than asks.
 14. **`Rows reserved per officer`: 13 or 21?** 13 shows 12 items per officer and costs 229 rows of the connector read; 21 guarantees nothing is ever hidden and costs 340 (6B.3). Shipped at 13, because the worked week has committees at 3 to 8 items and the read's truncation limit is the largest open risk in the build. It is one Configuration edit plus one `Build or repair workbook` to change, and the overflow notice is what tells Ethan the day it matters.
 15. **Keep the ranked block?** `TRACK RECORD, RANKED` is the only workload-fair comparator in the workbook and it is a league table of fourteen people, readable by the Canva reader account (6A.6). Shipped, with a small sample suppressed rather than ranked and nothing reaching the feed, an email or Canva. Ethan's to reverse: deleting the block costs one edit and no other block reads it.
-16. **Keep `Avg days`?** It is the weakest column on the officer block, it costs about 84,000 range reads, and it is first on the cut list if recalculation bites (6A.5, 6A.12). It is a data quality signal rather than a performance measure, and it is shipped on that basis.
+16. **Keep `Avg days`?** It is the weakest column on the officer block, it costs about 84,000 range reads, and it is first on the cut list if recalculation bites (6A.7, 6A.13). It is a data quality signal rather than a performance measure, and it is shipped on that basis.
 17. **Accept the frozen-column loss on `02 | Deliverables`, `05 | Archive` and `06 | Log`?** The instruction was given workbook-wide and is applied workbook-wide (2.5, Appendix C). Those three tabs are wider than a screen, so scrolling right now loses the row's identity. The alternative is to apply the ban only where it costs nothing, which is the two views.
 
 ### v1 findings not carried into v2
@@ -2501,6 +2739,24 @@ Six fixes were applied to this file directly: the Feed errors scan now reaches c
 
 **R14. The Canva Feed painter sets Poppins over its whole block.** Setup applies the font before the feed is resized, so any row the feed adds below the old last row would otherwise come back in the default face on every build. One line in the painter, and the self test asserts the font on the feed's last row.
 
-**R15. The frozen key column is withdrawn, on Ethan's instruction of 2026-09-27, and the ban is workbook-wide.** `IS9WD_FREEZE` reads `cols: 0` on all seven tabs, 2.5's "the key column where wide" is superseded, and the self test asserts it so it cannot come back by hand. **The cost is recorded here rather than rediscovered as a bug**: `02 | Deliverables` is 2,040 px of visible columns, `05 | Archive` 2,660 and `06 | Log` 1,930, so on those three, scrolling right loses the row's identity. It costs the two new views nothing, because both are sized to fit a 1366 px laptop without horizontal scroll, and on both the left edge carries the identifier and the verdict for exactly that reason. The frozen header row is Ethan's earlier instruction, it does not conflict, and it stays; `03 | Statistics` freezes two rows and `04 | Officer Tables` three, so each tab always says what it is.
+**R15. The frozen key column is withdrawn, on Ethan's instruction of 2026-09-27, and the ban is workbook-wide.** `IS9WD_FREEZE` reads `cols: 0` on all nine tabs, 2.5's "the key column where wide" is superseded, and the self test asserts it so it cannot come back by hand. **The cost is recorded here rather than rediscovered as a bug**: `02 | Deliverables` is 2,040 px of visible columns, `05 | Archive` 2,660 and `06 | Log` 1,930, so on those three, scrolling right loses the row's identity. It costs the two new views nothing, because both are sized to fit a 1366 px laptop without horizontal scroll, and on both the left edge carries the identifier and the verdict for exactly that reason. The frozen header row is Ethan's earlier instruction, it does not conflict, and it stays; `03 | Statistics` freezes two rows, `04 | Officer Tables` three and `02 | Deliverables` four, the fourth being the plain English hint row, so each tab always says what it is and what to type into it.
+
+**R16. `00 | Configuration` holds only what a president sets, and every cell he fills is cream with a plain English sentence beside it and the same sentence as its own note.** Ethan's instruction of 2026-09-27, in his words: "for the things i need to encode, put a cream background on it, for the configuration and canva feed, explain what it does so in layman terms, as if i don't know anything about how to code. This is per cell i need to fill up in for". Implemented as 4.0, asserted in 13.4, and the reason banding is withdrawn from every block that holds an input column. The tab ends on row 67 rather than row 168.
+
+**R17. Two hidden machine tabs, `_Engine` and `_Views`, and both take the page background as their tab colour.** Ethan's instruction: "you may add tabs for your use but hide it". `_Engine` takes every setting that exists for the code (4B) and `_Views` the helper band both computed views read (6C). Every value that moved keeps its named range, so nothing that reads a setting changed. The palette reuse decision 2.5 predicted is taken here: a tab outside the numbered reading order does not claim a colour from it.
+
+**R18. `01 | Canva Feed` may never be hidden, and the self test says so in its own sentence.** Whether the Drive connector includes a hidden tab in its read is unmeasured, and the entire Sunday run depends on reading that tab. It is the one tab where hiding would risk the thing the build exists for.
+
+**R19. `03 | Statistics` is a dashboard: eight KPI tiles, one table of sentences, the seven gates, three tables and three embedded charts.** Ethan's instruction: "i don't it to be a configuration, i want to see KPIs and Charts, literally for viewing". Every threshold moved to `_Engine` (4B.7), the hidden helper band and `OPERATIONAL HEALTH` and `SCHEDULED JOBS` moved to `_Views` (6C), and the single trend sparkline is replaced by chart 3. A flagged tile takes bold `#724485` text and no fill, which is this tab's one departure from the workbook's usual flag treatment: a cream filled tile reads as a box rather than as a number.
+
+**R20. Every chart is removed before any is inserted, and a chart with no data is still inserted.** `insertChart` appends and has no replace form, so the first is the only thing standing between a build run twice and six stacked charts. The second is the honest half: a missing chart looks like a missing feature, so an empty plot ships with a caption saying what will fill it.
+
+**R21. A conditional format rule may not reference another sheet, so every named range in every rule on a computed tab is wrapped in `INDIRECT`.** This is the bug that left `04 | Officer Tables` empty before this revision: Sheets refuses the rule at the moment it is applied, and the build dies several tabs after the mistake. The wrapper is applied to every named range including the local ones, because a wrapper applied selectively is a wrapper somebody forgets.
+
+**R22. The directory is two blocks on two tabs, joined by row position.** The seven columns a president fills are on `00 | Configuration` and the five the code owns are on `_Engine`. The join is by index rather than by a lookup on the `Key`, because a lookup would make a mistyped key read as a different officer, which is a silent wrong answer, where a mismatch by index is a loud one the self test fails on.
+
+**R23. On `02 | Deliverables` the per-cell explanation is per column, in a frozen hint row, plus a note on the header and the hint cell.** 17 columns times 2,000 rows is 34,000 notes, which is a minute of every build and a heavier file for a sentence that is already on screen one row above the column. The settings tabs, where a cell is a setting rather than a column, do carry a note per cell. The blocking flag rule on that tab loses its cream fill with it: bold strong purple text carries the signal, and a flagged row filled cream would say all seventeen cells were his to type into.
+
+**R24. Column H of `04 | Officer Tables` stays hidden on a tab a person reads, and it is the one exception to "hidden helper columns move to a hidden tab".** It is not a helper: it is the eighth column of the very `SORT` that produces the seven visible ones, so it has to sit beside them on the same rows of the same sheet. The derived block on `02 | Deliverables`, columns K to Q, stays for the neighbouring reason: it is one row per item, and moving it to a hidden tab would add 2,000 rows to the connector read for the same seven hidden columns.
 
 **R16. The two views never gate the Canva run, and the gates block is allowed to exist only because one cell checks it.** `Ready for Canva` stays exactly seven gates read from the feed. `03 | Statistics` carries a second reading of those seven, because the feed publishes the verdict and not the reason and the Sunday brief names the gate too late to fix it, and `IS9WD_STATS_GATE_AGREE` compares the two readings and fails the self test when they disagree. Without that cell the block would be a copy that can drift and read reassuringly forever. Recorded as a ruling because the instinct on reading a duplicated rule is to delete it, and the duplication here is deliberate and closed by a check.

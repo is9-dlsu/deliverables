@@ -1,50 +1,68 @@
 /**
  * =============================================================================
- *  IS9 · WEEKLY DELIVERABLES TRACKER · 03 | STATISTICS and 04 | OFFICER TABLES
- *  IS9WD_Stats.js, the only module that writes a formula onto either view
+ *  IS9 · WEEKLY DELIVERABLES TRACKER · THE THREE COMPUTED TABS
+ *  IS9WD_Stats.js, the only module that writes a formula onto a view
  * =============================================================================
  *  Owner : Ethan Gabriel, President, Investors' Society (IS9), DLSU
- *  Spec  : docs/BUILD-REFERENCE.md 6A the statistics tab, 6B the officer tables,
- *          2.5 conventions, 4.6 the eight settings, 5.1 the columns both read.
+ *  Spec  : docs/BUILD-REFERENCE.md 6A the dashboard, 6B the officer tables,
+ *          6C _Views, 2.5 conventions, 4.6C the eight thresholds.
  *
- *  BOTH TABS ARE VIEWS, AND THAT IS THE WHOLE DESIGN. Every cell is a formula over
- *  02 | Deliverables, 05 | Archive and 00 | Configuration. There is no new source of
- *  truth, nothing is typed, and this module never computes a number in JavaScript and
- *  writes it into a cell: a value written once is a value that is wrong the next
- *  morning. The only literals written here are the block furniture, the gate
- *  sentences, the hierarchy ordinals the officer blocks join on, and the two row
- *  counts setup actually built, which are addresses and guards rather than data.
+ *  THREE TABS, THREE ENTRY POINTS, IN THIS ORDER AND NEVER ANOTHER:
+ *    IS9WD_viewsResize_(cfg)          owns `_Views`, hidden, the helper band
+ *    IS9WD_statsResize_(cfg)          owns `03 | Statistics`, the dashboard
+ *    IS9WD_officerTablesResize_(cfg)  owns `04 | Officer Tables`, the document
+ *  Each one is called through IS9WD_setupCall_ so a missing push cannot take a build
+ *  down. The order is a dependency: the dashboard reads the helper band by name, and the
+ *  officer tables read both.
  *
- *  NEITHER TAB MAY EVER GATE THE CANVA RUN. Readiness stays at seven gates and reads
- *  the feed alone. A broken view fails the self test and appears in the Sunday brief,
- *  and it does nothing else. The reverse would make the carousel hostage to a
- *  statistics formula, which is the one failure mode a view must not introduce.
+ *  EVERY CELL ON ALL THREE IS A FORMULA over 02 | Deliverables, 05 | Archive,
+ *  00 | Configuration and _Engine. There is no new source of truth, nothing is typed, and
+ *  this module never computes a number in JavaScript and writes it into a cell: a value
+ *  written once is a value that is wrong the next morning. The only literals written here
+ *  are the block furniture, the gate sentences, the tile captions, the hierarchy ordinals
+ *  the officer sections join on, and the three build markers, which are addresses and
+ *  guards rather than data.
  *
- *  ONE SOURCE, TWO VIEWS. Every count in an officer table's band row is an INDEX into
- *  a named range on 03 | Statistics rather than a second COUNTIFS, so the two tabs
- *  cannot disagree. That is the rule 4.9 already follows for the feed.
+ *  03 | STATISTICS IS A DASHBOARD. Ethan's instruction of 2026-09-27: "i want to see KPIs
+ *  and Charts, literally for viewing". So it is eight big number tiles, one table of
+ *  sentences, the seven readiness gates, three tables and THREE REAL EMBEDDED CHARTS built
+ *  with the Apps Script chart builder. Not one threshold is on it: they are all on
+ *  `_Engine`. Not one hidden column is on it: they are all on `_Views`.
  *
- *  TWO ENTRY POINTS, ONE PER TAB, both called through IS9WD_setupCall_ so a missing
- *  push cannot take the build down:
- *    IS9WD_statsResize_(cfg)          owns 03 | Statistics for the length of the call
- *    IS9WD_officerTablesResize_(cfg)  owns 04 | Officer Tables for the length of it
- *  Statistics is built first, because the officer tables read its named ranges.
+ *  CHARTS ARE REBUILT, NEVER APPENDED. Every chart on the tab is removed before three are
+ *  inserted, because insertChart appends and a build run twice would otherwise leave six,
+ *  then nine, and nothing on screen would say so until the file was slow. A chart with no
+ *  data yet is still inserted and still renders, and the caption row above it says in
+ *  plain words what will fill it: an empty chart with an explanation beats a missing one.
+ *
+ *  NEITHER VIEW MAY EVER GATE THE CANVA RUN. Readiness stays at seven gates and reads the
+ *  feed alone. A broken view fails the self test and appears in the Sunday brief, and it
+ *  does nothing else.
+ *
+ *  ONE SOURCE, TWO VIEWS. Every count in an officer section's heading is an INDEX into a
+ *  named range the dashboard's own helper band produced, never a second COUNTIFS, so the
+ *  two tabs cannot disagree.
  *
  *  Rules this file keeps:
  *    · Every function ends in `_`: google.script.run exposes server globals.
- *    · Every row and column comes from IS9WD_statsLayout_ or IS9WD_otLayout_, so
- *      nothing here knows that the last rows happen to be 95 and 229 this term.
- *    · Every threshold comes from a named range. There is no number in this file that
- *      a person could disagree with.
- *    · Idempotent. Each entry point trims, wipes and repaints the tab it owns, and
- *      hands back a whole conditional format rule list rather than appending to one.
- *      Neither tab is ever typed into, so neither writer can lose an item, a token,
- *      an archive row or a log row.
- *    · Nothing is merged, on either tab. The Drive connector renders a merged cell as
- *      a repeated `[merged]` value and both tabs are inside the same read.
- *    · Every fallback is the visible sentinel `!ERR`, except in the four places where
- *      blank is the contract: an unscored rank, an unused trend row, `Not on carousel`
- *      on an officer who does not publish, and an officer with no items.
+ *    · Every row and column comes from a layout function, so nothing here knows what the
+ *      last row happens to be this term.
+ *    · Every threshold comes from a named range. There is no number in this file that a
+ *      person could disagree with.
+ *    · A CONDITIONAL FORMAT RULE MAY NOT REFERENCE ANOTHER SHEET, and most of the names a
+ *      rule needs now live on another sheet, so every named range inside a rule goes
+ *      through IS9WD_statsRuleName_ and comes out as INDIRECT("NAME"). This is the bug
+ *      that stopped 04 | Officer Tables being built at all, and the wrapper is why it
+ *      cannot come back.
+ *    · Idempotent. Each entry point trims, wipes, repaints and rewrites the tab it owns,
+ *      hands back a whole conditional format rule list rather than appending to one, and
+ *      removes every chart before inserting any.
+ *    · Nothing is merged, on any of the three. The Drive connector renders a merged cell
+ *      as a repeated `[merged]` value and all three are inside the same read. A tile is a
+ *      wide column, a big type size and overflow wrap, never a merge.
+ *    · Every fallback is the visible sentinel `!ERR`, except where blank is the contract:
+ *      an unscored rank, an unused trend row, `No slide` on an officer who does not
+ *      publish, and an officer with no tasks.
  * =============================================================================
  */
 
@@ -77,7 +95,7 @@ function IS9WD_statsBand_(col, firstRow, lastRow) {
   return '$' + letter + '$' + firstRow + ':$' + letter + '$' + lastRow;
 }
 
-// `$A$1:$Y$94`, a rectangle locked both ways.
+// `$A$1:$L$136`, a rectangle locked both ways.
 function IS9WD_statsBox_(firstCol, firstRow, lastCol, lastRow) {
   return '$' + IS9WD_colLetter_(firstCol) + '$' + firstRow +
     ':$' + IS9WD_colLetter_(lastCol) + '$' + lastRow;
@@ -95,6 +113,17 @@ function IS9WD_statsErr_() {
 // the sentinel this tab counts rather than a bare #NAME? nobody can act on.
 function IS9WD_statsFeed_(name) {
   return 'IFERROR(' + name + ',' + IS9WD_statsErr_() + ')';
+}
+
+// A NAMED RANGE INSIDE A CONDITIONAL FORMAT RULE, and the one rule that has to be kept
+// mechanically rather than remembered. Sheets refuses a conditional format rule whose
+// formula references another sheet, and it refuses it at the moment the rule is applied,
+// which takes the whole build down several tabs later than the mistake. Most of the names
+// a rule on these tabs needs are now on `_Engine` or `_Views`, so every one of them goes
+// through here and comes out as an INDIRECT, including the ones that happen to be local:
+// a wrapper applied selectively is a wrapper somebody forgets.
+function IS9WD_statsRuleName_(name) {
+  return 'INDIRECT(' + IS9WD_statsQ_(name) + ')';
 }
 
 // The eight blocking flags as a vertical array literal, read from Core so this tab and
@@ -126,12 +155,19 @@ function IS9WD_statsOverdueFlag_() {
 // palette with no green and no red (2.5).
 function IS9WD_statsCols_() {
   return {
-    // Label, value, reading. The reading sits in a 65 px column and overflows right
-    // across D to L, which is why no row of either block puts content in D to L.
-    KV: [
+    // The sentence table: what, the number, and what to do about it. The sentence sits in
+    // an 80 px column and overflows right across D to L, which is why no row of the block
+    // puts anything in D to L.
+    ATTENTION: [
       { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
       { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, bold: true },
       { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.OVER, fg: IS9WD_ROLE.HINT_FG }
+    ],
+    KV: [
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, bold: true },
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.OVER, fg: IS9WD_ROLE.HINT_FG },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, fg: IS9WD_ROLE.HINT_FG }
     ],
     OFFICER: [
       { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, bold: true },
@@ -173,6 +209,37 @@ function IS9WD_statsCols_() {
       { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, fg: IS9WD_ROLE.HINT_FG },
       { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.OVER }
     ],
+    // `_Views`, the officer helper band: five columns of the identity sort then eight
+    // broadcast helpers.
+    VIEW_OFFICER: [
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.STAMP, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP }
+    ],
+    VIEW_RANK: [
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.PCT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP }
+    ],
+    VIEW_TREND: [
+      { align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP }
+    ],
+    VIEW_MARKER: [
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+      { align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP, bold: true },
+      { align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.OVER, fg: IS9WD_ROLE.HINT_FG }
+    ],
     // 04 | Officer Tables. Title first because it is the thing you read, then the two
     // cells that say whether it is late, then the detail.
     OT: [
@@ -187,193 +254,295 @@ function IS9WD_statsCols_() {
   };
 }
 
-// The help line that rides at the end of each section band, in the band's own help
-// colour. One line, and each one says what a reader would otherwise get wrong.
+// The plain English line that rides under each section band, in the band's own hint row.
+// One line, and each one says what a reader would otherwise get wrong.
 function IS9WD_statsBandHelp_() {
   return {
-    week: 'Read these before Sunday. A plain number needs nothing; a decorated one names an action.',
-    officer: 'Fourteen rows in hierarchy order. Attention is second from the left because it is the column to scan.',
-    rank: 'The share of an officer\'s past-deadline items that were ticked on or before the deadline, so a busy committee is not punished for being busy.',
-    trend: 'Read from 05 | Archive. Load is reliable; accomplishment is recorded only for an item that has been retired.',
-    gate: 'The seven gates behind Ready for Canva. Six are a plain read of a cell that already exists, so this is not a second copy of the rule.',
-    health: 'Whether the machine ran, whether it can still send, and how much room is left in the data tab.',
-    job: 'Whether each job ran and whether it failed, read from the schedule block itself.'
+    tile: 'The eight numbers to look at before Sunday. A plain number needs nothing from ' +
+      'you. A number in bold purple is naming something to do, and the table under these ' +
+      'tiles says what.',
+    attention: 'The same numbers again, with the names. This is the chase list: read the ' +
+      'right hand column and act on it.',
+    gate: 'The seven things that have to be true before the carousel can go out. Any one ' +
+      'of them reading HOLD stops it, and the right hand column says what to do.',
+    officer: 'Fourteen officers in order of rank. Attention is second from the left ' +
+      'because it is the column to scan. Due, Done and Rate are this week; the rest cover ' +
+      'everything still on the data tab.',
+    rank: 'The share of each officer\'s past-deadline tasks that were ticked on or before ' +
+      'the deadline, so a busy committee is not punished for being busy. A blank means too ' +
+      'few tasks to judge, not a score of zero.',
+    trend: 'Read from 05 | Archive, oldest week first. Published is reliable; ' +
+      'Accomplished is recorded only for a task that has been retired.',
+    health: 'Whether the machine ran, whether it can still send, and how much room is ' +
+      'left in the data tab.',
+    job: 'Whether each job ran and whether it failed, read from the schedule block itself.',
+    marker: 'What the build actually made, so a setting changed without a rebuild is ' +
+      'caught by the guard beside it rather than by a stale tab.',
+    viewOfficer: 'One sorted spill and eight broadcast formulas. 03 | Statistics and ' +
+      '04 | Officer Tables both point at these rather than recomputing them.',
+    viewRank: 'The ranked sort. An unscored officer is carried as -1 so a descending sort ' +
+      'puts them last, and the dashboard shows the -1 as blank.',
+    viewTrend: 'Each trend week\'s Monday, and that week\'s own trimester start, so a week ' +
+      'inside a previous trimester numbers against its own trimester.'
   };
 }
 
 // ============================================================================
-//  BLOCK `THIS WEEK`  (eleven numbers, each with its own threshold)
+//  THE EIGHT TILES  (6A: the headline KPIs, as numbers a president can read)
 // ============================================================================
 
-// Keyed on the machine key rather than ordered, so if the list in IS9WD_Config.js ever
-// grows a row this throws on the unknown key instead of writing eleven formulas one row
-// out of place, which is a failure nothing on the tab would show.
+// Keyed on the machine key rather than ordered, so if the tile list in IS9WD_Config.js
+// ever grows a tile this throws on the unknown key instead of writing eight formulas one
+// position out of place, which is a failure nothing on the tab would show.
 //
-// Every row also writes a boolean into the hidden band, and ONE conditional format rule
-// reads it. One rule instead of eleven scoped rules, and each row still owns its own
-// threshold in its own helper cell.
-function IS9WD_statsWeekSpec_(layout) {
-  var sep = IS9WD_statsSep_();
+// `value` is the big number. `note` is the one short line under the label, and short is a
+// constraint rather than a preference: a tile is 240 px wide and the line clips. Anything
+// that needs a sentence belongs in the attention table, which is exactly what that table
+// is for.
+function IS9WD_statsTileSpec_() {
   var load = '(IS9WD_STATS_ACTIVE_WEEK+IS9WD_STATS_DONE_WEEK)';
   var overdue = IS9WD_statsQ_(IS9WD_statsOverdueFlag_());
   var spec = {};
 
-  // Earns its place because every number below is scoped to this week, and a reader who
-  // has to guess which week is reading a different report from the one on screen.
-  // Flagged out of term, where every number below is arithmetic over a week the
-  // calendar does not contain.
-  spec['W.WEEK'] = {
+  // The week, because every number beside it is scoped to this week and a reader who has
+  // to guess which week is reading a different report from the one on screen.
+  spec['T.WEEK'] = {
     value: '="WEEK "&IF(IS9WD_WEEK_NUMBER="","--",TEXT(IS9WD_WEEK_NUMBER,"00"))',
-    reading: '=TEXT(IS9WD_WEEK_START,"ddd, mmm d")&" to "&TEXT(IS9WD_WEEK_END,"ddd, mmm d")&' +
-      sep + '&IF(IS9WD_STATS_ELAPSED=0,"the week has not started yet","day "&IS9WD_STATS_ELAPSED&" of 7")',
-    flag: '=NOT(IS9WD_IN_TERM)',
+    note: '=TEXT(IS9WD_WEEK_START,"ddd, mmm d")&" to "&TEXT(IS9WD_WEEK_END,"ddd, mmm d")&' +
+      'IF(IS9WD_IN_TERM,"",", outside every trimester")',
+    flag: '=NOT(' + IS9WD_statsRuleName_('IS9WD_IN_TERM') + ')',
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
   };
 
-  // The denominator a reader holds in their head, and its reading is the reconciliation
-  // against the feed: the feed counts every active item whatever its deadline, so the
-  // two numbers differ by design and the tab says so rather than leaving it to be
-  // discovered.
-  spec['W.ACTIVE'] = {
+  // The denominator a reader holds in their head.
+  spec['T.ACTIVE'] = {
     value: '=COUNTIFS(IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",' +
       'IS9WD_DEL_DEADLINE,">="&IS9WD_WEEK_START,IS9WD_DEL_DEADLINE,"<="&IS9WD_WEEK_END)',
-    reading: '=' + IS9WD_statsFeed_('IS9WD_FEED_TOTAL') +
-      '&" active in total, counting deadlines outside this week"',
+    note: '=IF(' + load + '=0,"nothing entered for this week","still open of "&' +
+      load + '&" entered")',
     flag: '=FALSE',
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
+    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.LEFT
   };
 
-  // Reads the derived Active flag, never a status label. An item ticked this week whose
-  // deadline was last week counts against last week's load, which is right and is
-  // stated in the tab's help line.
-  spec['W.DONE'] = {
+  // Reads the derived Active flag, never a status label. A task ticked this week whose
+  // deadline was last week counts against last week's load, which is right and is stated
+  // in the tab's help line.
+  spec['T.DONE'] = {
     value: '=COUNTIFS(IS9WD_DEL_ACTIVE,FALSE,IS9WD_DEL_TITLE,"<>",' +
       'IS9WD_DEL_DEADLINE,">="&IS9WD_WEEK_START,IS9WD_DEL_DEADLINE,"<="&IS9WD_WEEK_END)',
-    reading: '="of "&' + load + '&" entered for this week"',
+    note: '="ticked off by the officers"',
     flag: '=FALSE',
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
+    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.LEFT
   };
 
-  // A naked completion percentage mid-week is a vanity number: it is 0% on Monday
-  // morning by construction. Against the elapsed fraction of the week it becomes ahead
-  // or behind, which is actionable, and the slack setting keeps it from crying on a
-  // Tuesday. This is the one KPI that was rescued rather than killed.
-  spec['W.PACE'] = {
+  // A naked completion percentage mid-week is a vanity number: it is 0% on Monday morning
+  // by construction. Against the elapsed fraction of the week it becomes ahead or behind,
+  // which is actionable, and the slack setting keeps it from crying on a Tuesday.
+  spec['T.PACE'] = {
     value: '=IF(' + load + '=0,"",IFERROR(IS9WD_STATS_DONE_WEEK/' + load + ',""))',
-    reading: '=IF(' + load + '=0,"Nothing entered for this week",' +
-      'IF(IS9WD_STATS_ELAPSED=0,"the week has not started",' +
+    note: '=IF(' + load + '=0,"nothing entered yet",' +
+      'IF(IS9WD_STATS_ELAPSED=0,"the week starts tomorrow",' +
       'IF(IS9WD_STATS_PACE>=IS9WD_STATS_ELAPSED/7,"on pace or ahead",' +
-      '"behind pace by "&TEXT(IS9WD_STATS_ELAPSED/7-IS9WD_STATS_PACE,"0%"))))',
-    flag: '=AND(' + load + '>0,IS9WD_STATS_ELAPSED>0,' +
-      'IS9WD_STATS_PACE<IS9WD_STATS_ELAPSED/7-IS9WD_STATS_PACE_SLACK)',
-    format: IS9WD_FMT.PCT, align: IS9WD_ALIGN.RIGHT
+      '"behind by "&TEXT(IS9WD_STATS_ELAPSED/7-IS9WD_STATS_PACE,"0%"))))',
+    flag: '=AND(' + load + '>0,' + IS9WD_statsRuleName_('IS9WD_STATS_ELAPSED') + '>0,' +
+      'IS9WD_STATS_PACE<' + IS9WD_statsRuleName_('IS9WD_STATS_ELAPSED') + '/7-' +
+      IS9WD_statsRuleName_('IS9WD_STATS_PACE_SLACK') + ')',
+    format: IS9WD_FMT.PCT, align: IS9WD_ALIGN.LEFT
   };
 
-  // Reads the Check column rather than restating the rule. Recomputing it here would be
-  // a second definition of overdue that can drift from the flag Ethan sees on the data
-  // tab. The reading names who to chase first, because a count of four is not an action.
-  spec['W.OVERDUE'] = {
-    value: '=COUNTIF(IS9WD_DEL_CHECK,' + overdue + ')',
-    reading: '=IF(IS9WD_STATS_OVERDUE_NOW=0,"Nothing is past its deadline",' +
-      '"worst is "&MAX(IS9WD_STATS_OFF_LATE)&" days late"&' + sep +
-      '&IFERROR(INDEX(IS9WD_STATS_OFF_NAME,MATCH(MAX(IS9WD_STATS_OFF_LATE),IS9WD_STATS_OFF_LATE,0)),""))',
-    flag: '=IS9WD_STATS_OVERDUE_NOW>0',
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
-  };
-
-  // Exactly what the daily digest emails out, so it says what landed in thirteen
-  // inboxes this morning. Never flagged: a busy Wednesday is not a fault.
-  spec['W.SOON'] = {
-    value: '=COUNTIFS(IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",' +
-      'IS9WD_DEL_DEADLINE,">="&IS9WD_EFFECTIVE_TODAY,IS9WD_DEL_DEADLINE,"<="&IS9WD_EFFECTIVE_TODAY+1)',
-    reading: '="the same window the daily digest email uses"',
-    flag: '=FALSE',
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
-  };
-
-  // The single most actionable number on the tab, because it is Ethan's own omission
-  // and nobody else's: he enters every item, so an officer with nothing entered has
-  // nothing to tick and will get no Monday email. It names them rather than counting
-  // them, because a count of four is not an action and four names are.
-  spec['W.NOITEMS'] = {
-    value: '=SUMPRODUCT(--(IS9WD_STATS_OFF_NAME<>""),--(N(IS9WD_STATS_OFF_LOAD)=0))',
-    reading: '=IF(IS9WD_STATS_NO_ITEMS=0,"Every officer has something for this week",' +
-      'TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF((IS9WD_STATS_OFF_NAME<>"")*' +
-      '(N(IS9WD_STATS_OFF_LOAD)=0),IS9WD_STATS_OFF_NAME,""))))',
-    flag: '=IS9WD_STATS_NO_ITEMS>0',
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
-  };
-
-  // The only available proxy for whether a private link is being used at all. The
-  // caveat is in the tab's help line: a status change by Ethan from the Sheet resets it
-  // too, so silence is evidence and not proof. The action is concrete either way,
-  // because a link can be reissued from the menu.
-  spec['W.SILENT'] = {
-    value: '=SUMPRODUCT(--(IS9WD_STATS_OFF_NAME<>""),' +
-      '--(N(IS9WD_STATS_OFF_SILENT_N)>=IS9WD_STATS_SILENT_DAYS))',
-    reading: '=IF(IS9WD_STATS_SILENT=0,"every link has been used inside "&' +
-      'IS9WD_STATS_SILENT_DAYS&" days",TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF(' +
-      '(IS9WD_STATS_OFF_NAME<>"")*(N(IS9WD_STATS_OFF_SILENT_N)>=IS9WD_STATS_SILENT_DAYS),' +
-      'IS9WD_STATS_OFF_NAME,""))))',
-    flag: '=IS9WD_STATS_SILENT>0',
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
-  };
-
-  // The eight names and the `"?*"` filter are the readiness criterion's, including both
-  // load bearing halves: IS9WD_DEL_PUBKEY and not IS9WD_DEL_PAGE, because page is blank
-  // on any row with no rank, and `"?*"` and not `"<>"`, because Publish key is a formula
-  // returning "" in every unused row. The reading reads the feed's own flag list rather
-  // than re-deriving the first offender.
-  spec['W.BLOCKING'] = {
-    value: '=SUM(COUNTIFS(IS9WD_DEL_CHECK,' + IS9WD_statsBlockingArray_() +
-      ',IS9WD_DEL_PUBKEY,"?*"))',
-    reading: '=IF(IS9WD_STATS_BLOCKING=0,"nothing is blocking the carousel",' +
-      'IFERROR("first is "&INDEX(IS9WD_FLAGS,1,5)&" on "&INDEX(IS9WD_FLAGS,1,6)&' +
-      '" ("&INDEX(IS9WD_FLAGS,1,3)&")",' + IS9WD_statsErr_() + '))',
-    flag: '=IS9WD_STATS_BLOCKING>0',
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
-  };
-
-  // A plain reference, no recomputation. Not flagged and given the accent instead,
-  // because an item that does not fit a slide is not a mistake and the feed already
-  // treats the same number that way (5.4). It earns its place as the one carousel
-  // number a president acts on before Sunday: cut, reprioritise, or accept.
-  spec['W.NOTPUB'] = {
-    value: '=' + IS9WD_statsFeed_('IS9WD_FEED_NOTPUB'),
-    reading: '=IF(N(IS9WD_STATS_PAST_CAROUSEL)=0,"every active item has a slide",' +
-      'TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF(N(IS9WD_STATS_OFF_NOTPUB)>0,' +
-      'IS9WD_STATS_OFF_NAME&" ("&N(IS9WD_STATS_OFF_NOTPUB)&")",""))))',
-    flag: '=FALSE',
-    accent: true,
-    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
-  };
-
-  // The feed publishes the verdict but not the reason, and the Sunday brief names the
-  // gate too late to fix it. The reading points at the gates block, which is a plain
-  // read of each gate's own cell, so this is not a second copy of the seven gate logic.
-  spec['W.READY'] = {
-    value: '=' + IS9WD_statsFeed_('IS9WD_FEED_READY'),
-    reading: '=IFERROR("held by: "&INDEX(IS9WD_STATS_GATE_LABEL,' +
+  // READY or NOT READY rather than the feed's own sentence, because a tile is read from
+  // across a desk. The feed's cell stays the single source of the verdict: this reads it
+  // and so does the agreement check on the last row, which is what stops this tile
+  // becoming a second opinion.
+  spec['T.READY'] = {
+    value: '=IFERROR(IF(RIGHT(IS9WD_FEED_READY,2)="NO","NOT READY","READY"),' +
+      IS9WD_statsErr_() + ')',
+    note: '=IFERROR("held by: "&INDEX(IS9WD_STATS_GATE_LABEL,' +
       'MATCH("HOLD",IS9WD_STATS_GATE_STATE,0)),"all seven gates pass")',
-    flag: '=RIGHT(IS9WD_STATS_READY,2)="NO"',
+    flag: '=' + IS9WD_statsRuleName_('IS9WD_STATS_READY') + '<>"READY"',
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
+  };
+
+  // Reads the Check column rather than restating the rule. Recomputing it here would be a
+  // second definition of overdue that can drift from the flag Ethan sees on the data tab.
+  spec['T.OVERDUE'] = {
+    value: '=COUNTIF(IS9WD_DEL_CHECK,' + overdue + ')',
+    note: '=IF(IS9WD_STATS_OVERDUE_NOW=0,"nothing is past its deadline",' +
+      '"worst is "&MAX(IS9WD_STATS_OFF_LATE)&" days late")',
+    flag: '=' + IS9WD_statsRuleName_('IS9WD_STATS_OVERDUE_NOW') + '>0',
+    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.LEFT
+  };
+
+  // Exactly what the daily email sends out, so it says what landed in thirteen inboxes
+  // this morning. Never flagged: a busy Wednesday is not a fault.
+  spec['T.SOON'] = {
+    value: '=COUNTIFS(IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",' +
+      'IS9WD_DEL_DEADLINE,">="&IS9WD_EFFECTIVE_TODAY,' +
+      'IS9WD_DEL_DEADLINE,"<="&IS9WD_EFFECTIVE_TODAY+1)',
+    note: '="the window the daily email uses"',
+    flag: '=FALSE',
+    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.LEFT
+  };
+
+  // The single most actionable number on the tab, because it is Ethan's own omission and
+  // nobody else's: he enters every task, so an officer with nothing entered has nothing to
+  // tick and will get no Monday email. The names are in the attention table below.
+  spec['T.NOITEMS'] = {
+    value: '=SUMPRODUCT(--(IS9WD_STATS_OFF_NAME<>""),--(N(IS9WD_STATS_OFF_LOAD)=0))',
+    note: '=IF(IS9WD_STATS_NO_ITEMS=0,"everyone has something this week",' +
+      '"they get no Monday email until you enter something")',
+    flag: '=' + IS9WD_statsRuleName_('IS9WD_STATS_NO_ITEMS') + '>0',
+    format: IS9WD_FMT.INT, align: IS9WD_ALIGN.LEFT
   };
 
   return spec;
 }
 
 // ============================================================================
-//  BLOCK `OPERATIONAL HEALTH`  (the same shape, the machine rather than the week)
+//  WHAT NEEDS ATTENTION  (6A: the six sentences, where the names live)
 // ============================================================================
 
-function IS9WD_statsHealthSpec_(layout) {
+// Three of these carry a measure of their own and three point at a tile, so every one of
+// the eleven measures is named exactly once on the tab. The reading is the whole point of
+// the block: a count of four is not an action and four names are.
+function IS9WD_statsAttentionSpec_() {
+  var sep = IS9WD_statsSep_();
+  var spec = {};
+
+  spec['A.OVERDUE'] = {
+    value: '=IS9WD_STATS_OVERDUE_NOW',
+    reading: '=IF(IS9WD_STATS_OVERDUE_NOW=0,"Nothing is past its deadline.",' +
+      '"Chase first: "&IFERROR(INDEX(IS9WD_STATS_OFF_NAME,' +
+      'MATCH(MAX(IS9WD_STATS_OFF_LATE),IS9WD_STATS_OFF_LATE,0)),"")&' + sep +
+      '&"worst is "&MAX(IS9WD_STATS_OFF_LATE)&" days late. The officer table below lists ' +
+      'every one.")',
+    flag: '=N(' + IS9WD_statsRuleName_('IS9WD_STATS_OVERDUE_NOW') + ')>0',
+    format: IS9WD_FMT.INT
+  };
+
+  spec['A.NOITEMS'] = {
+    value: '=IS9WD_STATS_NO_ITEMS',
+    reading: '=IF(IS9WD_STATS_NO_ITEMS=0,"Every officer has something for this week.",' +
+      '"Nothing entered for: "&TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF((IS9WD_STATS_OFF_NAME<>"")*' +
+      '(N(IS9WD_STATS_OFF_LOAD)=0),IS9WD_STATS_OFF_NAME,"")))&' + sep +
+      '&"They get no Monday email until you enter something for them.")',
+    flag: '=N(' + IS9WD_statsRuleName_('IS9WD_STATS_NO_ITEMS') + ')>0',
+    format: IS9WD_FMT.INT
+  };
+
+  // The only available proxy for whether a private link is being used at all. The caveat
+  // is in the tab's help line: a status change by Ethan from the Sheet resets it too, so
+  // silence is evidence and not proof. The action is concrete either way, because a link
+  // can be reissued from the menu.
+  spec['A.SILENT'] = {
+    value: '=SUMPRODUCT(--(IS9WD_STATS_OFF_NAME<>""),' +
+      '--(N(IS9WD_STATS_OFF_SILENT_N)>=IS9WD_STATS_SILENT_DAYS))',
+    reading: '=IF(IS9WD_STATS_SILENT=0,"Every link has been used inside "&' +
+      'IS9WD_STATS_SILENT_DAYS&" days.","Silent: "&TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF(' +
+      '(IS9WD_STATS_OFF_NAME<>"")*(N(IS9WD_STATS_OFF_SILENT_N)>=IS9WD_STATS_SILENT_DAYS),' +
+      'IS9WD_STATS_OFF_NAME,"")))&' + sep + '&"Reissue a link from Links in the menu if ' +
+      'somebody has lost theirs.")',
+    flag: '=N(' + IS9WD_statsRuleName_('IS9WD_STATS_SILENT') + ')>0',
+    format: IS9WD_FMT.INT
+  };
+
+  // The eight names and the `"?*"` filter are the readiness criterion's, including both
+  // load bearing halves: IS9WD_DEL_PUBKEY and not IS9WD_DEL_PAGE, because page is blank on
+  // any row with no rank, and `"?*"` and not `"<>"`, because Publish key is a formula
+  // returning "" in every unused row.
+  spec['A.BLOCKING'] = {
+    value: '=SUM(COUNTIFS(IS9WD_DEL_CHECK,' + IS9WD_statsBlockingArray_() +
+      ',IS9WD_DEL_PUBKEY,"?*"))',
+    reading: '=IF(IS9WD_STATS_BLOCKING=0,"Nothing is blocking the carousel.",' +
+      'IFERROR("First is "&INDEX(IS9WD_FLAGS,1,5)&" on "&INDEX(IS9WD_FLAGS,1,6)&" ("&' +
+      'INDEX(IS9WD_FLAGS,1,3)&")"&' + sep + '&"Fix the marked rows on 02 | Deliverables.",' +
+      IS9WD_statsErr_() + '))',
+    flag: '=N(' + IS9WD_statsRuleName_('IS9WD_STATS_BLOCKING') + ')>0',
+    format: IS9WD_FMT.INT
+  };
+
+  // Not flagged and given the accent instead, because a task that does not fit a slide is
+  // not a mistake and the feed already treats the same number that way (5.4).
+  spec['A.NOTPUB'] = {
+    value: '=' + IS9WD_statsFeed_('IS9WD_FEED_NOTPUB'),
+    reading: '=IF(N(IS9WD_STATS_PAST_CAROUSEL)=0,"Every task this week has a slide.",' +
+      '"No slide for: "&TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF(N(IS9WD_STATS_OFF_NOTPUB)>0,' +
+      'IS9WD_STATS_OFF_NAME&" ("&N(IS9WD_STATS_OFF_NOTPUB)&")","")))&' + sep +
+      '&"This is not a fault: cut, reprioritise, or accept it.")',
+    flag: '=FALSE',
+    accent: true,
+    format: IS9WD_FMT.INT
+  };
+
+  spec['A.READY'] = {
+    value: '=IS9WD_STATS_READY',
+    reading: '=IFERROR("Held by: "&INDEX(IS9WD_STATS_GATE_LABEL,' +
+      'MATCH("HOLD",IS9WD_STATS_GATE_STATE,0))&' + sep +
+      '&"The gates block below says what to do about it.",' +
+      '"All seven gates pass, so the carousel can go out.")',
+    flag: '=' + IS9WD_statsRuleName_('IS9WD_STATS_READY') + '<>"READY"',
+    format: IS9WD_FMT.TEXT
+  };
+
+  return spec;
+}
+
+// ============================================================================
+//  BLOCK `READINESS GATES`  (six plain reads, one pointer at this tab's own count)
+// ============================================================================
+
+function IS9WD_statsGateSpec_() {
+  var spec = {};
+  spec['G.TERM'] = {
+    state: '=IF(IS9WD_IN_TERM,"PASS","HOLD")',
+    todo: 'Reads Inside a trimester right now on 00 | Configuration. A blank last day ' +
+      'pauses every job, so fill in the trimester dates.'
+  };
+  spec['G.SIGNOFF'] = {
+    state: '=IF(IS9WD_SIGNOFF_SET,"PASS","HOLD")',
+    todo: "Reads Signed off for this week. Set Prepared by and Checked by in the " +
+      "officers' page, which writes this week's row of the store."
+  };
+  spec['G.CAPACITY'] = {
+    state: '=IF(' + IS9WD_statsFeed_('IS9WD_FEED_CAPCHECK') + '="OK","PASS","HOLD")',
+    todo: 'Reads Capacity check on the feed. Restore the formula in the derived ' +
+      'publishable maximum on _Engine, then run Build or repair workbook.'
+  };
+  spec['G.PLAN'] = {
+    state: '=IF(' + IS9WD_statsFeed_('IS9WD_FEED_PLANCHECK') + '="OK","PASS","HOLD")',
+    todo: 'Reads Plan check on the feed. It names the committee or the page at fault, ' +
+      'usually a slide number.'
+  };
+  spec['G.FLAGCAP'] = {
+    state: '=IF(' + IS9WD_statsFeed_('IS9WD_FEED_FLAGCHECK') + '="OK","PASS","HOLD")',
+    todo: 'Reads Flag list check on the feed. The flag block is a budget rather than a ' +
+      'bound, so a longer list needs Build or repair workbook.'
+  };
+  spec['G.ERRORS'] = {
+    state: '=IF(N(' + IS9WD_statsFeed_('IS9WD_FEED_ERRORS') + ')=0,"PASS","HOLD")',
+    todo: 'Reads Feed errors. Any count above zero is a broken formula or a broken named ' +
+      'range on the feed itself.'
+  };
+  spec['G.BLOCKING'] = {
+    state: '=IF(N(IS9WD_STATS_BLOCKING)=0,"PASS","HOLD")',
+    todo: 'Reads the blocking count above, so the eight flag names exist once on this ' +
+      'tab. Fix the marked rows on 02 | Deliverables.'
+  };
+  return spec;
+}
+
+// ============================================================================
+//  BLOCK `OPERATIONAL HEALTH`  (on _Views: the machine reporting on itself)
+// ============================================================================
+
+function IS9WD_statsHealthSpec_() {
   var sep = IS9WD_statsSep_();
   var spec = {};
 
   spec['H.READY'] = {
     value: '=' + IS9WD_statsFeed_('IS9WD_FEED_READY'),
-    reading: '="the same cell the feed publishes, and the gates above name the one that holds it"',
-    flag: '=RIGHT(IS9WD_STATS_READY,2)="NO"',
+    reading: '="the cell the feed publishes, word for word"',
+    flag: '=IFERROR(RIGHT(' + IS9WD_statsRuleName_('IS9WD_FEED_READY') + ',2)="NO",TRUE)',
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
   };
 
@@ -391,10 +560,9 @@ function IS9WD_statsHealthSpec_(layout) {
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
   };
 
-  // Never flagged, and given the accent instead. A formula cannot know how many pages
-  // the Canva master physically holds, so a test against a number in this file would be
-  // either always true or always false. What it can do is print the number the master
-  // must reach and say what raising a capacity number costs.
+  // Never flagged, and given the accent instead. A formula cannot know how many pages the
+  // Canva master physically holds, so a test against a number in this file would be either
+  // always true or always false.
   spec['H.MASTER'] = {
     value: '=' + IS9WD_statsFeed_('IS9WD_FEED_MASTER'),
     reading: '="the Canva master must physically hold this many pages. Raising a ' +
@@ -404,26 +572,23 @@ function IS9WD_statsHealthSpec_(layout) {
     format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
   };
 
-  // The trigger is hourly, so a gap of more than two hours is a gap. A cell that holds
-  // no timestamp at all flags too, because a dispatcher that has never run is the same
-  // problem earlier.
   spec['H.LASTRUN'] = {
     value: '=IS9WD_DIAG_LAST_RUN',
-    reading: '=IF(ISNUMBER(IS9WD_DIAG_LAST_RUN),"the trigger runs hourly, so this ' +
-      'should be inside the hour",IF(IS9WD_DIAG_LAST_RUN="","the dispatcher has not ' +
-      'run yet. Install automations from the menu","this cell does not hold a timestamp"))',
-    flag: '=IF(ISNUMBER(IS9WD_DIAG_LAST_RUN),NOW()-IS9WD_DIAG_LAST_RUN>2/24,TRUE)',
+    reading: '=IF(ISNUMBER(IS9WD_DIAG_LAST_RUN),"the trigger runs hourly, so this should ' +
+      'be inside the hour",IF(IS9WD_DIAG_LAST_RUN="","the dispatcher has not run yet. ' +
+      'Install automations from the menu","this cell does not hold a timestamp"))',
+    flag: '=IF(ISNUMBER(' + IS9WD_statsRuleName_('IS9WD_DIAG_LAST_RUN') + '),NOW()-' +
+      IS9WD_statsRuleName_('IS9WD_DIAG_LAST_RUN') + '>2/24,TRUE)',
     format: IS9WD_FMT.STAMP, align: IS9WD_ALIGN.RIGHT
   };
 
-  // Both states are correct during the build and wrong at go live, which is exactly
-  // what a flag is for here.
   spec['H.MODE'] = {
     value: '=IF(IS9WD_AUTOMATION_ON,"ON","OFF")&' + sep + '&"test mode "&' +
       'IF(IS9WD_TEST_MODE,"ON","OFF")',
     reading: '="automation off pauses every job. Test mode sends every email to the ' +
       'admin instead of to the officers"',
-    flag: '=OR(NOT(IS9WD_AUTOMATION_ON),IS9WD_TEST_MODE)',
+    flag: '=OR(NOT(' + IS9WD_statsRuleName_('IS9WD_AUTOMATION_ON') + '),' +
+      IS9WD_statsRuleName_('IS9WD_TEST_MODE') + ')',
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
   };
 
@@ -433,8 +598,9 @@ function IS9WD_statsHealthSpec_(layout) {
     value: '=IS9WD_DIAG_SELFTEST',
     reading: '=IF(IS9WD_DIAG_SELFTEST="","the self test has not been run on this ' +
       'workbook yet. Checks > Run self test","Checks > Run self test writes this line")',
-    flag: '=OR(IS9WD_DIAG_SELFTEST="",NOT(ISERROR(FIND(' +
-      IS9WD_statsQ_(IS9WD_SELFTEST_FAIL_MARKER_) + ',IS9WD_DIAG_SELFTEST))))',
+    flag: '=OR(' + IS9WD_statsRuleName_('IS9WD_DIAG_SELFTEST') + '="",' +
+      'NOT(ISERROR(FIND(' + IS9WD_statsQ_(IS9WD_SELFTEST_FAIL_MARKER_) + ',' +
+      IS9WD_statsRuleName_('IS9WD_DIAG_SELFTEST') + '))))',
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
   };
 
@@ -442,27 +608,22 @@ function IS9WD_statsHealthSpec_(layout) {
     value: '=IS9WD_DIAG_QUOTA',
     reading: '="the quota guard stops sending below the reserve of "&IS9WD_QUOTA_RESERVE&' +
       '", rather than half sending a batch"',
-    flag: '=IF(ISNUMBER(IS9WD_DIAG_QUOTA),IS9WD_DIAG_QUOTA<IS9WD_QUOTA_RESERVE,FALSE)',
+    flag: '=IF(ISNUMBER(' + IS9WD_statsRuleName_('IS9WD_DIAG_QUOTA') + '),' +
+      IS9WD_statsRuleName_('IS9WD_DIAG_QUOTA') + '<' +
+      IS9WD_statsRuleName_('IS9WD_QUOTA_RESERVE') + ',FALSE)',
     format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
   };
 
-  // Both overrides are silent by nature: each one makes the workbook confidently report
-  // a week that is not the real one. The links line rides in the same reading, because
-  // a revoked or ageing link is the other thing that fails quietly.
   spec['H.OVERRIDES'] = {
     value: '=IS9WD_DIAG_OVERRIDES',
     reading: '=COUNTIF(IS9WD_DIR_REVOKED,TRUE)&" links revoked"&' + sep + '&' +
       'SUMPRODUCT(--(N(IS9WD_DIR_ISSUED)>0),' +
       '--(IS9WD_EFFECTIVE_TODAY-N(IS9WD_DIR_ISSUED)>IS9WD_TOKEN_WARN_DAYS))&' +
-      '" past the warning age"&' + sep + '&"an override makes every number above ' +
-      'describe a week the calendar may not contain"',
-    // The flag covers the links too. They ride in this row's reading, and a reading
-    // that needs action while the row renders in plain hint grey is a row nobody acts
-    // on: the numbers are already computed, only the boolean was too narrow.
-    flag: '=OR(AND(IS9WD_DIAG_OVERRIDES<>"",IS9WD_DIAG_OVERRIDES<>"not set"),' +
-      'COUNTIF(IS9WD_DIR_REVOKED,TRUE)>0,' +
-      'SUMPRODUCT(--(N(IS9WD_DIR_ISSUED)>0),' +
-      '--(IS9WD_EFFECTIVE_TODAY-N(IS9WD_DIR_ISSUED)>IS9WD_TOKEN_WARN_DAYS))>0)',
+      '" past the warning age"&' + sep + '&"an override makes every number on the ' +
+      'dashboard describe a week the calendar may not contain"',
+    flag: '=OR(AND(' + IS9WD_statsRuleName_('IS9WD_DIAG_OVERRIDES') + '<>"",' +
+      IS9WD_statsRuleName_('IS9WD_DIAG_OVERRIDES') + '<>"not set"),' +
+      'COUNTIF(' + IS9WD_statsRuleName_('IS9WD_DIR_REVOKED') + ',TRUE)>0)',
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
   };
 
@@ -473,17 +634,15 @@ function IS9WD_statsHealthSpec_(layout) {
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.RIGHT
   };
 
-  // The row that matters most in this block. The planning figure fills 2,000 rows in
-  // about seven weeks at 280 items a week, and this turns that from a paragraph in a
-  // document into a number on a screen with weeks on it.
   spec['H.ROOM'] = {
     value: '=IFERROR(ROUND((ROWS(IS9WD_DEL_ID)-COUNTIF(IS9WD_DEL_ID,"?*"))' +
       '/MAX(1,COUNTIFS(IS9WD_DEL_CREATED_AT,">="&IS9WD_EFFECTIVE_TODAY-28)/4),0),' +
       IS9WD_statsErr_() + ')',
-    reading: '="at the rate of the last four weeks. Retire accomplished items to ' +
-      'reclaim rows, which is the ' + 'RETIRE_ACCOMPLISHED job in the schedule below"',
-    flag: '=IF(ISNUMBER(IS9WD_STATS_ROOM_WEEKS),' +
-      'IS9WD_STATS_ROOM_WEEKS<IS9WD_STATS_ROOM_WEEKS_WARN,FALSE)',
+    reading: '="at the rate of the last four weeks. Retire accomplished tasks to reclaim ' +
+      'rows, which is the RETIRE_ACCOMPLISHED job in the schedule below"',
+    flag: '=IF(ISNUMBER(' + IS9WD_statsRuleName_('IS9WD_STATS_ROOM_WEEKS') + '),' +
+      IS9WD_statsRuleName_('IS9WD_STATS_ROOM_WEEKS') + '<' +
+      IS9WD_statsRuleName_('IS9WD_STATS_ROOM_WEEKS_WARN') + ',FALSE)',
     format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
   };
 
@@ -491,43 +650,315 @@ function IS9WD_statsHealthSpec_(layout) {
 }
 
 // ============================================================================
-//  BLOCK `READINESS GATES`  (six plain reads, one pointer at this tab's own count)
+//  THE ENTRY POINT FOR _VIEWS
 // ============================================================================
 
-// Keyed like the two blocks above. The `todo` sentence names what the gate reads and
-// what to do about it in one line, because two sentences side by side in a 65 px and a
-// 100 px column both clip and neither can be read.
-function IS9WD_statsGateSpec_() {
-  var spec = {};
-  spec['G.TERM'] = {
-    state: '=IF(IS9WD_IN_TERM,"PASS","HOLD")',
-    todo: 'Reads In term in 00 | Configuration. A blank trimester end pauses every job, so fill the term calendar.'
+/**
+ * Sizes, paints and writes `_Views`, or refuses and changes nothing. It runs FIRST of the
+ * three, because 03 | Statistics reads its helper band by name and 04 | Officer Tables
+ * reads both.
+ *
+ * The caller holds the document lock (section 9). Nothing here takes it, because two
+ * writers over one tab is the failure the lock exists for and a nested lock would hide it.
+ */
+function IS9WD_viewsResize_(cfg) {
+  var conf = cfg || IS9WD_readConfig_();
+  var layout = conf.views || IS9WD_views_();
+  var sheet = IS9WD_sheet_('VIEWS');
+
+  IS9WD_ensureGrid_(sheet, layout.endRow, layout.lastCol);
+  IS9WD_viewsTrim_(sheet, layout);
+  IS9WD_viewsWipe_(sheet, layout);
+  var names = IS9WD_viewsPointNames_(sheet, layout);
+
+  IS9WD_viewsPaintAll_(sheet, layout);
+  var report = IS9WD_viewsWriteAll_(sheet, layout);
+  report.namesPointed = names;
+  return report;
+}
+
+function IS9WD_viewsPointNames_(sheet, layout) {
+  var want = IS9WD_viewsNames_(layout);
+  for (var i = 0; i < want.length; i++) {
+    IS9WD_setNamed_(want[i].name, sheet.getRange(want[i].a1));
+  }
+  return want.length;
+}
+
+function IS9WD_viewsWipe_(sheet, layout) {
+  var rows = Math.max(layout.endRow, sheet.getLastRow());
+  var cols = Math.max(layout.lastCol, sheet.getLastColumn());
+  var all = sheet.getRange(1, 1, rows, cols);
+  all.clear();
+  all.clearDataValidations();
+  all.clearNote();
+}
+
+function IS9WD_viewsTrim_(sheet, layout) {
+  var extraRows = sheet.getMaxRows() - layout.endRow;
+  if (extraRows > 0) sheet.deleteRows(layout.endRow + 1, extraRows);
+  var extraCols = sheet.getMaxColumns() - layout.lastCol;
+  if (extraCols > 0) sheet.deleteColumns(layout.lastCol + 1, extraCols);
+}
+
+function IS9WD_viewsPaintAll_(sheet, layout) {
+  var v = layout;
+  var cols = IS9WD_statsCols_();
+  var help = IS9WD_statsBandHelp_();
+
+  sheet.getRange(1, 1, v.endRow, v.lastCol).setFontFamily(IS9WD_FONT);
+  IS9WD_paintBanner_(sheet, v.bannerRow, v.firstCol, v.lastCol, IS9WD_VIEWS.BANNER);
+  IS9WD_paintHelp_(sheet, v.helpRow, v.firstCol, v.lastCol, IS9WD_VIEWS.HELP);
+
+  IS9WD_statsBlock_(sheet, v, v.markerBand, 'BUILD MARKERS', help.marker,
+    null, v.markerFirst, v.markerLast, cols.VIEW_MARKER);
+  IS9WD_statsBlock_(sheet, v, v.officerBand, 'OFFICER IDENTITY AND HELPERS',
+    help.viewOfficer, IS9WD_STATS_HEADERS.VIEW_OFFICER, v.officerFirst, v.officerLast,
+    cols.VIEW_OFFICER);
+  IS9WD_statsBlock_(sheet, v, v.rankBand, 'RANKED SORT', help.viewRank,
+    IS9WD_STATS_HEADERS.VIEW_RANK, v.rankFirst, v.rankLast, cols.VIEW_RANK);
+  IS9WD_statsBlock_(sheet, v, v.trendBand, 'TREND HELPERS', help.viewTrend,
+    IS9WD_STATS_HEADERS.VIEW_TREND, v.trendFirst, v.trendLast, cols.VIEW_TREND);
+  IS9WD_statsBlock_(sheet, v, v.healthBand, 'OPERATIONAL HEALTH', help.health,
+    IS9WD_STATS_HEADERS.KV, v.healthFirst, v.healthLast, cols.KV);
+  IS9WD_statsBlock_(sheet, v, v.jobBand, 'SCHEDULED JOBS', help.job,
+    IS9WD_STATS_HEADERS.JOBS, v.jobFirst, v.jobLast, cols.JOBS);
+
+  IS9WD_statsSpacers_(sheet, v.spacerRows, v.lastCol);
+  IS9WD_statsEndBand_(sheet, v.endRow, v.lastCol);
+
+  IS9WD_setWidths_(sheet, 'VIEWS');
+  sheet.showColumns(1, v.lastCol);
+  IS9WD_freezeTab_(sheet, 'VIEWS');
+  sheet.setTabColor(IS9WD_TAB_COLOR.VIEWS);
+}
+
+function IS9WD_viewsWriteAll_(sheet, layout) {
+  var v = layout;
+  IS9WD_viewsMarkers_(sheet, v);
+  IS9WD_viewsOfficers_(sheet, v);
+  IS9WD_viewsRanked_(sheet, v);
+  IS9WD_viewsTrend_(sheet, v);
+  IS9WD_viewsHealth_(sheet, v);
+  IS9WD_viewsJobs_(sheet, v);
+  IS9WD_viewsEndRow_(sheet, v);
+  IS9WD_setRules_(sheet, IS9WD_viewsRules_(sheet, v));
+
+  return {
+    tab: IS9WD_TAB.VIEWS,
+    directoryRows: v.directoryRows,
+    trendWeeks: v.trendWeeks,
+    jobRows: v.jobRows,
+    officerRows: v.officerRows,
+    lastRow: v.endRow,
+    writtenAt: IS9WD_stampText_(new Date())
   };
-  spec['G.SIGNOFF'] = {
-    state: '=IF(IS9WD_SIGNOFF_SET,"PASS","HOLD")',
-    todo: "Reads Sign-off set for this week. Set Prepared by and Checked by in the app, which writes this week's row of the store."
-  };
-  spec['G.CAPACITY'] = {
-    state: '=IF(' + IS9WD_statsFeed_('IS9WD_FEED_CAPCHECK') + '="OK","PASS","HOLD")',
-    todo: 'Reads Capacity check on the feed. Restore the formula in the derived publishable maximum, then run Build or repair workbook.'
-  };
-  spec['G.PLAN'] = {
-    state: '=IF(' + IS9WD_statsFeed_('IS9WD_FEED_PLANCHECK') + '="OK","PASS","HOLD")',
-    todo: 'Reads Plan check on the feed. It names the committee or the page at fault, usually a carousel order.'
-  };
-  spec['G.FLAGCAP'] = {
-    state: '=IF(' + IS9WD_statsFeed_('IS9WD_FEED_FLAGCHECK') + '="OK","PASS","HOLD")',
-    todo: 'Reads Flag list check on the feed. The flag block is a budget rather than a bound, so a longer list needs Build or repair workbook.'
-  };
-  spec['G.ERRORS'] = {
-    state: '=IF(N(' + IS9WD_statsFeed_('IS9WD_FEED_ERRORS') + ')=0,"PASS","HOLD")',
-    todo: 'Reads Feed errors. Any count above zero is a broken formula or a broken named range on the feed itself.'
-  };
-  spec['G.BLOCKING'] = {
-    state: '=IF(N(IS9WD_STATS_BLOCKING)=0,"PASS","HOLD")',
-    todo: 'Reads the blocking count in THIS WEEK, so the eight flag names exist once on this tab. Fix the flagged rows on 02 | Deliverables.'
-  };
-  return spec;
+}
+
+// The three build markers. Two of them are literals, and they are the only numbers this
+// module writes into a cell: a layout setting raised without a rebuild would otherwise
+// spill a row into a spacer and produce a #REF!, and the guard note beside the setting on
+// `_Engine` compares the two and says so.
+//
+// Elapsed days is a formula. On Sunday the week starts tomorrow, so elapsed is 0 and
+// nothing can be behind pace, which is correct: Sunday's run describes the week that
+// starts the next morning.
+function IS9WD_viewsMarkers_(sheet, layout) {
+  var rows = [
+    ['Elapsed days of this week',
+      '=IF(IS9WD_EFFECTIVE_TODAY<IS9WD_WEEK_START,0,' +
+      'MIN(7,IS9WD_EFFECTIVE_TODAY-IS9WD_WEEK_START+1))',
+      'Day n of 7. Zero on a Sunday, because the week starts tomorrow.'],
+    ['Trend weeks built', layout.trendWeeks,
+      'What the trend block was actually built with. The guard on _Engine compares it ' +
+      'against the setting.'],
+    ['Rows reserved per officer built', layout.officerRows,
+      'What 04 | Officer Tables was actually built with. The guard on _Engine compares ' +
+      'it against the setting.']
+  ];
+  for (var i = 0; i < rows.length; i++) {
+    var row = layout.markerFirst + i;
+    sheet.getRange(row, 1).setValue(rows[i][0]);
+    var cell = sheet.getRange(row, 2);
+    cell.setNumberFormat(IS9WD_FMT.INT);
+    if (typeof rows[i][1] === 'string') {
+      cell.setFormula(rows[i][1]);
+    } else {
+      cell.setValue(rows[i][1]);
+    }
+    sheet.getRange(row, 3).setValue(rows[i][2]);
+  }
+}
+
+// ONE SPILLING SORT plus eight broadcast formulas. COUNTIFS, SUMIFS, MINIFS, MAXIFS and
+// SUMIF all take an array criterion under ARRAYFORMULA, which is what makes a fourteen row
+// block cost one formula per column instead of fourteen lookups per column.
+//
+// The five offices are ordinary rows here, exactly as 5.4 says they are everywhere except
+// Canva. Hierarchy order rather than carousel order, because hierarchy order is the order
+// every list a person reads is sorted by.
+//
+// The identity sort combines three columns from 00 | Configuration with two from _Engine in
+// one array literal. That is legal because all five are the same height, and it is the
+// reason the directory could be split across two tabs at all.
+function IS9WD_viewsOfficers_(sheet, layout) {
+  var v = layout;
+  var rows = v.officerLast - v.officerFirst + 1;
+  var name = 'IS9WD_STATS_OFF_NAME';
+  var blank = 'IF(' + name + '="","",';
+  var today = 'IS9WD_EFFECTIVE_TODAY';
+
+  sheet.getRange(v.officerFirst, 1).setFormula(
+    '=IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({IS9WD_DIR_NAME,IS9WD_DIR_VP,' +
+    'IS9WD_DIR_POSITION,IS9WD_DIR_CAROUSEL,IS9WD_DIR_HIERARCHY},IS9WD_DIR_KEY<>""),' +
+    '5,TRUE),' + rows + ',5),' + IS9WD_statsErr_() + ')');
+
+  // Eight helpers, one broadcast formula each, written in the same call as the block they
+  // belong to so a resize can never leave a helper describing the old size. `9999` rather
+  // than blank in the silence column, so Silent can be compared numerically without a text
+  // guard. The blocking count deliberately does not restate the eight flag names: `"?*"`
+  // counts every non-blank Check and Overdue is subtracted, so it stays correct the day a
+  // ninth flag is added.
+  var helpers = [
+    '=ARRAYFORMULA(' + blank + 'IS9WD_STATS_OFF_DUE+IS9WD_STATS_OFF_DONE))',
+    '=ARRAYFORMULA(' + blank + 'MINIFS(IS9WD_DEL_DEADLINE,IS9WD_DEL_COMMITTEE,' + name +
+      ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0")))',
+    '=ARRAYFORMULA(' + blank + 'MAXIFS(IS9WD_DEL_STATUS_AT,IS9WD_DEL_COMMITTEE,' + name +
+      ',IS9WD_DEL_STATUS_AT,">0")))',
+    '=ARRAYFORMULA(' + blank + 'IF(N(IS9WD_STATS_OFF_LASTTICK)=0,9999,' +
+      today + '-INT(IS9WD_STATS_OFF_LASTTICK))))',
+    '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
+      ',IS9WD_DEL_CHECK,"?*")-COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
+      ',IS9WD_DEL_CHECK,' + IS9WD_statsQ_(IS9WD_statsOverdueFlag_()) + ')))',
+    '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
+      ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>")))',
+    '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
+      ',IS9WD_DEL_ACTIVE,FALSE,IS9WD_DEL_TITLE,"<>")))',
+    '=ARRAYFORMULA(' + blank + 'IS9WD_STATS_OFF_ACTIVE_ALL+IS9WD_STATS_OFF_DONE_ALL))'
+  ];
+  for (var x = 0; x < helpers.length; x++) {
+    sheet.getRange(v.officerFirst, 6 + x).setFormula(helpers[x]);
+  }
+}
+
+// The `-1` substitution is what puts an unscored officer at the bottom of a descending
+// sort: an empty string sorts as text, and text sorts before numbers descending, which
+// would have put every unscored officer first. The dashboard shows it as blank, never as
+// -1, and a muted rule makes the unscored tail read as not applicable rather than as last
+// place.
+function IS9WD_viewsRanked_(sheet, layout) {
+  var v = layout;
+  var rows = v.rankLast - v.rankFirst + 1;
+  sheet.getRange(v.rankFirst, 1).setFormula(
+    '=IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({IS9WD_STATS_OFF_NAME,' +
+    'ARRAYFORMULA(IF(IS9WD_STATS_OFF_ONTIME="",-1,IS9WD_STATS_OFF_ONTIME)),' +
+    'IS9WD_STATS_OFF_JUDGED},IS9WD_STATS_OFF_NAME<>""),2,FALSE),' + rows + ',3),' +
+    IS9WD_statsErr_() + ')');
+}
+
+// Each trend week's Monday, and that week's own trimester start, looked up through the term
+// calendar rather than through IS9WD_TERM_START, so a week inside a previous trimester
+// numbers against its own trimester instead of against the current one.
+function IS9WD_viewsTrend_(sheet, layout) {
+  var v = layout;
+  var rows = v.trendLast - v.trendFirst + 1;
+  var monday = 'IS9WD_STATS_TRENDMONDAY';
+  sheet.getRange(v.trendFirst, 1).setFormula(
+    '=ARRAYFORMULA(IS9WD_WEEK_START-7*SEQUENCE(' + rows + ',1,' + rows + ',-1))');
+  sheet.getRange(v.trendFirst, 2).setFormula(
+    '=ARRAYFORMULA(IF(' + monday + '="","",SUMIFS(IS9WD_TERM_STARTS,IS9WD_TERM_STARTS,"<="&' +
+    monday + ',IS9WD_TERM_ENDS,">="&' + monday + ')))');
+}
+
+// Label, value, reading, and the flag boolean in column D. One conditional format rule
+// reads the boolean, which is one rule instead of eleven scoped rules, and each row still
+// owns its own threshold in its own formula.
+function IS9WD_viewsHealth_(sheet, layout) {
+  var v = layout;
+  var spec = IS9WD_statsHealthSpec_();
+  var labels = [];
+  var values = [];
+  var readings = [];
+  var flags = [];
+  var formats = [];
+  var aligns = [];
+  var accents = [];
+  for (var i = 0; i < IS9WD_STATS_HEALTH_ROWS.length; i++) {
+    var key = IS9WD_STATS_HEALTH_ROWS[i][0];
+    var entry = spec[key];
+    if (!entry) {
+      throw new Error('The operational health block has no formula for the key ' + key +
+        '. IS9WD_Stats.js and IS9WD_Config.js disagree about that block.');
+    }
+    labels.push([IS9WD_STATS_HEALTH_ROWS[i][1]]);
+    values.push([entry.value]);
+    readings.push([entry.reading]);
+    flags.push([entry.flag]);
+    formats.push([entry.format || IS9WD_FMT.TEXT]);
+    aligns.push([entry.align || IS9WD_ALIGN.LEFT]);
+    if (entry.accent) accents.push(v.healthFirst + i);
+  }
+  var count = labels.length;
+  sheet.getRange(v.healthFirst, 1, count, 1).setValues(labels);
+  var value = sheet.getRange(v.healthFirst, 2, count, 1);
+  value.setNumberFormats(formats);
+  value.setHorizontalAlignments(aligns);
+  value.setValues(values);
+  sheet.getRange(v.healthFirst, 3, count, 1).setValues(readings);
+  var band = sheet.getRange(v.healthFirst, 4, count, 1);
+  band.setNumberFormat(IS9WD_FMT.TEXT);
+  band.setValues(flags);
+  for (var a = 0; a < accents.length; a++) {
+    sheet.getRange(accents[a], 2).setFontColor(IS9WD_ROLE.ACCENT_FG).setFontWeight('bold');
+  }
+}
+
+// Four spills out of the schedule's own named range, so this block cannot disagree with
+// it. Whether the Monday job ran and whether it failed is actionable; how many messages it
+// sent is not.
+function IS9WD_viewsJobs_(sheet, layout) {
+  var cols = [1, 8, 6, 9];
+  for (var i = 0; i < cols.length; i++) {
+    sheet.getRange(layout.jobFirst, i + 1).setFormula(
+      '=ARRAYFORMULA(INDEX(IS9WD_SCHEDULE,0,' + cols[i] + '))');
+  }
+}
+
+function IS9WD_viewsEndRow_(sheet, layout) {
+  var scan = IS9WD_statsBox_(1, 1, layout.lastCol, layout.scanLastRow);
+  sheet.getRange(layout.endRow, 1).setValue(IS9WD_VIEWS.END);
+  sheet.getRange(layout.endRow, 2).setValue('End of tab');
+  sheet.getRange(layout.errorsCell.row, layout.errorsCell.col)
+    .setNumberFormat(IS9WD_FMT.INT)
+    .setFormula('=SUMPRODUCT(--ISERROR(' + scan + '))+' +
+      'SUMPRODUCT(--(' + scan + '=' + IS9WD_statsQ_(IS9WD_VIEWS.ERR) + '))');
+}
+
+function IS9WD_viewsRules_(sheet, layout) {
+  var v = layout;
+  var flag = { fg: IS9WD_ROLE.FLAG_FG, bg: IS9WD_ROLE.FLAG_BG, bold: true };
+  var muted = { fg: IS9WD_ROLE.MUTED_FG };
+  var rules = [];
+
+  rules.push(IS9WD_ruleFormula_(
+    [sheet.getRange(1, 1, v.endRow, v.lastCol)],
+    '=A1=' + IS9WD_statsQ_(IS9WD_VIEWS.ERR), flag));
+
+  var hRows = v.healthLast - v.healthFirst + 1;
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(v.healthFirst, 2, hRows, 2)],
+    '=' + IS9WD_statsRef_(4, v.healthFirst) + '=TRUE', flag));
+
+  var jRows = v.jobLast - v.jobFirst + 1;
+  var jCols = IS9WD_STATS_HEADERS.JOBS.length;
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(v.jobFirst, 1, jRows, jCols)],
+    '=AND(' + IS9WD_statsRef_(4, v.jobFirst) + '<>"",LOWER(' +
+    IS9WD_statsRef_(4, v.jobFirst) + ')<>"ok")', flag));
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(v.jobFirst, 1, jRows, jCols)],
+    '=' + IS9WD_statsRef_(3, v.jobFirst) + '=FALSE', muted));
+
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(v.errorsCell.row, v.errorsCell.col)],
+    '=N(' + IS9WD_statsCell_(v.errorsCell.col, v.errorsCell.row) + ')>0', flag));
+  return rules;
 }
 
 // ============================================================================
@@ -535,31 +966,33 @@ function IS9WD_statsGateSpec_() {
 // ============================================================================
 
 /**
- * Sizes, paints and writes 03 | Statistics, or refuses and changes nothing. It owns
- * the whole tab for the length of the call: trim, wipe, re-point the names, paint,
- * write. Nothing on the tab is ever typed into, so a full wipe is the cheapest
- * guarantee that nothing accumulates.
+ * Sizes, paints, writes and charts 03 | Statistics, or refuses and changes nothing. It
+ * owns the whole tab for the length of the call: trim, wipe, remove every chart, re-point
+ * the names, paint, write, insert three charts. Nothing on the tab is ever typed into, so
+ * a full wipe is the cheapest guarantee that nothing accumulates.
  *
- * The caller holds the document lock (section 9). Nothing here takes it, because two
- * writers over one tab is the failure the lock exists for and a nested lock would
- * hide it.
+ * It must run AFTER IS9WD_viewsResize_, because every helper it reads is a named range on
+ * `_Views`.
  */
 function IS9WD_statsResize_(cfg) {
   var conf = cfg || IS9WD_readConfig_();
   var layout = conf.stats || IS9WD_stats_();
   var sheet = IS9WD_sheet_('STATS');
 
-  IS9WD_ensureGrid_(sheet, layout.endRow, layout.helperLastCol);
+  IS9WD_ensureGrid_(sheet, layout.endRow, layout.lastCol);
   IS9WD_statsTrim_(sheet, layout);
   IS9WD_statsWipe_(sheet, layout);
+  var removed = IS9WD_statsRemoveCharts_(sheet);
 
   // Names before formulas. A formula naming a range that does not exist yet reads
-  // #NAME? until it does, and every block on this tab reads the officer block by name.
+  // #NAME? until it does, and every block on this tab reads another by name.
   var names = IS9WD_statsPointNames_(sheet, layout);
 
   IS9WD_statsPaintAll_(sheet, layout);
   var report = IS9WD_statsWriteAll_(sheet, conf, layout);
   report.namesPointed = names;
+  report.chartsRemoved = removed;
+  report.charts = IS9WD_statsInsertCharts_(sheet, layout);
   return report;
 }
 
@@ -573,36 +1006,45 @@ function IS9WD_statsPointNames_(sheet, layout) {
 
 function IS9WD_statsWipe_(sheet, layout) {
   var rows = Math.max(layout.endRow, sheet.getLastRow());
-  var cols = Math.max(layout.helperLastCol, sheet.getLastColumn());
+  var cols = Math.max(layout.lastCol, sheet.getLastColumn());
   var all = sheet.getRange(1, 1, rows, cols);
   all.clear();
   all.clearDataValidations();
   all.clearNote();
 }
 
-// Rows and columns past the layout are deleted rather than left blank. Both new tabs
-// are inside the Drive connector read the Sunday run depends on, and an empty row still
-// costs a row of markdown in it.
+// Rows and columns past the layout are deleted rather than left blank. The tab is inside
+// the Drive connector read the Sunday run depends on, and an empty row still costs a row of
+// markdown in it.
 function IS9WD_statsTrim_(sheet, layout) {
   var extraRows = sheet.getMaxRows() - layout.endRow;
   if (extraRows > 0) sheet.deleteRows(layout.endRow + 1, extraRows);
-  var extraCols = sheet.getMaxColumns() - layout.helperLastCol;
-  if (extraCols > 0) sheet.deleteColumns(layout.helperLastCol + 1, extraCols);
+  var extraCols = sheet.getMaxColumns() - layout.lastCol;
+  if (extraCols > 0) sheet.deleteColumns(layout.lastCol + 1, extraCols);
+}
+
+// EVERY CHART GOES BEFORE ANY IS INSERTED, and this is the idempotency rule the charts
+// bring with them. `insertChart` appends: it has no by-name form and no replace form, so a
+// build run twice would leave six charts stacked on the same anchors, a build run three
+// times nine, and nothing on screen would say so until the file was slow. Removing them
+// all is safe because this tab is script owned end to end and nothing else ever puts a
+// chart on it.
+function IS9WD_statsRemoveCharts_(sheet) {
+  var charts = sheet.getCharts();
+  for (var i = 0; i < charts.length; i++) sheet.removeChart(charts[i]);
+  return charts.length;
 }
 
 function IS9WD_statsWriteAll_(sheet, cfg, layout) {
   var f = layout;
   IS9WD_statsFormats_(sheet, f);
-  IS9WD_statsTabHelpers_(sheet, f);
-  IS9WD_statsKvValues_(sheet, f, f.weekFirst, IS9WD_STATS_WEEK_ROWS,
-    IS9WD_statsWeekSpec_(f), 'THIS WEEK');
+  IS9WD_statsTiles_(sheet, f);
+  IS9WD_statsAttention_(sheet, f);
+  IS9WD_statsGates_(sheet, f);
   IS9WD_statsOfficers_(sheet, f);
   IS9WD_statsRanked_(sheet, f);
   IS9WD_statsTrend_(sheet, f);
-  IS9WD_statsGates_(sheet, f);
-  IS9WD_statsKvValues_(sheet, f, f.healthFirst, IS9WD_STATS_HEALTH_ROWS,
-    IS9WD_statsHealthSpec_(f), 'OPERATIONAL HEALTH');
-  IS9WD_statsJobs_(sheet, f);
+  IS9WD_statsCaptions_(sheet, f);
   IS9WD_statsEndRow_(sheet, f);
   IS9WD_setRules_(sheet, IS9WD_statsRules_(sheet, f));
 
@@ -610,120 +1052,125 @@ function IS9WD_statsWriteAll_(sheet, cfg, layout) {
     tab: IS9WD_TAB.STATS,
     directoryRows: f.directoryRows,
     trendWeeks: f.trendWeeks,
-    jobRows: f.jobRows,
+    tiles: IS9WD_STATS_TILES.length,
     lastRow: f.endRow,
-    lastCol: IS9WD_colLetter_(f.helperLastCol),
+    lastCol: IS9WD_colLetter_(f.lastCol),
     writtenAt: IS9WD_stampText_(new Date())
   };
 }
 
 // ---------------------------------------------------------------------------
-//  the tab's own two hidden cells
+//  the eight tiles
 // ---------------------------------------------------------------------------
 
-// Elapsed days of the week, and the trend row count setup actually built.
-//
-// On Sunday the week starts tomorrow, so elapsed is 0 and nothing can be behind pace,
-// which is correct: Sunday's run describes the week that starts the next morning.
-//
-// The built count is a literal, and it is the only number on this tab written by code.
-// It exists because the trend weeks setting decides a layout: raised without a rebuild
-// it would spill a trend row into the spacer and produce a #REF!, and the guard note
-// beside the setting in 00 | Configuration compares the two and says so.
-function IS9WD_statsTabHelpers_(sheet, layout) {
-  sheet.getRange(layout.elapsedCell.row, layout.elapsedCell.col)
-    .setNumberFormat(IS9WD_FMT.INT)
-    .setFormula('=IF(IS9WD_EFFECTIVE_TODAY<IS9WD_WEEK_START,0,' +
-      'MIN(7,IS9WD_EFFECTIVE_TODAY-IS9WD_WEEK_START+1))');
-  sheet.getRange(layout.trendBuiltCell.row, layout.trendBuiltCell.col)
-    .setNumberFormat(IS9WD_FMT.INT)
-    .setValue(layout.trendWeeks);
+// Three cells per tile, in three rows: the number, the label under it, and one short line
+// under that. Keyed on the machine key, so a tile always lands where its key says.
+function IS9WD_statsTiles_(sheet, layout) {
+  var spec = IS9WD_statsTileSpec_();
+  for (var i = 0; i < IS9WD_STATS_TILES.length; i++) {
+    var key = IS9WD_STATS_TILES[i][0];
+    var label = IS9WD_STATS_TILES[i][1];
+    var entry = spec[key];
+    var at = IS9WD_statsTileAt_(layout, key);
+    if (!entry) {
+      throw new Error('There is no formula for the tile ' + key +
+        '. IS9WD_Stats.js and IS9WD_Config.js disagree about the tiles.');
+    }
+    if (!at) {
+      throw new Error('The tile ' + key + ' is not in either tile row. ' +
+        'IS9WD_STATS_TILES and IS9WD_STATS_TILE_ROW_A or _B disagree.');
+    }
+    var value = sheet.getRange(at.valueRow, at.col);
+    value.setNumberFormat(entry.format || IS9WD_FMT.TEXT);
+    value.setHorizontalAlignment(entry.align || IS9WD_ALIGN.LEFT);
+    value.setFormula(entry.value);
+    sheet.getRange(at.labelRow, at.col).setValue(label);
+    sheet.getRange(at.noteRow, at.col).setFormula(entry.note);
+  }
 }
 
 // ---------------------------------------------------------------------------
-//  the two label and value blocks
+//  what needs attention
 // ---------------------------------------------------------------------------
 
-// The label in A, the value in B, the reading in C and the flag boolean in the hidden
-// band. Keyed on the machine key, so a list that grew a row throws here rather than
-// writing eleven formulas one row out of place.
-function IS9WD_statsKvValues_(sheet, layout, firstRow, rows, spec, label) {
+function IS9WD_statsAttention_(sheet, layout) {
+  var spec = IS9WD_statsAttentionSpec_();
   var labels = [];
   var values = [];
   var readings = [];
-  var flags = [];
   var formats = [];
-  var aligns = [];
   var accents = [];
-
-  for (var i = 0; i < rows.length; i++) {
-    var key = rows[i][0];
+  for (var i = 0; i < IS9WD_STATS_ATTENTION_ROWS.length; i++) {
+    var key = IS9WD_STATS_ATTENTION_ROWS[i][0];
     var entry = spec[key];
     if (!entry) {
-      throw new Error('Block ' + label + ' has no formula for the key ' + key +
+      throw new Error('The attention block has no formula for the key ' + key +
         '. IS9WD_Stats.js and IS9WD_Config.js disagree about that block.');
     }
-    labels.push([rows[i][1]]);
+    labels.push([IS9WD_STATS_ATTENTION_ROWS[i][1]]);
     values.push([entry.value]);
     readings.push([entry.reading]);
-    flags.push([entry.flag]);
     formats.push([entry.format || IS9WD_FMT.TEXT]);
-    aligns.push([entry.align || IS9WD_ALIGN.LEFT]);
-    if (entry.accent) accents.push(firstRow + i);
+    if (entry.accent) accents.push(layout.attentionFirst + i);
   }
-
-  sheet.getRange(firstRow, 1, rows.length, 1).setValues(labels);
-  var value = sheet.getRange(firstRow, 2, rows.length, 1);
+  var count = labels.length;
+  sheet.getRange(layout.attentionFirst, 1, count, 1).setValues(labels);
+  var value = sheet.getRange(layout.attentionFirst, 2, count, 1);
   value.setNumberFormats(formats);
-  value.setHorizontalAlignments(aligns);
   value.setValues(values);
-  sheet.getRange(firstRow, 3, rows.length, 1).setValues(readings);
-  var band = sheet.getRange(firstRow, layout.helperFirstCol, rows.length, 1);
-  band.setNumberFormat(IS9WD_FMT.TEXT);
-  band.setValues(flags);
-
-  // A number worth the eye that is not a fault takes the accent, which is the
-  // treatment the feed already gives the same number.
+  sheet.getRange(layout.attentionFirst, 3, count, 1).setValues(readings);
+  // A number worth the eye that is not a fault takes the accent, which is the treatment
+  // the feed already gives the same number.
   for (var a = 0; a < accents.length; a++) {
     sheet.getRange(accents[a], 2).setFontColor(IS9WD_ROLE.ACCENT_FG).setFontWeight('bold');
   }
 }
 
 // ---------------------------------------------------------------------------
+//  readiness gates
+// ---------------------------------------------------------------------------
+
+function IS9WD_statsGates_(sheet, layout) {
+  var spec = IS9WD_statsGateSpec_();
+  var labels = [];
+  var states = [];
+  var todos = [];
+  for (var i = 0; i < IS9WD_STATS_GATE_ROWS.length; i++) {
+    var key = IS9WD_STATS_GATE_ROWS[i][0];
+    var entry = spec[key];
+    if (!entry) {
+      throw new Error('The gates block has no state formula for the key ' + key +
+        '. IS9WD_Stats.js and IS9WD_Config.js disagree about that block.');
+    }
+    labels.push([IS9WD_STATS_GATE_ROWS[i][1]]);
+    states.push([entry.state]);
+    todos.push([entry.todo]);
+  }
+  var rows = labels.length;
+  sheet.getRange(layout.gateFirst, 1, rows, 1).setValues(labels);
+  sheet.getRange(layout.gateFirst, 2, rows, 1).setValues(states);
+  sheet.getRange(layout.gateFirst, 3, rows, 1).setValues(todos);
+}
+
+// ---------------------------------------------------------------------------
 //  BY OFFICER, fourteen rows in hierarchy order
 // ---------------------------------------------------------------------------
 
-// Identity comes from ONE spilling sort into the hidden band and the visible column is
-// a pointer at it, so display formatting never fights the sort. Then one broadcast
-// formula per metric column: COUNTIFS, SUMIFS, MINIFS, MAXIFS and SUMIF all take an
-// array criterion under ARRAYFORMULA, which is what makes a fourteen row block cost one
-// formula per column instead of fourteen lookups per column.
-//
-// The five offices are ordinary rows here, exactly as 5.4 says they are everywhere
-// except Canva. Hierarchy order rather than carousel order, because hierarchy order is
-// the order every list a person reads is sorted by.
+// Twelve visible columns and not one hidden one: every helper this block reads is a named
+// range on `_Views`. Column A is a pointer at the identity sort rather than a second
+// lookup, so display formatting never fights the sort.
 function IS9WD_statsOfficers_(sheet, layout) {
   var f = layout;
-  var rows = f.officerLast - f.officerFirst + 1;
-  var h = f.helperFirstCol;
   var name = 'IS9WD_STATS_OFF_NAME';
   var blank = 'IF(' + name + '="","",';
   var today = 'IS9WD_EFFECTIVE_TODAY';
 
-  // The identity sort. Five columns into M to Q, constrained to the directory's own row
-  // count so a fifteenth directory row cannot silently spill into the spacer below.
-  sheet.getRange(f.officerFirst, h).setFormula(
-    '=IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({IS9WD_DIR_NAME,IS9WD_DIR_VP,' +
-    'IS9WD_DIR_POSITION,IS9WD_DIR_CAROUSEL,IS9WD_DIR_HIERARCHY},IS9WD_DIR_KEY<>""),' +
-    '5,TRUE),' + rows + ',5),' + IS9WD_statsErr_() + ')');
-
-  var spill = IS9WD_statsBand_(h, f.officerFirst, f.officerLast);
   var visible = [
-    // A, the officer. A pointer at the sort rather than a second lookup.
-    '=ARRAYFORMULA(IF(' + spill + '="","",' + spill + '))',
-    // B, Attention. One broadcast precedence string, first match wins, OK at the
-    // bottom: the officer row equivalent of the workbook's own Check idiom. AND does
-    // not broadcast, so the last condition multiplies instead.
+    // A, the officer, read straight off the sort on _Views.
+    '=ARRAYFORMULA(IF(IS9WD_STATS_OFF_SORTNAME="","",IS9WD_STATS_OFF_SORTNAME))',
+    // B, Attention. One broadcast precedence string, first match wins, OK at the bottom:
+    // the officer row equivalent of the workbook's own Check idiom. AND does not
+    // broadcast, so the last condition multiplies instead.
     '=ARRAYFORMULA(' + blank +
       'IF(N(IS9WD_STATS_OFF_LOAD)=0,"Nothing entered for this week",' +
       'IF(N(IS9WD_STATS_OFF_OVERDUE)>0,"Overdue: "&IS9WD_STATS_OFF_OVERDUE&' +
@@ -733,7 +1180,7 @@ function IS9WD_statsOfficers_(sheet, layout) {
       'IF(N(IS9WD_STATS_OFF_SILENT_N)>=IS9WD_STATS_SILENT_DAYS,' +
         'IF(N(IS9WD_STATS_OFF_LASTTICK)=0,"Never ticked","Silent "&' +
         'IS9WD_STATS_OFF_SILENT_N&" days"),' +
-      'IF(N(IS9WD_STATS_OFF_NOTPUB)>0,"Past the carousel by "&IS9WD_STATS_OFF_NOTPUB,' +
+      'IF(N(IS9WD_STATS_OFF_NOTPUB)>0,"No slide for "&IS9WD_STATS_OFF_NOTPUB,' +
       'IF((IS9WD_STATS_ELAPSED>0)*(N(IS9WD_STATS_OFF_RATE)<' +
         'IS9WD_STATS_ELAPSED/7-IS9WD_STATS_PACE_SLACK),"Behind pace","OK"))))))))',
     // C, Due this week.
@@ -775,15 +1222,15 @@ function IS9WD_statsOfficers_(sheet, layout) {
       '*(N(IS9WD_DEL_STATUS_AT)<INT(N(IS9WD_DEL_DEADLINE))+1)' +
       ')/IS9WD_STATS_OFF_JUDGED,""))))',
     // J, Judged. The honesty column, and what makes the ranking fair: a rate is
-    // suppressed entirely below the minimum rather than printed off one item.
+    // suppressed entirely below the minimum rather than printed off one task.
     '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',' +
       'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0",IS9WD_DEL_DEADLINE,"<"&' + today + ')))',
     // K, Avg days from creation to the last status change. One broadcast formula on the
     // identity that a sum of differences equals a difference of sums when the filter is
     // identical, which is what lets SUMIFS stand in for an AVERAGEIFS over a computed
-    // range. A behaviour signal rather than a performance measure: an average near 0
-    // means the officer ticks the moment Ethan enters the item, which is a data quality
-    // smell worth seeing. This is the first column to cut if recalculation bites.
+    // range. A behaviour signal rather than a performance measure: an average near 0 means
+    // the officer ticks the moment Ethan enters the task, which is a data quality smell
+    // worth seeing. This is the first column to cut if recalculation bites.
     '=ARRAYFORMULA(' + blank + 'IFERROR((' +
       'SUMIFS(IS9WD_DEL_STATUS_AT,IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,FALSE,' +
       'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0")' +
@@ -791,8 +1238,8 @@ function IS9WD_statsOfficers_(sheet, layout) {
       'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0"))' +
       '/COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,FALSE,' +
       'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0"),"")))',
-    // L, Not on carousel. Read from the feed by carousel ordinal, never recomputed, and
-    // blank by contract on an officer who does not publish.
+    // L, No slide. Read from the feed by carousel ordinal, never recomputed, and blank by
+    // contract on an officer who does not publish.
     '=ARRAYFORMULA(' + blank + 'IF(IS9WD_STATS_OFF_CAROUSEL="","",' +
       'IFERROR(SUMIF(IS9WD_OFFICER_ORDINAL,IS9WD_STATS_OFF_CAROUSEL,IS9WD_NOTPUB),' +
       IS9WD_statsErr_() + '))))'
@@ -801,62 +1248,20 @@ function IS9WD_statsOfficers_(sheet, layout) {
   for (var v = 0; v < visible.length; v++) {
     sheet.getRange(f.officerFirst, v + 1).setFormula(visible[v]);
   }
-
-  // The hidden band, R to Y, one broadcast formula each, written in the same call as
-  // the block it belongs to so a resize can never leave a helper describing the old
-  // size. `9999` rather than blank in the silence column, so Silent can be compared
-  // numerically without a text guard. The blocking count deliberately does not restate
-  // the eight names: `"?*"` counts every non-blank Check and Overdue is subtracted, so
-  // it stays correct the day a ninth flag is added.
-  var helpers = [
-    '=ARRAYFORMULA(' + blank + 'IS9WD_STATS_OFF_DUE+IS9WD_STATS_OFF_DONE))',
-    '=ARRAYFORMULA(' + blank + 'MINIFS(IS9WD_DEL_DEADLINE,IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0")))',
-    '=ARRAYFORMULA(' + blank + 'MAXIFS(IS9WD_DEL_STATUS_AT,IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_STATUS_AT,">0")))',
-    '=ARRAYFORMULA(' + blank + 'IF(N(IS9WD_STATS_OFF_LASTTICK)=0,9999,' +
-      today + '-INT(IS9WD_STATS_OFF_LASTTICK))))',
-    '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_CHECK,"?*")-COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_CHECK,' + IS9WD_statsQ_(IS9WD_statsOverdueFlag_()) + ')))',
-    '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>")))',
-    '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_ACTIVE,FALSE,IS9WD_DEL_TITLE,"<>")))',
-    '=ARRAYFORMULA(' + blank + 'IS9WD_STATS_OFF_ACTIVE_ALL+IS9WD_STATS_OFF_DONE_ALL))'
-  ];
-  var helperFirst = h + 5;
-  for (var x = 0; x < helpers.length; x++) {
-    sheet.getRange(f.officerFirst, helperFirst + x).setFormula(helpers[x]);
-  }
 }
 
 // ---------------------------------------------------------------------------
 //  TRACK RECORD, RANKED
 // ---------------------------------------------------------------------------
 
-// Deliberately a separate block from the officer table, because the officer table stays
-// in hierarchy order and a rank number buried in hierarchy order is not a ranking
-// anyone can read.
-//
-// The `-1` substitution is what puts an unscored officer at the bottom of a descending
-// sort: an empty string sorts as text, and text sorts before numbers descending, which
-// would have put every unscored officer first. It is displayed as blank, never as -1,
-// and the muted rule makes the unscored block read as not applicable rather than as
-// last place.
+// Five pointers at the sort on `_Views`. Deliberately a separate block from the officer
+// table, because that table stays in hierarchy order and a rank number buried in hierarchy
+// order is not a ranking anyone can read.
 function IS9WD_statsRanked_(sheet, layout) {
   var f = layout;
-  var rows = f.rankLast - f.rankFirst + 1;
-  var h = f.helperFirstCol;
-  var key = IS9WD_statsBand_(h, f.rankFirst, f.rankLast);
-  var score = IS9WD_statsBand_(h + 1, f.rankFirst, f.rankLast);
-  var judged = IS9WD_statsBand_(h + 2, f.rankFirst, f.rankLast);
-
-  sheet.getRange(f.rankFirst, h).setFormula(
-    '=IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({IS9WD_STATS_OFF_NAME,' +
-    'ARRAYFORMULA(IF(IS9WD_STATS_OFF_ONTIME="",-1,IS9WD_STATS_OFF_ONTIME)),' +
-    'IS9WD_STATS_OFF_JUDGED},IS9WD_STATS_OFF_NAME<>""),2,FALSE),' + rows + ',3),' +
-    IS9WD_statsErr_() + ')');
+  var key = 'IS9WD_STATS_RANK_KEY';
+  var score = 'IS9WD_STATS_RANK_SCORE';
+  var judged = 'IS9WD_STATS_RANK_JUDGED';
 
   var body = [
     '=ARRAYFORMULA(IF(' + key + '="","",IF(' + score + '<0,"",' +
@@ -865,7 +1270,7 @@ function IS9WD_statsRanked_(sheet, layout) {
     '=ARRAYFORMULA(IF(' + key + '="","",IF(' + score + '<0,"",' + score + ')))',
     '=ARRAYFORMULA(IF(' + key + '="","",' + judged + '))',
     '=ARRAYFORMULA(IF(' + key + '="","",IF(' + score + '<0,"Fewer than "&' +
-      'IS9WD_STATS_MIN_JUDGED&" of this officer\'s items have passed their deadline","")))'
+      'IS9WD_STATS_MIN_JUDGED&" of this officer\'s tasks have passed their deadline","")))'
   ];
   for (var i = 0; i < body.length; i++) {
     sheet.getRange(f.rankFirst, i + 1).setFormula(body[i]);
@@ -876,32 +1281,22 @@ function IS9WD_statsRanked_(sheet, layout) {
 //  TREND, and its honest limits
 // ---------------------------------------------------------------------------
 
-// What the Archive can and cannot support, because the block is designed around it.
-// The snapshot path archives the feed's VISIBLE rows and the feed excludes terminal
-// items, so a snapshot row's status is always active: snapshot rows structurally cannot
-// say what was accomplished. Only the retire path records an accomplishment, once per
-// ID, with a real deadline and a real status time. So weekly load is reliable, weekly
-// accomplishment covers retired items only, and overdue at week end cannot be
-// reconstructed at all and is not offered.
+// What the Archive can and cannot support, because the block is designed around it. The
+// snapshot path archives the feed's VISIBLE rows and the feed excludes terminal items, so a
+// snapshot row's status is always active: snapshot rows structurally cannot say what was
+// accomplished. Only the retire path records an accomplishment, once per ID, with a real
+// deadline and a real status time. So weekly load is reliable, weekly accomplishment covers
+// retired tasks only, and overdue at week end cannot be reconstructed at all and is not
+// offered.
 //
-// Rows are oldest first, so the sparkline reads left to right in time.
+// Rows are oldest first, so the chart under the block reads left to right in time.
 function IS9WD_statsTrend_(sheet, layout) {
   var f = layout;
   var rows = f.trendLast - f.trendFirst + 1;
-  var h = f.helperFirstCol;
   var monday = 'IS9WD_STATS_TRENDMONDAY';
   var blank = 'IF(' + monday + '="","",';
   var snapshot = IS9WD_statsQ_(IS9WD_ARCHIVE.SOURCE_SNAPSHOT);
   var retired = IS9WD_statsQ_(IS9WD_ARCHIVE.SOURCE_RETIRED);
-
-  // The two hidden helpers. The week number lookup goes through the term calendar
-  // rather than through IS9WD_TERM_START, so a week inside a previous trimester numbers
-  // against its own trimester instead of against the current one.
-  sheet.getRange(f.trendFirst, h + 1).setFormula(
-    '=ARRAYFORMULA(IS9WD_WEEK_START-7*SEQUENCE(' + rows + ',1,' + rows + ',-1))');
-  sheet.getRange(f.trendFirst, h + 2).setFormula(
-    '=ARRAYFORMULA(' + blank + 'SUMIFS(IS9WD_TERM_STARTS,IS9WD_TERM_STARTS,"<="&' +
-    monday + ',IS9WD_TERM_ENDS,">="&' + monday + ')))');
 
   var body = [
     '=ARRAYFORMULA(' + blank + 'IF(N(IS9WD_STATS_TRENDTERM)=0,"--",' +
@@ -920,9 +1315,9 @@ function IS9WD_statsTrend_(sheet, layout) {
     sheet.getRange(f.trendFirst, i + 1).setFormula(body[i]);
   }
 
-  // Column E is the one per-row block on this tab. SUMPRODUCT compares two ranges row
-  // by row, which no broadcast criterion can express, and the comparison is against the
-  // end of the deadline day for the reason 5.3 gives.
+  // Column E is the one per-row block on this tab. SUMPRODUCT compares two ranges row by
+  // row, which no broadcast criterion can express, and the comparison is against the end
+  // of the deadline day for the reason 5.3 gives.
   var onTime = [];
   for (var r = 0; r < rows; r++) {
     var row = f.trendFirst + r;
@@ -936,65 +1331,42 @@ function IS9WD_statsTrend_(sheet, layout) {
       '*(N(IS9WD_ARC_STATUS_AT)<INT(N(IS9WD_ARC_DEADLINE))+1))/' + done + ',""))']);
   }
   sheet.getRange(f.trendFirst, 5, rows, 1).setValues(onTime);
-
-  // The sparkline row. An empty block becomes an instruction rather than a wall of
-  // zeros, and the sparkline cell renders as one labelled blank cell in a connector
-  // read, which the tab's help line says.
-  var recorded = IS9WD_statsBand_(6, f.trendFirst, f.trendLast);
-  var published = IS9WD_statsBand_(3, f.trendFirst, f.trendLast);
-  sheet.getRange(layout.sparkRow, 1).setFormula(
-    '="Load over the last "&IS9WD_STATS_TREND_WEEKS&" weeks"');
-  sheet.getRange(layout.sparkRow, 3).setFormula(
-    '=IF(COUNTIF(' + recorded + ',"Not archived")=ROWS(' + recorded + '),"",' +
-    'SPARKLINE(' + published + ',{"charttype","column";"color",' +
-    IS9WD_statsQ_(IS9WD_ROLE.HEAD_BG) + ';"empty","zero"}))');
-  sheet.getRange(layout.sparkRow, 4).setFormula(
-    '=IF(COUNTIF(' + recorded + ',"Not archived")=0,"",' +
-    'COUNTIF(' + recorded + ',"Not archived")&" of "&ROWS(' + recorded + ')&' +
-    '" weeks were never archived. Switch ARCHIVE_WEEK on in 00 | Configuration, or ' +
-    'run Archive this week from the menu.")');
 }
 
 // ---------------------------------------------------------------------------
-//  READINESS GATES
+//  the three chart captions
 // ---------------------------------------------------------------------------
 
-function IS9WD_statsGates_(sheet, layout) {
-  var f = layout;
-  var spec = IS9WD_statsGateSpec_();
-  var labels = [];
-  var states = [];
-  var todos = [];
-  for (var i = 0; i < IS9WD_STATS_GATE_ROWS.length; i++) {
-    var key = IS9WD_STATS_GATE_ROWS[i][0];
-    var entry = spec[key];
-    if (!entry) {
-      throw new Error('The gates block has no state formula for the key ' + key +
-        '. IS9WD_Stats.js and IS9WD_Config.js disagree about that block.');
-    }
-    labels.push([IS9WD_STATS_GATE_ROWS[i][1]]);
-    states.push([entry.state]);
-    todos.push([entry.todo]);
-  }
-  var rows = labels.length;
-  sheet.getRange(f.gateFirst, 1, rows, 1).setValues(labels);
-  sheet.getRange(f.gateFirst, 2, rows, 1).setValues(states);
-  sheet.getRange(f.gateFirst, 3, rows, 1).setValues(todos);
-}
-
-// ---------------------------------------------------------------------------
-//  SCHEDULED JOBS
-// ---------------------------------------------------------------------------
-
-// What replaces v1's idea of counting emails sent: whether the Monday job ran and
-// whether it failed is actionable, and how many messages it sent is not. Four spills
-// out of the schedule's own named range, so this block cannot disagree with it.
-function IS9WD_statsJobs_(sheet, layout) {
-  var f = layout;
-  var cols = [1, 8, 6, 9];
-  for (var i = 0; i < cols.length; i++) {
-    sheet.getRange(f.jobFirst, i + 1).setFormula(
-      '=ARRAYFORMULA(INDEX(IS9WD_SCHEDULE,0,' + cols[i] + '))');
+// A CHART WITH NO DATA YET IS STILL A CHART, and this is the row that makes that honest.
+// Each caption is a formula that says, in plain words, either what the chart is showing or
+// what will fill it. That is the whole answer to "never as a broken object": the chart is
+// always inserted and always renders, and the sentence above it carries the explanation an
+// empty plot cannot.
+function IS9WD_statsCaptions_(sheet, layout) {
+  var due = 'SUM(IS9WD_STATS_OFF_DUE)';
+  var done = 'SUM(IS9WD_STATS_OFF_DONE)';
+  var officers = 'COUNTIF(IS9WD_STATS_OFF_NAME,"?*")';
+  var recorded = 'IS9WD_STATS_TRENDRECORDED';
+  var captions = [
+    '=IF(' + due + '+' + done + '=0,' +
+      '"Nothing is entered for this week yet, so the chart below is empty. It fills the ' +
+      'moment you enter deliverables on 02 | Deliverables.",' +
+      '"' + 'Showing "&' + due + '&" still to do and "&' + done + '&" done across "&' +
+      officers + '&" officers.")',
+    '=IF(COUNT(IS9WD_STATS_OFF_ONTIME)=0,' +
+      '"No officer has enough tasks past a deadline to be scored yet, so the chart below ' +
+      'is empty. It fills as tasks pass their deadlines and are ticked off.",' +
+      '"Showing "&COUNT(IS9WD_STATS_OFF_ONTIME)&" of "&' + officers +
+      '&" officers. A blank bar means too few tasks to judge, not a score of zero.")',
+    '=IF(COUNTIF(' + recorded + ',"Not archived")=ROWS(' + recorded + '),' +
+      '"No week has been archived yet, so the chart below is empty. Switch ARCHIVE_WEEK ' +
+      'on, or run Archive this week from the IS9 Deliverables menu.",' +
+      '"Showing "&(ROWS(' + recorded + ')-COUNTIF(' + recorded + ',"Not archived"))&" of "&' +
+      'ROWS(' + recorded + ')&" weeks. Accomplished counts only tasks that have been ' +
+      'retired, so it reads low until retirement runs.")'
+  ];
+  for (var i = 0; i < layout.charts.length && i < captions.length; i++) {
+    sheet.getRange(layout.charts[i].captionRow, 1).setFormula(captions[i]);
   }
 }
 
@@ -1002,14 +1374,16 @@ function IS9WD_statsJobs_(sheet, layout) {
 //  the end row
 // ---------------------------------------------------------------------------
 
-// The end marker, this tab's own error count, and the one check that can tell a stale
-// copy of the gate list from a correct one.
+// The end marker, this tab's own error count, and the one check that can tell a stale copy
+// of the gate list from a correct one.
 //
-// Both numbers fail the SELF TEST and appear in the Sunday brief, and they do nothing
-// else. A view that breaks must not stop publication.
+// The agreement reads the FEED's verdict rather than the tile beside it, which is the whole
+// point: the tile is a rendering of that verdict, so comparing the gates against the tile
+// would compare a copy with a copy. Both numbers fail the SELF TEST and appear in the
+// Sunday brief, and they do nothing else.
 function IS9WD_statsEndRow_(sheet, layout) {
   var f = layout;
-  var scan = IS9WD_statsBox_(1, 1, f.helperLastCol, f.scanLastRow);
+  var scan = IS9WD_statsBox_(1, 1, f.lastCol, f.scanLastRow);
   sheet.getRange(f.endRow, 1).setValue(IS9WD_STATS.END);
   sheet.getRange(f.endRow, 2).setValue('End of tab');
   sheet.getRange(f.errorsCell.row, f.errorsCell.col)
@@ -1017,28 +1391,145 @@ function IS9WD_statsEndRow_(sheet, layout) {
     .setFormula('=SUMPRODUCT(--ISERROR(' + scan + '))+' +
       'SUMPRODUCT(--(' + scan + '=' + IS9WD_statsErr_() + '))');
   sheet.getRange(f.agreeCell.row, f.agreeCell.col).setFormula(
-    '=IF((COUNTIF(IS9WD_STATS_GATE_STATE,"HOLD")>0)=(RIGHT(IS9WD_STATS_READY,2)="NO"),' +
+    '=IF((COUNTIF(IS9WD_STATS_GATE_STATE,"HOLD")>0)=' +
+    '(RIGHT(IFERROR(IS9WD_FEED_READY,""),2)="NO"),' +
     '"OK","Gates disagree with Ready for Canva")');
+}
+
+// ============================================================================
+//  THE THREE CHARTS
+// ============================================================================
+
+// Built with the Apps Script chart builder and anchored on the tab, over a reserved band of
+// blank rows. A chart is an overlay rather than a range, so the rows underneath it are
+// deliberately empty: anything written there would be hidden by the chart and invisible to
+// a reader while still being counted by the error scan.
+//
+// Every option here is either a palette colour or Poppins, because a chart is part of the
+// workbook rather than a guest in it. The series colours are #085040 and #8a64a9, the
+// gridlines #e9ebd4, the text #58756a and the background #F8FBFD. No green, no red, and
+// nothing outside the palette (2.5).
+function IS9WD_statsChartOptions_(builder, title) {
+  return builder
+    .setOption('title', title)
+    .setOption('titleTextStyle', {
+      color: IS9WD_ROLE.BODY_FG, fontName: IS9WD_FONT, fontSize: 13, bold: true
+    })
+    .setOption('backgroundColor', IS9WD_ROLE.BODY_BG)
+    .setOption('fontName', IS9WD_FONT)
+    .setOption('fontSize', 10)
+    .setOption('colors', [IS9WD_CLR.GREEN_DEEP, IS9WD_CLR.PURPLE_BRIGHT])
+    .setOption('legend', {
+      position: 'top', alignment: 'start',
+      textStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 }
+    })
+    .setOption('chartArea', { left: 160, top: 56, width: '72%', height: '66%' })
+    .setOption('width', 1120)
+    .setOption('height', IS9WD_STATS_CHART_HEIGHT);
+}
+
+function IS9WD_statsAxisStyle_() {
+  return {
+    textStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 },
+    titleTextStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 }
+  };
+}
+
+// Inserts exactly three, in the order IS9WD_STATS_CHARTS declares them, each one anchored
+// at the first row of its own reserved band. Every range includes its own header row and
+// setNumHeaders(1) reads the series names out of it, so a legend says `Due` and `Done`
+// rather than `Series 1` and `Series 2`.
+function IS9WD_statsInsertCharts_(sheet, layout) {
+  var f = layout;
+  var axis = IS9WD_statsAxisStyle_();
+  var built = 0;
+
+  var anchor = function (index) {
+    return f.charts[index] ? f.charts[index].firstRow : f.endRow;
+  };
+
+  // 1. Due against done per committee, this week. A column chart, because the comparison is
+  // between two bars for one officer and a reader has to see the pair.
+  var officerRows = f.officerLast - f.officerHeader + 1;
+  var one = sheet.newChart()
+    .setChartType(Charts.ChartType.COLUMN)
+    .addRange(sheet.getRange(f.officerHeader, 1, officerRows, 1))
+    .addRange(sheet.getRange(f.officerHeader, 3, officerRows, 1))
+    .addRange(sheet.getRange(f.officerHeader, 4, officerRows, 1))
+    .setNumHeaders(1)
+    .setPosition(anchor(0), 1, 4, 4);
+  IS9WD_statsChartOptions_(one, IS9WD_STATS_CHARTS[0].title);
+  one.setOption('hAxis', {
+    textStyle: axis.textStyle, slantedText: true, slantedTextAngle: 40
+  });
+  one.setOption('vAxis', {
+    textStyle: axis.textStyle, minValue: 0,
+    gridlines: { color: IS9WD_CLR.CREAM }, baselineColor: IS9WD_ROLE.HINT_FG
+  });
+  sheet.insertChart(one.build());
+  built++;
+
+  // 2. The fairness adjusted track record. A bar chart, because fourteen officer names read
+  // straight along the vertical axis and do not need slanting.
+  var rankRows = f.rankLast - f.rankHeader + 1;
+  var two = sheet.newChart()
+    .setChartType(Charts.ChartType.BAR)
+    .addRange(sheet.getRange(f.rankHeader, 2, rankRows, 1))
+    .addRange(sheet.getRange(f.rankHeader, 3, rankRows, 1))
+    .setNumHeaders(1)
+    .setPosition(anchor(1), 1, 4, 4);
+  IS9WD_statsChartOptions_(two, IS9WD_STATS_CHARTS[1].title);
+  two.setOption('colors', [IS9WD_CLR.PURPLE_DEEP]);
+  two.setOption('legend', { position: 'none' });
+  // On a bar chart the axes swap, so the value axis is the horizontal one and the
+  // percentage format belongs there.
+  two.setOption('hAxis', {
+    textStyle: axis.textStyle, format: '#%', minValue: 0, maxValue: 1,
+    gridlines: { color: IS9WD_CLR.CREAM }, baselineColor: IS9WD_ROLE.HINT_FG
+  });
+  two.setOption('vAxis', { textStyle: axis.textStyle });
+  sheet.insertChart(two.build());
+  built++;
+
+  // 3. Week by week. A line chart, because the point is the shape over time.
+  var trendRows = f.trendLast - f.trendHeader + 1;
+  var three = sheet.newChart()
+    .setChartType(Charts.ChartType.LINE)
+    .addRange(sheet.getRange(f.trendHeader, 2, trendRows, 1))
+    .addRange(sheet.getRange(f.trendHeader, 3, trendRows, 1))
+    .addRange(sheet.getRange(f.trendHeader, 4, trendRows, 1))
+    .setNumHeaders(1)
+    .setPosition(anchor(2), 1, 4, 4);
+  IS9WD_statsChartOptions_(three, IS9WD_STATS_CHARTS[2].title);
+  three.setOption('pointSize', 5);
+  three.setOption('curveType', 'none');
+  three.setOption('hAxis', { textStyle: axis.textStyle, format: 'MMM d' });
+  three.setOption('vAxis', {
+    textStyle: axis.textStyle, minValue: 0,
+    gridlines: { color: IS9WD_CLR.CREAM }, baselineColor: IS9WD_ROLE.HINT_FG
+  });
+  sheet.insertChart(three.build());
+  built++;
+
+  return built;
 }
 
 // ============================================================================
 //  PAINTERS FOR 03 | STATISTICS
 // ============================================================================
 
-// Every block's number format, set before one value is written. It looks like styling
-// and is not: a week number written as `04` into a General cell becomes the number 4,
-// and a date written into a General cell becomes a serial nobody can read.
+// Every block's number format, set before one value is written. It looks like styling and
+// is not: a week number written as `04` into a General cell becomes the number 4, and a
+// date written into a General cell becomes a serial nobody can read.
 function IS9WD_statsFormats_(sheet, layout) {
   var f = layout;
   var cols = IS9WD_statsCols_();
   var tables = [
-    [f.weekFirst, f.weekLast, cols.KV],
+    [f.attentionFirst, f.attentionLast, cols.ATTENTION],
+    [f.gateFirst, f.gateLast, cols.GATES],
     [f.officerFirst, f.officerLast, cols.OFFICER],
     [f.rankFirst, f.rankLast, cols.RANKED],
-    [f.trendFirst, f.trendLast, cols.TREND],
-    [f.gateFirst, f.gateLast, cols.GATES],
-    [f.healthFirst, f.healthLast, cols.KV],
-    [f.jobFirst, f.jobLast, cols.JOBS]
+    [f.trendFirst, f.trendLast, cols.TREND]
   ];
   for (var t = 0; t < tables.length; t++) {
     var first = tables[t][0];
@@ -1050,17 +1541,18 @@ function IS9WD_statsFormats_(sheet, layout) {
         .setNumberFormat(spec[i].format || IS9WD_FMT.TEXT);
     }
   }
-  // The hidden band, which mixes text, a date, a timestamp and nine counts. A column
-  // here carries different things in different blocks, so the format is the one that
-  // makes the column readable when a developer unhides it: a number format changes how
-  // a cell displays and never what it holds, so no formula reading the band is affected.
-  var band = [IS9WD_FMT.TEXT, IS9WD_FMT.INT, IS9WD_FMT.TEXT, IS9WD_FMT.INT,
-    IS9WD_FMT.INT, IS9WD_FMT.INT, IS9WD_FMT.DATE_KEY, IS9WD_FMT.STAMP,
-    IS9WD_FMT.INT, IS9WD_FMT.INT, IS9WD_FMT.INT, IS9WD_FMT.INT, IS9WD_FMT.INT];
-  for (var b = 0; b < band.length; b++) {
-    sheet.getRange(1, f.helperFirstCol + b, f.endRow, 1).setNumberFormat(band[b]);
+  // The tile label and note rows, and every caption and marker row, are text: a caption
+  // that starts with a number must not be read as one.
+  for (var g = 0; g < f.tileGroups.length; g++) {
+    sheet.getRange(f.tileGroups[g].labelRow, 1, 1, f.lastCol)
+      .setNumberFormat(IS9WD_FMT.TEXT);
+    sheet.getRange(f.tileGroups[g].noteRow, 1, 1, f.lastCol)
+      .setNumberFormat(IS9WD_FMT.TEXT);
   }
-  sheet.getRange(f.sparkRow, 1, 1, f.lastCol).setNumberFormat(IS9WD_FMT.TEXT);
+  for (var c = 0; c < f.charts.length; c++) {
+    sheet.getRange(f.charts[c].captionRow, 1, 1, f.lastCol)
+      .setNumberFormat(IS9WD_FMT.TEXT);
+  }
   sheet.getRange(f.endRow, 1, 1, f.lastCol).setNumberFormat(IS9WD_FMT.TEXT);
   sheet.getRange(f.errorsCell.row, f.errorsCell.col).setNumberFormat(IS9WD_FMT.INT);
 }
@@ -1070,12 +1562,19 @@ function IS9WD_statsPaintAll_(sheet, layout) {
   var cols = IS9WD_statsCols_();
   var help = IS9WD_statsBandHelp_();
 
-  sheet.getRange(1, 1, f.endRow, f.helperLastCol).setFontFamily(IS9WD_FONT);
+  sheet.getRange(1, 1, f.endRow, f.lastCol).setFontFamily(IS9WD_FONT);
   IS9WD_paintBanner_(sheet, f.bannerRow, f.firstCol, f.lastCol, IS9WD_STATS.BANNER);
   IS9WD_paintHelp_(sheet, f.helpRow, f.firstCol, f.lastCol, IS9WD_STATS.HELP);
 
-  IS9WD_statsBlock_(sheet, f, f.weekBand, 'THIS WEEK', help.week,
-    IS9WD_STATS_HEADERS.KV, f.weekFirst, f.weekLast, cols.KV);
+  // The tiles: one band, one hint row, then two groups of three rows.
+  IS9WD_paintBand_(sheet, f.tileBand, f.firstCol, f.lastCol, 'THIS WEEK AT A GLANCE', '');
+  IS9WD_paintHint_(sheet, f.tileHint, f.firstCol, f.lastCol, help.tile);
+  IS9WD_statsPaintTiles_(sheet, f);
+
+  IS9WD_statsBlock_(sheet, f, f.attentionBand, 'WHAT NEEDS ATTENTION', help.attention,
+    IS9WD_STATS_HEADERS.ATTENTION, f.attentionFirst, f.attentionLast, cols.ATTENTION);
+  IS9WD_statsBlock_(sheet, f, f.gateBand, 'READINESS GATES', help.gate,
+    IS9WD_STATS_HEADERS.GATES, f.gateFirst, f.gateLast, cols.GATES);
   IS9WD_statsBlock_(sheet, f, f.officerBand, 'BY OFFICER', help.officer,
     IS9WD_STATS_HEADERS.OFFICER, f.officerFirst, f.officerLast, cols.OFFICER);
   IS9WD_statsBlock_(sheet, f, f.rankBand, 'TRACK RECORD, RANKED', help.rank,
@@ -1083,49 +1582,88 @@ function IS9WD_statsPaintAll_(sheet, layout) {
   IS9WD_statsBlock_(sheet, f, f.trendBand,
     'TREND, LAST ' + f.trendWeeks + ' WEEKS', help.trend,
     IS9WD_STATS_HEADERS.TREND, f.trendFirst, f.trendLast, cols.TREND);
-  IS9WD_statsBlock_(sheet, f, f.gateBand, 'READINESS GATES', help.gate,
-    IS9WD_STATS_HEADERS.GATES, f.gateFirst, f.gateLast, cols.GATES);
-  IS9WD_statsBlock_(sheet, f, f.healthBand, 'OPERATIONAL HEALTH', help.health,
-    IS9WD_STATS_HEADERS.KV, f.healthFirst, f.healthLast, cols.KV);
-  IS9WD_statsBlock_(sheet, f, f.jobBand, 'SCHEDULED JOBS', help.job,
-    IS9WD_STATS_HEADERS.JOBS, f.jobFirst, f.jobLast, cols.JOBS);
 
-  // The sparkline row reads as a caption rather than as data, so it takes the band's
-  // height and the hint colour instead of the banding.
-  IS9WD_style_(sheet.getRange(f.sparkRow, 1, 1, f.lastCol), {
-    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
-    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
-  });
-  sheet.setRowHeight(f.sparkRow, IS9WD_ROW_H.BAND);
-
-  // The end row, which is the tab's own footer: the marker, the error count and the
-  // gate agreement, all in the band's help colour on the band fill so it reads as the
-  // end of the document rather than as one more row of data.
-  IS9WD_style_(sheet.getRange(f.endRow, 1, 1, f.lastCol), {
-    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.BAND_HELP_FG, bg: IS9WD_ROLE.BAND_BG,
-    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
-  });
-  IS9WD_style_(sheet.getRange(f.endRow, 1), {
-    size: IS9WD_SIZE.BAND, fg: IS9WD_ROLE.BAND_FG, bold: true,
-    bg: IS9WD_ROLE.BAND_BG, align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER,
-    format: IS9WD_FMT.TEXT
-  });
-  sheet.setRowHeight(f.endRow, IS9WD_ROW_H.DATA);
-
-  IS9WD_statsSpacers_(sheet, f.spacerRows, f.helperLastCol);
-  IS9WD_statsPaintHelperBand_(sheet, f);
+  IS9WD_statsPaintCharts_(sheet, f);
+  IS9WD_statsSpacers_(sheet, f.spacerRows, f.lastCol);
+  IS9WD_statsEndBand_(sheet, f.endRow, f.lastCol);
   IS9WD_statsChrome_(sheet, f);
 }
 
-// One band, one header row, one banded body. The band is 34 px, the header 30 and a
-// data row 26, which is what makes a block read as a block.
+// A tile is three cells in one column, and the look is entirely type and space: the number
+// at 22 point in the deep green, the label at 9 point in sage above a hairline of white
+// space, the line under it at 9 point in sage. No fill, no border, no merge. The width
+// comes from the column and the overflow runs into the tile's own span, which is why the
+// tile columns are declared with a span at all.
+function IS9WD_statsPaintTiles_(sheet, layout) {
+  var f = layout;
+  for (var g = 0; g < f.tileGroups.length; g++) {
+    var group = f.tileGroups[g];
+    var value = sheet.getRange(group.valueRow, 1, 1, f.lastCol);
+    IS9WD_style_(value, {
+      size: IS9WD_SIZE.TILE, fg: IS9WD_ROLE.BODY_FG, bold: true,
+      bg: IS9WD_ROLE.BODY_BG, align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER
+    });
+    sheet.setRowHeight(group.valueRow, IS9WD_ROW_H.TILE);
+
+    var label = sheet.getRange(group.labelRow, 1, 1, f.lastCol);
+    IS9WD_style_(label, {
+      size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bold: true,
+      bg: IS9WD_ROLE.BODY_BG, align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER,
+      format: IS9WD_FMT.TEXT
+    });
+    sheet.setRowHeight(group.labelRow, IS9WD_ROW_H.TILE_LABEL);
+
+    // Overflow rather than clip, and it is the difference between a readable tile and a
+    // truncated one: a tile's note sits in the tile's FIRST column, which is 80 px on
+    // tiles two, three and four, and overflow is what lets it use the whole 240 to 350 px
+    // of the tile. It stops at the next tile's own note cell, which is always filled, so
+    // one tile's line can never run into the next tile's.
+    var note = sheet.getRange(group.noteRow, 1, 1, f.lastCol);
+    IS9WD_style_(note, {
+      size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
+      align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
+    });
+    sheet.setRowHeight(group.noteRow, IS9WD_ROW_H.TILE_NOTE);
+  }
+}
+
+// A chart band: the band, the hint row under it, the caption row under that, and then the
+// reserved rows the chart is drawn over. Those rows are given a data row's height and
+// nothing else: they carry no value, no fill and no banding, because a chart sits on top
+// of them.
+function IS9WD_statsPaintCharts_(sheet, layout) {
+  var f = layout;
+  for (var i = 0; i < f.charts.length; i++) {
+    var chart = f.charts[i];
+    var spec = IS9WD_STATS_CHARTS[chart.index];
+    IS9WD_paintBand_(sheet, chart.bandRow, f.firstCol, f.lastCol, spec.title, '');
+    IS9WD_paintHint_(sheet, chart.hintRow, f.firstCol, f.lastCol, spec.help);
+    var caption = sheet.getRange(chart.captionRow, 1, 1, f.lastCol);
+    IS9WD_style_(caption, {
+      size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
+      align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
+    });
+    sheet.setRowHeight(chart.captionRow, IS9WD_ROW_H.HINT);
+    var band = sheet.getRange(chart.firstRow, 1,
+      chart.lastRow - chart.firstRow + 1, f.lastCol);
+    IS9WD_clearBanding_(band);
+    band.setBackground(IS9WD_ROLE.BODY_BG);
+    IS9WD_setDataHeights_(sheet, chart.firstRow, chart.lastRow - chart.firstRow + 1);
+  }
+}
+
+// One band, one hint row under it, one header row, one body. The band is 38 px, the hint
+// 26, the header 30 and a data row 26, which is what makes a block read as a block. A block
+// with no header row passes null, which is the marker block on `_Views`.
 function IS9WD_statsBlock_(sheet, layout, bandRow, title, help, headers, firstRow,
   lastRow, cols) {
-  IS9WD_paintBand_(sheet, bandRow, layout.firstCol, layout.lastCol, title, help);
-  IS9WD_paintHeader_(sheet, bandRow + 1, layout.firstCol, headers);
+  IS9WD_paintBand_(sheet, bandRow, layout.firstCol, layout.lastCol, title, '');
+  IS9WD_paintHint_(sheet, bandRow + 1, layout.firstCol, layout.lastCol, help);
+  if (headers) IS9WD_paintHeader_(sheet, bandRow + 2, layout.firstCol, headers);
   var rows = lastRow - firstRow + 1;
   if (rows < 1) return;
-  var body = sheet.getRange(firstRow, 1, rows, headers.length);
+  var width = headers ? headers.length : cols.length;
+  var body = sheet.getRange(firstRow, 1, rows, width);
   IS9WD_style_(body, {
     size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, bg: IS9WD_ROLE.BODY_BG,
     align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP
@@ -1133,7 +1671,7 @@ function IS9WD_statsBlock_(sheet, layout, bandRow, title, help, headers, firstRo
   IS9WD_applyColumnStyles_(sheet, firstRow, rows, 1, cols);
   IS9WD_statsTints_(sheet, firstRow, rows, cols);
   IS9WD_setDataHeights_(sheet, firstRow, rows);
-  IS9WD_banding_(body);
+  IS9WD_clearBanding_(body);
 }
 
 // Font colour and weight per column, which IS9WD_applyColumnStyles_ deliberately does
@@ -1148,8 +1686,9 @@ function IS9WD_statsTints_(sheet, firstRow, rows, cols) {
   }
 }
 
-// A 12 px blank row between blocks, with no fill of its own, so a block reads as a
-// block rather than as part of the next one.
+// A blank row between blocks, with no fill of its own, so a block reads as a block rather
+// than as part of the next one. It is 18 px now rather than 12: more air was Ethan's
+// instruction of 2026-09-27.
 function IS9WD_statsSpacers_(sheet, rows, lastCol) {
   for (var i = 0; i < rows.length; i++) {
     sheet.getRange(rows[i], 1, 1, lastCol).setBackground(null);
@@ -1157,52 +1696,89 @@ function IS9WD_statsSpacers_(sheet, rows, lastCol) {
   }
 }
 
-// The whole hidden band in one call, so a helper cell can never be left in body type
-// where it would read as content if the column were unhidden.
-function IS9WD_statsPaintHelperBand_(sheet, layout) {
-  var width = layout.helperLastCol - layout.helperFirstCol + 1;
-  IS9WD_style_(sheet.getRange(1, layout.helperFirstCol, layout.endRow, width), {
-    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
-    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP
+// The end row, which is a tab's own footer: the marker, the error count and whatever else
+// that tab records there, in the band's help colour on the band fill so it reads as the end
+// of the document rather than as one more row of data.
+function IS9WD_statsEndBand_(sheet, endRow, lastCol) {
+  IS9WD_style_(sheet.getRange(endRow, 1, 1, lastCol), {
+    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.BAND_HELP_FG, bg: IS9WD_ROLE.BAND_BG,
+    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
   });
+  IS9WD_style_(sheet.getRange(endRow, 1), {
+    size: IS9WD_SIZE.BAND, fg: IS9WD_ROLE.BAND_FG, bold: true,
+    bg: IS9WD_ROLE.BAND_BG, align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER,
+    format: IS9WD_FMT.TEXT
+  });
+  sheet.setRowHeight(endRow, IS9WD_ROW_H.DATA);
 }
 
 function IS9WD_statsChrome_(sheet, layout) {
   IS9WD_setWidths_(sheet, 'STATS');
-  // Shown before hidden, or a column a past layout hid stays hidden forever.
-  sheet.showColumns(1, layout.helperLastCol);
+  // Shown and never hidden: the helper band moved to `_Views`, so there is no hidden
+  // column on this tab at all. Showing them anyway is what undoes a column a past layout
+  // hid, which would otherwise stay hidden forever.
+  sheet.showColumns(1, layout.lastCol);
   IS9WD_hideCols_(sheet, 'STATS');
   IS9WD_freezeTab_(sheet, 'STATS');
   sheet.setTabColor(IS9WD_TAB_COLOR.STATS);
 }
 
-// Returns the list rather than applying it, so the caller replaces the whole list in
-// one call and nothing is ever appended. Colours are roles: a blocking state is always
-// bold #724485 on #e9ebd4 and a superseded row is always #8b74a1, here and on every
-// other tab.
+// Returns the list rather than applying it, so the caller replaces the whole list in one
+// call and nothing is ever appended. Colours are roles: a blocking state is always bold
+// #724485 and a superseded row is always #8b74a1, here and on every other tab.
+//
+// EVERY NAMED RANGE IN EVERY RULE GOES THROUGH INDIRECT. A conditional format rule may not
+// reference another sheet, and most of the thresholds these rules read are on `_Engine` or
+// `_Views` now. Applying the wrapper to all of them, including the local ones, is what
+// makes the rule mechanical instead of remembered.
 function IS9WD_statsRules_(sheet, layout) {
   var f = layout;
   var flag = { fg: IS9WD_ROLE.FLAG_FG, bg: IS9WD_ROLE.FLAG_BG, bold: true };
+  // A FLAGGED TILE TAKES BOLD STRONG PURPLE TEXT AND NO FILL, which is this tab's one
+  // departure from the workbook's usual flag treatment. A cream filled tile on a dashboard
+  // reads as a box rather than as a number, and the whole point of a tile is the number.
+  var tileFlag = { fg: IS9WD_ROLE.FLAG_FG, bold: true };
   var muted = { fg: IS9WD_ROLE.MUTED_FG };
   var accent = { fg: IS9WD_ROLE.ACCENT_FG, bold: true };
   var rules = [];
-  var h = f.helperFirstCol;
+  var spec = IS9WD_statsTileSpec_();
+  var attention = IS9WD_statsAttentionSpec_();
 
-  // First, so it wins on any cell it touches: the visible sentinel this tab uses
-  // instead of swallowing an error into a blank.
+  // First, so it wins on any cell it touches: the visible sentinel this tab uses instead
+  // of swallowing an error into a blank.
   rules.push(IS9WD_ruleFormula_(
-    [sheet.getRange(1, 1, f.endRow, f.helperLastCol)],
+    [sheet.getRange(1, 1, f.endRow, f.lastCol)],
     '=A1=' + IS9WD_statsErr_(), flag));
 
-  // The two label and value blocks, one rule each rather than eleven scoped rules.
-  var kv = [[f.weekFirst, f.weekLast], [f.healthFirst, f.healthLast]];
-  for (var k = 0; k < kv.length; k++) {
-    var first = kv[k][0];
-    var rows = kv[k][1] - first + 1;
-    rules.push(IS9WD_ruleFormula_(
-      [sheet.getRange(first, 2, rows, 2)],
-      '=' + IS9WD_statsRef_(h, first) + '=TRUE', flag));
+  // The eight tiles, one rule each, each one scoped to that tile's own three cells so a
+  // flag on one tile cannot decorate the tile beside it.
+  for (var t = 0; t < IS9WD_STATS_TILES.length; t++) {
+    var key = IS9WD_STATS_TILES[t][0];
+    var at = IS9WD_statsTileAt_(f, key);
+    var entry = spec[key];
+    if (!at || !entry || entry.flag === '=FALSE') continue;
+    rules.push(IS9WD_ruleFormula_([
+      sheet.getRange(at.valueRow, at.col, 1, at.span),
+      sheet.getRange(at.labelRow, at.col, 1, at.span),
+      sheet.getRange(at.noteRow, at.col, 1, at.span)
+    ], entry.flag, tileFlag));
   }
+
+  // The attention table, one rule per row, because there is no hidden flag column on this
+  // tab any more and a per-row rule is the honest replacement for one.
+  for (var a = 0; a < IS9WD_STATS_ATTENTION_ROWS.length; a++) {
+    var aKey = IS9WD_STATS_ATTENTION_ROWS[a][0];
+    var aEntry = attention[aKey];
+    if (!aEntry || aEntry.flag === '=FALSE') continue;
+    rules.push(IS9WD_ruleFormula_(
+      [sheet.getRange(f.attentionFirst + a, 2, 1, 2)], aEntry.flag, flag));
+  }
+
+  // The gates.
+  var gRows = f.gateLast - f.gateFirst + 1;
+  rules.push(IS9WD_ruleFormula_(
+    [sheet.getRange(f.gateFirst, 1, gRows, IS9WD_STATS_HEADERS.GATES.length)],
+    '=' + IS9WD_statsRef_(2, f.gateFirst) + '="HOLD"', flag));
 
   // BY OFFICER. Attention is the column Ethan scans, so it is the one that shouts.
   var oRows = f.officerLast - f.officerFirst + 1;
@@ -1212,22 +1788,24 @@ function IS9WD_statsRules_(sheet, layout) {
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 6, oRows, 1)],
     '=N(' + IS9WD_statsRef_(6, o) + ')>0', flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 7, oRows, 1)],
-    '=N(' + IS9WD_statsRef_(7, o) + ')>=INDIRECT("IS9WD_STATS_LATE_DAYS")', flag));
+    '=N(' + IS9WD_statsRef_(7, o) + ')>=' +
+    IS9WD_statsRuleName_('IS9WD_STATS_LATE_DAYS'), flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 8, oRows, 1)],
-    '=OR(' + IS9WD_statsRef_(8, o) + '="never",N(' + IS9WD_statsRef_(8, o) +
-    ')>=INDIRECT("IS9WD_STATS_SILENT_DAYS"))', flag));
+    '=OR(' + IS9WD_statsRef_(8, o) + '="never",N(' + IS9WD_statsRef_(8, o) + ')>=' +
+    IS9WD_statsRuleName_('IS9WD_STATS_SILENT_DAYS') + ')', flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 5, oRows, 1)],
     '=AND(' + IS9WD_statsRef_(3, o) + '+' + IS9WD_statsRef_(4, o) + '>0,' +
-    'IS9WD_STATS_ELAPSED>0,' + IS9WD_statsRef_(5, o) +
-    '<IS9WD_STATS_ELAPSED/7-INDIRECT("IS9WD_STATS_PACE_SLACK"))', flag));
-  // A committee that finished its whole week is the one good state this tab decorates,
-  // and it takes the accent rather than a flag colour, because it is not a fault.
+    IS9WD_statsRuleName_('IS9WD_STATS_ELAPSED') + '>0,' + IS9WD_statsRef_(5, o) + '<' +
+    IS9WD_statsRuleName_('IS9WD_STATS_ELAPSED') + '/7-' +
+    IS9WD_statsRuleName_('IS9WD_STATS_PACE_SLACK') + ')', flag));
+  // A committee that finished its whole week is the one good state this tab decorates, and
+  // it takes the accent rather than a flag colour, because it is not a fault.
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 5, oRows, 1)],
     '=AND(' + IS9WD_statsRef_(3, o) + '+' + IS9WD_statsRef_(4, o) + '>0,' +
     IS9WD_statsRef_(5, o) + '=1)', accent));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 9, oRows, 1)],
-    '=AND(' + IS9WD_statsRef_(9, o) + '<>"",' + IS9WD_statsRef_(9, o) +
-    '<INDIRECT("IS9WD_STATS_ONTIME_TARGET"))', flag));
+    '=AND(' + IS9WD_statsRef_(9, o) + '<>"",' + IS9WD_statsRef_(9, o) + '<' +
+    IS9WD_statsRuleName_('IS9WD_STATS_ONTIME_TARGET') + ')', flag));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 12, oRows, 1)],
     '=N(' + IS9WD_statsRef_(12, o) + ')>0', accent));
 
@@ -1237,32 +1815,14 @@ function IS9WD_statsRules_(sheet, layout) {
     [sheet.getRange(f.rankFirst, 1, rRows, IS9WD_STATS_HEADERS.RANKED.length)],
     '=' + IS9WD_statsRef_(5, f.rankFirst) + '<>""', muted));
 
-  // The trend block. A week nothing ever archived is muted, because it is missing
-  // rather than empty; a week with a snapshot and no retirement takes the accent.
+  // The trend block. A week nothing ever archived is muted, because it is missing rather
+  // than empty; a week with a snapshot and no retirement takes the accent.
   var tRows = f.trendLast - f.trendFirst + 1;
   rules.push(IS9WD_ruleFormula_(
     [sheet.getRange(f.trendFirst, 1, tRows, IS9WD_STATS_HEADERS.TREND.length)],
     '=' + IS9WD_statsRef_(6, f.trendFirst) + '="Not archived"', muted));
   rules.push(IS9WD_ruleFormula_([sheet.getRange(f.trendFirst, 6, tRows, 1)],
     '=' + IS9WD_statsRef_(6, f.trendFirst) + '="Snapshot only"', accent));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(f.sparkRow, 4)],
-    '=' + IS9WD_statsCell_(4, f.sparkRow) + '<>""', flag));
-
-  // The gates.
-  var gRows = f.gateLast - f.gateFirst + 1;
-  rules.push(IS9WD_ruleFormula_(
-    [sheet.getRange(f.gateFirst, 1, gRows, IS9WD_STATS_HEADERS.GATES.length)],
-    '=' + IS9WD_statsRef_(2, f.gateFirst) + '="HOLD"', flag));
-
-  // The jobs. A failed run shouts; a job that is switched off is superseded and not
-  // broken, which is the distinction the two treatments carry everywhere else.
-  var jRows = f.jobLast - f.jobFirst + 1;
-  var jCols = IS9WD_STATS_HEADERS.JOBS.length;
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(f.jobFirst, 1, jRows, jCols)],
-    '=AND(' + IS9WD_statsRef_(4, f.jobFirst) + '<>"",LOWER(' +
-    IS9WD_statsRef_(4, f.jobFirst) + ')<>"ok")', flag));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(f.jobFirst, 1, jRows, jCols)],
-    '=' + IS9WD_statsRef_(3, f.jobFirst) + '=FALSE', muted));
 
   // The two footer cells. Either one is a self test failure and nothing else.
   rules.push(IS9WD_ruleFormula_([sheet.getRange(f.errorsCell.row, f.errorsCell.col)],
@@ -1279,13 +1839,12 @@ function IS9WD_statsRules_(sheet, layout) {
 // ============================================================================
 
 /**
- * Sizes, paints and writes 04 | Officer Tables: fourteen structurally identical blocks,
- * one per directory entry, in hierarchy order. It owns the whole tab for the length of
- * the call, exactly as IS9WD_statsResize_ owns its own.
+ * Sizes, paints and writes 04 | Officer Tables: fourteen numbered sections, one per
+ * directory entry, in order of rank. It owns the whole tab for the length of the call.
  *
- * It must run after IS9WD_statsResize_, because every count in a band row is an INDEX
- * into a named range on 03 | Statistics. That is what stops the two views disagreeing,
- * and it is why this is the second of the two calls rather than the first.
+ * IT READS BOTH OTHER VIEWS BY NAME, so it runs last: every count in a section heading is
+ * an INDEX into a named range on `_Views`, and the reserved row count it compares against
+ * is a marker `_Views` writes. That is what stops the three tabs disagreeing.
  */
 function IS9WD_officerTablesResize_(cfg) {
   var conf = cfg || IS9WD_readConfig_();
@@ -1345,8 +1904,8 @@ function IS9WD_otWriteAll_(sheet, layout) {
 }
 
 // Row 3, and the reason it is frozen with the banner: it says from the top what the
-// fourteen blocks below cannot be trusted to show, so nobody has to scroll to the
-// bottom of the tab to find out that something was left out.
+// fourteen sections below cannot be trusted to show, so nobody has to scroll to the bottom
+// of the tab to find out that something was left out.
 function IS9WD_otSummaryRow_(sheet, layout) {
   var shown = '(IS9WD_OT_ROWS_BUILT-1)';
   sheet.getRange(layout.summaryRow, 1).setFormula(
@@ -1355,17 +1914,10 @@ function IS9WD_otSummaryRow_(sheet, layout) {
     '"Not shown below: "&TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF(' +
     'N(IS9WD_STATS_OFF_TOTAL)>' + shown + ',IS9WD_STATS_OFF_NAME&" ("&' +
     '(N(IS9WD_STATS_OFF_TOTAL)-' + shown + ')&")","")))&' +
-    '". Raise Rows reserved per officer in 00 | Configuration, then run Build or ' +
-    'repair workbook.")');
-  // The reserved row count setup actually built, so the guard note beside the setting
-  // in 00 | Configuration has something to compare against. The only literal on the
-  // tab besides the fourteen ordinals.
-  sheet.getRange(layout.rowsBuiltCell.row, layout.rowsBuiltCell.col)
-    .setNumberFormat(IS9WD_FMT.INT)
-    .setValue(layout.officerRows);
+    '". Raise Rows reserved per officer on _Engine, then run Build or repair workbook.")');
 }
 
-// One block: the band line, the hierarchy ordinal it joins on, one spilling item
+// One section: the numbered heading, the hierarchy ordinal it joins on, one spilling item
 // formula and one overflow notice.
 function IS9WD_otBlockValues_(sheet, layout, block) {
   var ord = IS9WD_statsRef_(layout.keyCol, block.bandRow);
@@ -1373,55 +1925,59 @@ function IS9WD_otBlockValues_(sheet, layout, block) {
   var sep = IS9WD_statsSep_();
 
   // The ordinal is a literal, written once by setup, and it is what lets fourteen
-  // structurally identical blocks share one formula shape. It is the feed's own device
+  // structurally identical sections share one formula shape. It is the feed's own device
   // for the same job.
   sheet.getRange(block.bandRow, layout.keyCol)
     .setNumberFormat(IS9WD_FMT.INT)
     .setValue(block.ordinal);
 
-  // The band line. Every count in it is an INDEX into 03 | Statistics rather than a
-  // second COUNTIFS, so the two views cannot disagree, and the counts are the
-  // all-items window, which the tab's help line says.
+  // The heading. It opens with the section number, which is what makes the tab read as a
+  // document with fourteen numbered sections rather than as fourteen stripes: a reader
+  // always knows where they are and how far there is to go. Every count in it is an INDEX
+  // into a named range on `_Views` rather than a second COUNTIFS, so the tabs cannot
+  // disagree, and the counts are the all-tasks window, which the tab's help line says.
   sheet.getRange(block.bandRow, 1).setFormula(
     '=IF(' + ord + '="",' + IS9WD_statsErr_() + ',' +
+    'TEXT(' + ord + ',"00")&" of "&TEXT(ROWS(IS9WD_STATS_OFF_NAME),"00")&' + sep + '&' +
     'UPPER(INDEX(IS9WD_STATS_OFF_NAME,' + ord + '))&' + sep + '&' +
     'UPPER(INDEX(IS9WD_STATS_OFF_POSITION,' + ord + '))&' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_VP,' + ord + ')&' + sep + '&' +
-    'INDEX(IS9WD_STATS_OFF_ACTIVE_ALL,' + ord + ')&" active"&' + sep + '&' +
+    'INDEX(IS9WD_STATS_OFF_ACTIVE_ALL,' + ord + ')&" to do"&' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_DONE_ALL,' + ord + ')&" done"&' + sep + '&' +
-    'INDEX(IS9WD_STATS_OFF_OVERDUE,' + ord + ')&" overdue"&' +
+    'INDEX(IS9WD_STATS_OFF_OVERDUE,' + ord + ')&" late"&' +
     'IF(N(INDEX(IS9WD_STATS_OFF_NOTPUB,' + ord + '))>0,' + sep + '&' +
-    'INDEX(IS9WD_STATS_OFF_NOTPUB,' + ord + ')&" past the carousel","")&' +
+    'INDEX(IS9WD_STATS_OFF_NOTPUB,' + ord + ')&" with no slide","")&' +
     'IF(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))=0,' + sep +
-    '&"no deliverables entered","")&' +
+    '&"nothing entered yet","")&' +
     'IF(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))>' + shown + ',' + sep + '&' +
     '(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))-' + shown + ')&' +
     '" not shown below",""))');
 
-  // The item spill, one formula per block. Four things in it are load bearing, and all
+  // The item spill, one formula per section. Four things in it are load bearing, and all
   // four are the reason it is one formula rather than ninety-six lookups.
   //
-  // The sort key is ONE column rather than three sort arguments: `0` or `1` for active
-  // or done, then the deadline serial zero padded to six digits, then the ID. The whole
+  // The sort key is ONE column rather than three sort arguments: `0` or `1` for active or
+  // done, then the deadline serial zero padded to six digits, then the ID. The whole
   // ordering rule is legible in one expression, and a blank deadline gives `000000` and
-  // sorts first, which matches the feed's deliberate choice to put an item nobody can
-  // date at the top rather than buried.
+  // sorts first, which matches the feed's deliberate choice to put a task nobody can date
+  // at the top rather than buried.
   //
-  // Both computed columns are wrapped in ARRAYFORMULA, because IF and & do not
-  // broadcast over a range inside an array literal: without the wrapper each column
-  // collapses to a scalar, the `{}` literal fails on a size mismatch, and the block
-  // goes permanently and silently blank.
+  // Both computed columns are wrapped in ARRAYFORMULA, because IF and & do not broadcast
+  // over a range inside an array literal: without the wrapper each column collapses to a
+  // scalar, the `{}` literal fails on a size mismatch, and the section goes permanently
+  // and silently blank.
   //
-  // The key is the last column and hidden, so the display columns stay in reading
-  // order with no CHOOSECOLS, which keeps this to classic functions like every other
-  // formula in the workbook.
+  // The key is the last column and hidden, so the display columns stay in reading order
+  // with no CHOOSECOLS, which keeps this to classic functions like every other formula in
+  // the workbook. It is the one hidden column left on a tab a person reads, and it cannot
+  // move to `_Views` with the others: it is the eighth column of this very SORT.
   //
   // And the IF on the total means one cell returns either a sentence or an array, so an
-  // officer with nothing does not need a second cell and does not read as twelve blank
+  // officer with nothing does not need a second cell and does not read as twenty blank
   // banded rows.
   sheet.getRange(block.itemFirst, 1).setFormula(
     '=IF(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))=0,' +
-    '"No deliverables entered for this officer.",' +
+    '"Nothing entered for this officer yet.",' +
     'IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({IS9WD_DEL_TITLE,IS9WD_DEL_DEADLINE,' +
     'ARRAYFORMULA(IF(N(IS9WD_DEL_DEADLINE)>0,INT(N(IS9WD_DEL_DEADLINE))-' +
     'IS9WD_EFFECTIVE_TODAY,"")),IS9WD_DEL_STATUS,IS9WD_DEL_CHECK,IS9WD_DEL_REMARK,' +
@@ -1435,7 +1991,7 @@ function IS9WD_otBlockValues_(sheet, layout, block) {
   sheet.getRange(block.noticeRow, 1).setFormula(
     '=IF(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))<=' + shown + ',"",' +
     '"+ "&(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))-' + shown + ')&' +
-    '" more not shown here. Raise Rows reserved per officer in 00 | Configuration, ' +
+    '" more not shown here. Raise Rows reserved per officer on _Engine, ' +
     'then run Build or repair workbook.")');
 }
 
@@ -1461,29 +2017,20 @@ function IS9WD_otPaintAll_(sheet, layout) {
   IS9WD_paintBanner_(sheet, o.bannerRow, o.firstCol, o.visibleLastCol, IS9WD_OT.BANNER);
   IS9WD_paintHelp_(sheet, o.helpRow, o.firstCol, o.visibleLastCol, IS9WD_OT.HELP);
 
-  // The summary row is a rule rather than a caption, so it takes the hint colour and a
-  // data row's height and sits directly under the help line inside the frozen pane.
+  // The summary row is a rule rather than a caption, so it takes body type and sits
+  // directly under the help line inside the frozen pane.
   IS9WD_style_(sheet.getRange(o.summaryRow, 1, 1, o.visibleLastCol), {
     size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, bg: IS9WD_ROLE.BODY_BG,
     align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
   });
-  sheet.setRowHeight(o.summaryRow, IS9WD_ROW_H.DATA);
+  sheet.setRowHeight(o.summaryRow, IS9WD_ROW_H.HINT);
 
   for (var i = 0; i < o.blocks.length; i++) {
     IS9WD_otPaintBlock_(sheet, o, o.blocks[i], cols);
   }
 
   IS9WD_statsSpacers_(sheet, o.spacerRows, o.lastCol);
-
-  IS9WD_style_(sheet.getRange(o.endRow, 1, 1, o.visibleLastCol), {
-    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.BAND_HELP_FG, bg: IS9WD_ROLE.BAND_BG,
-    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
-  });
-  IS9WD_style_(sheet.getRange(o.endRow, 1), {
-    size: IS9WD_SIZE.BAND, fg: IS9WD_ROLE.BAND_FG, bold: true, bg: IS9WD_ROLE.BAND_BG,
-    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
-  });
-  sheet.setRowHeight(o.endRow, IS9WD_ROW_H.DATA);
+  IS9WD_statsEndBand_(sheet, o.endRow, o.visibleLastCol);
 
   // The hidden sort key column, top to bottom.
   IS9WD_style_(sheet.getRange(1, o.keyCol, o.endRow, 1), {
@@ -1498,10 +2045,10 @@ function IS9WD_otPaintAll_(sheet, layout) {
   sheet.setTabColor(IS9WD_TAB_COLOR.TABLES);
 }
 
-// One officer's table. The band is one cell of text running across a filled span, which
-// is how the bar look is achieved without the connector printing `[merged]` repeats.
-// Banding covers the item rows only, so the notice row and the spacer stay plain and
-// the block reads as a table with a heading rather than as a stripe that never ends.
+// One officer's section. The heading is one cell of text running across a filled span,
+// which is how the bar look is achieved without the connector printing `[merged]` repeats.
+// Banding covers the task rows only, so the notice row and the spacer stay plain and the
+// section reads as a table under a heading rather than as a stripe that never ends.
 function IS9WD_otPaintBlock_(sheet, layout, block, cols) {
   IS9WD_paintBand_(sheet, block.bandRow, layout.firstCol, layout.visibleLastCol, '', '');
   IS9WD_paintHeader_(sheet, block.headerRow, layout.firstCol, IS9WD_OT_HEADERS);
@@ -1515,7 +2062,7 @@ function IS9WD_otPaintBlock_(sheet, layout, block, cols) {
   IS9WD_applyColumnStyles_(sheet, block.itemFirst, rows, 1, cols);
   IS9WD_statsTints_(sheet, block.itemFirst, rows, cols);
   IS9WD_setDataHeights_(sheet, block.itemFirst, rows);
-  IS9WD_banding_(body);
+  IS9WD_clearBanding_(body);
 
   var notice = sheet.getRange(block.noticeRow, 1, 1, layout.visibleLastCol);
   IS9WD_style_(notice, {
@@ -1525,10 +2072,13 @@ function IS9WD_otPaintBlock_(sheet, layout, block, cols) {
   sheet.setRowHeight(block.noticeRow, IS9WD_ROW_H.DATA);
 }
 
-// Five rules per block plus the sentinel rule. Per block rather than one multi-range
-// rule per treatment, because a multi-range rule's relative anchor across fourteen
-// ranges is undocumented, and getting it wrong would mute the wrong rows on a tab whose
-// muting is the acceptance check for not keying on a status label.
+// Five rules per section plus the sentinel rule. Per section rather than one multi-range
+// rule per treatment, because a multi-range rule's relative anchor across fourteen ranges
+// is undocumented, and getting it wrong would mute the wrong rows on a tab whose muting is
+// the acceptance check for not keying on a status label.
+//
+// Not one of these reads a named range, which is why this tab was the one that exposed the
+// cross-sheet rule bug: everything it needs is a cell on the same sheet.
 function IS9WD_otRules_(sheet, layout) {
   var flag = { fg: IS9WD_ROLE.FLAG_FG, bg: IS9WD_ROLE.FLAG_BG, bold: true };
   var muted = { fg: IS9WD_ROLE.MUTED_FG };
@@ -1556,10 +2106,10 @@ function IS9WD_otRules_(sheet, layout) {
     // Scoped to Days left so it cannot collide with the flag rule beside it.
     rules.push(IS9WD_ruleFormula_([sheet.getRange(b.itemFirst, 3, rows, 1)],
       '=AND(' + daysRef + '<>"",N(' + daysRef + ')<0)', accent));
-    // An accomplished row reads muted across all seven columns, and the rule reads the
-    // FIRST CHARACTER OF THE SORT KEY, which derives from the Active flag. Nothing here
-    // keys on the word Accomplished: the Status column carries the label as display and
-    // never as a key, so renaming the status in Configuration changes nothing.
+    // A finished row reads muted across all seven columns, and the rule reads the FIRST
+    // CHARACTER OF THE SORT KEY, which derives from the Active flag. Nothing here keys on
+    // the word Accomplished: the Status column carries the label as display and never as a
+    // key, so renaming the status in the status list changes nothing.
     rules.push(IS9WD_ruleFormula_(whole, '=LEFT(' + keyRef + ',1)="1"', muted));
     rules.push(IS9WD_ruleFormula_([sheet.getRange(b.noticeRow, 1, 1, layout.visibleLastCol)],
       '=' + IS9WD_statsCell_(1, b.noticeRow) + '<>""', flag));

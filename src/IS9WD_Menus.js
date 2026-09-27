@@ -67,6 +67,10 @@ var IS9WD_ACTION = {
   // Ethan-owned cell below it at its old row, because setup writes those only when
   // blank. This deletes the tabs and builds again, and it refuses the moment the
   // workbook holds an item, an archive row, a sign-off row or a directory name.
+  // Rebuilds all three computed tabs in dependency order: `_Views`, then the dashboard,
+  // then the officer tables. It is the action to run after changing a layout setting on
+  // `_Engine`, and the one to run when a slow build ran out of execution time before it
+  // reached them.
   VIEWS: {
     fn: 'IS9WD_buildViews_', from: 'IS9WD_Setup.js', lock: true,
     label: 'Rebuild the views'
@@ -540,7 +544,7 @@ function IS9WD_menuRecordDeployment() {
       IS9WD_configReset_();
     });
     ui.alert('Record the live deployment settings',
-      'Recorded in 00 | Configuration:\n\n' + line +
+      'Recorded on _Engine under Diagnostics:\n\n' + line +
       '\n\nExecute as must read the owner, never the accessing user: the whole ' +
       'point of the token model is that the 14 people never hold Sheet access.',
       ui.ButtonSet.OK);
@@ -800,8 +804,12 @@ function IS9WD_aboutLines_() {
   out.push('');
   out.push('Ethan enters every deliverable. Each officer holds one private link ' +
     'and ticks items off. Nothing here keys on a status label: the derived ' +
-    'Active flag is what the code reads, so a status can be renamed in ' +
-    '00 | Configuration.');
+    'Active flag is what the code reads, so a status can be renamed in the status ' +
+    'list on _Engine.');
+  out.push('00 | Configuration holds only what a president sets, and every cell you ' +
+    'type into on it is cream with the reason beside it. Everything the code needs is ' +
+    'on the hidden _Engine tab, and the working out behind the dashboard is on the ' +
+    'hidden _Views tab.');
   return out;
 }
 

@@ -59,6 +59,14 @@ var IS9WD_FEED_DOT_ = '·  ';
 // a legitimately empty slot.
 var IS9WD_FEED_ERR_ = '!ERR';
 
+// The plain English sentence in E1 and in A1's note. Written for somebody who has never
+// written a formula: what the tab is for, that it fills itself, and who reads it.
+var IS9WD_FEED_PLAIN_ = 'What this tab is for: it is the words and the colours the ' +
+  'Instagram carousel prints. It fills itself from the deliverables you enter and from ' +
+  '00 | Configuration, so there is nothing to type here and nothing to tidy up. Every ' +
+  'Sunday Claude reads this one tab and updates the Canva design from it, which is why ' +
+  'the wording here is exact and why this tab is never hidden.';
+
 // One line per block, riding on the sentinel band beside the sentinel itself.
 // Index for index with IS9WD_FEED_SENTINELS. Row 1 has no room for one: A1 to D1
 // are the tab identity, the start sentinel, the feed-as-of line and the stamp.
@@ -243,11 +251,11 @@ function IS9WD_feedBlockingArray_() {
 // retyped. Two copies of one condition are two strings that drift, and 13.3 compares
 // the two cells word for word.
 function IS9WD_feedCapacityFormula_() {
-  var rows = IS9WD_CFG.SWITCHES.rows;
+  var rows = IS9WD_ENG.CAPACITY.rows;
   for (var i = 0; i < rows.length; i++) {
     if (rows[i].name === 'IS9WD_PUBLISH_MAX' && rows[i].note) return rows[i].note;
   }
-  throw new Error('The capacity guard formula is missing from IS9WD_CFG.SWITCHES. ' +
+  throw new Error('The capacity guard formula is missing from IS9WD_ENG.CAPACITY. ' +
     'The feed cannot be built without it.');
 }
 
@@ -562,13 +570,30 @@ function IS9WD_feedIdentityRow_(sheet, layout) {
     IS9WD_feedQ_(IS9WD_FEED_PIPE_) + '&"Counts "&IFERROR(TEXTJOIN("-",FALSE,' +
     'ARRAYFORMULA(TEXT(' + counts + ',"00"))),' + IS9WD_feedQ_(IS9WD_FEED_ERR_) + ')');
 
-  // The banner is painted across the row at 14 point bold. These two cells are this
-  // module's own and are plumbing, so they are pulled back to hint size in the band's
-  // help colour: a stamp set in the banner's type would swamp the tab's name and
-  // overflow the row. It is the one paint this writer does, and it is deliberate.
+  // THE PLAIN ENGLISH EXPLANATION, Ethan's instruction of 2026-09-27: this tab has no
+  // cells he fills, so it gets a short explanation at the top saying what it is for, that
+  // it fills itself, and that it is what Claude reads every Sunday.
+  //
+  // It rides in E1 rather than in a row of its own, and that is not a cosmetic choice:
+  // section 6.3 fixes every row number on this tab and the nine sentinels are how a
+  // truncated connector read is detected, so there is no free row to take. E1 is inside
+  // the banner's own filled span, it is read by the connector like any other cell, and it
+  // moves nothing. The same sentence is the note on A1, which is what a person gets by
+  // clicking the tab's own name.
+  sheet.getRange(row, 5).setValue(IS9WD_FEED_PLAIN_);
+  sheet.getRange(row, 1).setNote(IS9WD_FEED_PLAIN_);
+
+  // The banner is painted across the row at 14 point bold. These three cells are this
+  // module's own and are plumbing or a caption, so they are pulled back to hint size in
+  // the band's help colour: a stamp set in the banner's type would swamp the tab's name
+  // and overflow the row. It is the one paint this writer does, and it is deliberate.
   IS9WD_style_(sheet.getRange(row, 3, 1, 2), {
     size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.BAND_HELP_FG, bg: IS9WD_ROLE.BAND_BG,
     align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
+  });
+  IS9WD_style_(sheet.getRange(row, 5), {
+    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.BAND_HELP_FG, bg: IS9WD_ROLE.BAND_BG,
+    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
   });
 }
 

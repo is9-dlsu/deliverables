@@ -63,19 +63,40 @@ var IS9WD_TAB = {
   STATS: '03 | Statistics',
   TABLES: '04 | Officer Tables',
   ARCHIVE: '05 | Archive',
-  LOG: '06 | Log'
+  LOG: '06 | Log',
+  // The two hidden machine tabs, added on Ethan's instruction of 2026-09-27: "you may
+  // add tabs for your use but hide it". They carry the leading underscore so they sort
+  // and read as not part of the numbered reading order.
+  //
+  // _Engine is every setting that exists for the code rather than for a president: the
+  // hex pairs Canva consumes, the status vocabulary, the job schedule, the carousel
+  // capacity numbers, the mail plumbing, the statistics thresholds, the diagnostics, the
+  // directory's token and ordinal columns, and the weekly sign-off store.
+  //
+  // _Views is the helper band both computed views used to hide inside themselves. It
+  // exists so 03 | Statistics is twelve visible columns and nothing else, and so a
+  // developer unhiding a column on a tab Ethan reads is impossible rather than merely
+  // unlikely.
+  ENGINE: '_Engine',
+  VIEWS: '_Views'
 };
 
-// Left to right in the tab bar. Setup also uses it to order a repaired workbook.
-var IS9WD_TAB_ORDER = ['CONFIG', 'FEED', 'ITEMS', 'STATS', 'TABLES', 'ARCHIVE', 'LOG'];
+// Left to right in the tab bar. Setup also uses it to order a repaired workbook. The
+// two hidden tabs sit after the Log, so the seven numbered tabs keep positions 1 to 7
+// and 01 | Canva Feed keeps position 2, which is the one hard constraint (10.1).
+var IS9WD_TAB_ORDER = ['CONFIG', 'FEED', 'ITEMS', 'STATS', 'TABLES', 'ARCHIVE', 'LOG',
+  'ENGINE', 'VIEWS'];
 
 // Renaming a tab in the tab bar must not make the next repair build an empty twin
 // under the old name and strand 2,000 real rows on a sheet nothing reads.
 var IS9WD_TAB_META_PREFIX = 'IS9WD_TAB_';
 
-// 06 | Log is hidden. Hiding it is not a security boundary: the Canva reader can
-// read every cell of every tab, hidden or not, which is why no token is ever in one.
-var IS9WD_HIDDEN_TABS = ['LOG'];
+// 06 | Log, _Engine and _Views are hidden. Hiding is not a security boundary: the Canva
+// reader can read every cell of every tab, hidden or not, which is why no token is ever
+// in one. 01 | Canva Feed is deliberately NOT here: whether the Drive connector includes
+// a hidden tab in its read is unmeasured, and the whole Sunday run depends on reading
+// that tab, so hiding it would risk the one thing this build exists for.
+var IS9WD_HIDDEN_TABS = ['LOG', 'ENGINE', 'VIEWS'];
 
 // ============================================================================
 //  PALETTE, FONT AND TYPE  (2.5: the IS9 palette and nothing outside it)
@@ -120,9 +141,11 @@ var IS9WD_ROLE = {
   BAND_ROW_B: IS9WD_CLR.CREAM
 };
 
-// Seven tabs, and the palette holds exactly seven colours that are not the page
-// background, so the two new tabs consume it exactly with no reuse. An eighth tab
-// forces a reuse decision, which is worth knowing now rather than then.
+// The palette holds exactly seven colours that are not the page background, so the
+// seven numbered tabs consume it exactly. The two hidden machine tabs forced the reuse
+// decision the earlier note predicted, and it is taken here rather than by inventing a
+// colour: both take the page background, because a tab that is not part of the reading
+// order should not claim a colour from it.
 var IS9WD_TAB_COLOR = {
   CONFIG: IS9WD_CLR.PURPLE_DEEP,
   FEED: IS9WD_CLR.GREEN_DEEP,
@@ -130,16 +153,27 @@ var IS9WD_TAB_COLOR = {
   STATS: IS9WD_CLR.PURPLE_STRONG,
   TABLES: IS9WD_CLR.CREAM,
   ARCHIVE: IS9WD_CLR.SAGE,
-  LOG: IS9WD_CLR.LILAC
+  LOG: IS9WD_CLR.LILAC,
+  ENGINE: IS9WD_CLR.PAPER,
+  VIEWS: IS9WD_CLR.PAPER
 };
 
 var IS9WD_FONT = 'Poppins';
 var IS9WD_TZ = 'Asia/Manila';
 
-var IS9WD_SIZE = { BANNER: 14, BAND: 11, HEAD: 10, BODY: 10, HINT: 9 };
+// TILE is the KPI number on 03 | Statistics. It is the one type size on the workbook
+// that exists to be read from across a desk rather than at arm's length, which is what
+// makes a dashboard read as a dashboard instead of as a table of numbers.
+var IS9WD_SIZE = { BANNER: 14, BAND: 12, HEAD: 10, BODY: 10, HINT: 9, TILE: 22 };
 
-// 26 for data and 34 for a section title, so a 12 row block reads as a block.
-var IS9WD_ROW_H = { BANNER: 40, HELP: 24, BAND: 34, HEAD: 30, DATA: 26, SPACER: 12 };
+// 26 for data and 38 for a section title, so a 12 row block reads as a block. BAND grew
+// from 34 and SPACER from 12 on Ethan's instruction of 2026-09-27: taller bands, more
+// air. HINT is the row that carries a block's plain English explanation under its
+// heading rather than crammed beside it.
+var IS9WD_ROW_H = {
+  BANNER: 46, HELP: 34, BAND: 38, HINT: 26, HEAD: 30, DATA: 26, SPACER: 18,
+  TILE: 46, TILE_LABEL: 22, TILE_NOTE: 22
+};
 
 var IS9WD_SEP = '  ·  ';
 
@@ -222,32 +256,47 @@ var IS9WD_DAY_LIST = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
 // value and the rest clip: A is both the label column and the directory Key, so
 // it is sized for the labels.
 var IS9WD_WIDTH = {
-  CONFIG: [300, 210, 300, 240, 240, 260, 170, 150, 160, 210, 110, 120],
+  // Seven columns, not twelve. Ethan's instruction of 2026-09-27 was generous column
+  // widths and more air, and the width that matters most here is C: it carries the plain
+  // English hint beside every cell he types into, and a hint that clips is a hint nobody
+  // reads. A to D serve the label, value, hint and check of every settings row; B to G
+  // serve the seven directory columns, so B is wide enough for the longest office name
+  // and D for the longest position label.
+  CONFIG: [320, 300, 420, 300, 260, 120, 320],
   FEED: [150, 240, 340, 240, 320, 260, 200, 150, 170, 140, 150, 200, 110,
     80, 80, 80, 80, 150, 150, 130, 130, 220],
   ITEMS: [90, 260, 380, 150, 300, 150, 160, 200, 160, 190, 90, 110, 80, 80,
     110, 120, 110],
-  // 03 | Statistics carries six blocks in twelve columns, so each width serves that
-  // column's widest real value across every block and the rest clip, exactly as
-  // Configuration already does. The total is 1,170 px, which fits the grid a 1366 px
-  // laptop shows with room: that is the whole answer to reading a wide table with no
-  // frozen column. A three column block (label, value, reading) puts nothing in D to
-  // L, so its reading overflows right rather than wrapping.
-  STATS: [260, 250, 65, 65, 65, 80, 85, 75, 75, 70, 80, 100],
-  // 04 | Officer Tables is 1,075 px of visible columns. Title first because it is the
+  // 03 | Statistics is a dashboard: twelve visible columns and no hidden ones. The
+  // first two are wide because they carry an officer name and an Attention sentence,
+  // and because the first KPI tile of each row sits across them. The other ten are
+  // even, so tiles two, three and four are the same size as each other. Total 1,180 px,
+  // inside the grid a 1366 px laptop shows, which is the whole answer to reading this
+  // tab with no frozen column.
+  STATS: [250, 230, 80, 80, 80, 80, 90, 80, 80, 80, 80, 110],
+  // 04 | Officer Tables is 1,095 px of visible columns. Title first because it is the
   // thing you read; the band above already says whose table it is.
-  TABLES: [340, 110, 85, 110, 150, 200, 80],
+  TABLES: [360, 110, 85, 110, 150, 200, 80],
   ARCHIVE: [90, 150, 260, 380, 150, 300, 160, 90, 150, 160, 200, 190, 220, 220],
-  LOG: [160, 220, 110, 190, 240, 90, 460, 150]
+  LOG: [160, 220, 110, 190, 240, 90, 460, 150],
+  // _Engine: nine columns, because the schedule block is the widest thing on it.
+  ENGINE: [320, 260, 300, 240, 240, 200, 200, 180, 220],
+  // _Views: thirteen, because the officer helper band is the widest thing on it.
+  VIEWS: [260, 240, 300, 110, 110, 90, 110, 140, 90, 100, 100, 100, 90]
 };
 
-// Hidden column spans, first and last, 1 based. The feed helpers sit in R to V so
-// they are clear of the 13 column slot table (6.4); the data tab hides the seven
-// derived columns K to Q (5.1).
+// Hidden column spans, first and last, 1 based. The data tab hides the seven derived
+// columns K to Q (5.1) and the feed its helpers in R to V (6.4). Both are one row per
+// row of the thing they describe, so neither can move to another tab without doubling
+// the row count of the connector read.
+//
+// 03 | Statistics has no entry any more, and that is the point: its helper band moved to
+// _Views, so there is no hidden column on the tab Ethan reads. 04 | Officer Tables keeps
+// exactly one, column H, and it is not a helper: it is the eighth column of one spilling
+// SORT, so it cannot live on another sheet at all (6B.6).
 var IS9WD_HIDE_COLS = {
   ITEMS: [{ first: 11, last: 17 }],
   FEED: [{ first: 18, last: 22 }],
-  STATS: [{ first: 13, last: 25 }],
   TABLES: [{ first: 8, last: 8 }]
 };
 
@@ -271,115 +320,543 @@ var IS9WD_HIDE_COLS = {
 var IS9WD_FREEZE = {
   CONFIG: { rows: 2, cols: 0 },
   FEED: { rows: 1, cols: 0 },
-  ITEMS: { rows: 3, cols: 0 },
+  // Four now, not three: row 4 on the data tab is the plain English hint row that says
+  // what to type into each column, and a hint that scrolls away on row 40 is a hint that
+  // helps nobody.
+  ITEMS: { rows: 4, cols: 0 },
   STATS: { rows: 2, cols: 0 },
   TABLES: { rows: 3, cols: 0 },
   ARCHIVE: { rows: 3, cols: 0 },
-  LOG: { rows: 3, cols: 0 }
+  LOG: { rows: 3, cols: 0 },
+  ENGINE: { rows: 2, cols: 0 },
+  VIEWS: { rows: 2, cols: 0 }
 };
 
 // ============================================================================
-//  00 | CONFIGURATION  (reference 4, every address in one place)
+//  THE SETTINGS TABS  (reference 4, every address in one place)
 // ============================================================================
 
-// Column A holds the block title on a title row and the label on a value row.
-// Column B holds the value, column C the note or the guard. A table block uses
-// its own columns instead, listed with the block.
+// TWO TABS, ONE SHAPE, AND THE REASON THE SPLIT EXISTS.
+//
+// Ethan's instruction of 2026-09-27: `00 | Configuration` keeps only what a president
+// actually sets, which is the term dates, the A.Y. label, the people, the on and off
+// switches and the sign-off. Everything else a setting could be is machinery: the hex
+// pairs Canva consumes, the status vocabulary, the job schedule, the carousel capacity
+// arithmetic, the mail plumbing, the eight statistics thresholds, the diagnostics, the
+// directory's token and ordinal columns, and the 52 row sign-off store. All of it moved
+// to `_Engine`, which is hidden.
+//
+// Nothing was deleted and nothing was hardcoded. Every moved value keeps its named
+// range and its owner, so every formula, every email and every reader is unchanged: they
+// all read by name, which is the whole payoff of the naming rule and the second time it
+// was collected on.
+//
+// Both tabs are described by the same two block shapes and written by the same painter:
+//
+//   A ROW BLOCK is one setting per row. Column A the label, column B the value, column C
+//   the plain English hint, column D the check or guard. `hint` is the sentence, written
+//   for somebody who has never written a formula, and it lands twice: in the cell's own
+//   note and visibly in column C. A row with a `formula` is calculated and never gets a
+//   hint, a cream fill or a note, because the one thing a hint must never do is invite a
+//   president to type into a cell the workbook owns.
+//
+//   A TABLE BLOCK is one record per row. The band carries the title, the row under it
+//   carries one plain English hint per column, and every cell of an Ethan owned column
+//   carries that column's hint as its note.
 var IS9WD_CFG = {
   BANNER_ROW: 1,
   HELP_ROW: 2,
   TITLE_COL: 1,
   LABEL_COL: 1,
   VALUE_COL: 2,
-  NOTE_COL: 3,
+  HINT_COL: 3,
+  NOTE_COL: 4,
   FIRST_COL: 1,
-  LAST_COL: 12,
+  LAST_COL: 7,
   BANNER: '00 | CONFIGURATION',
-  HELP: 'Every setting the workbook reads. Code reads these cells through named ranges, never by address, so a block can move and nothing breaks.',
-  // Shifted down by eight when the switches block took the eight statistics
-  // settings (4.6). Nothing outside this file knew the old numbers, which is the
-  // whole payoff of reading every value through a named range.
-  SPACER_ROWS: [15, 22, 28, 33, 35, 76, 84, 101, 114]
+  HELP: 'Everything on this tab is something you set. A cell with a cream background is ' +
+    'yours to type into, and the sentence beside it says what to type and what happens ' +
+    'if it is wrong. A cell with no cream is worked out by the sheet: read it, do not ' +
+    'type in it. Nothing here needs a formula and nothing here needs code.'
 };
 
+// The hint that rides in the check column's own header position on a row block, so a
+// reader knows what the fourth column is for before anything is wrong.
+var IS9WD_CFG_CHECK_HINT = 'This column stays empty while everything is right. When ' +
+  'something is wrong it says so in plain words.';
+
+// The sentence a calculated cell carries instead of a hint, so the distinction between
+// "yours" and "the sheet's" is stated rather than implied by a missing fill.
+var IS9WD_CFG_CALC_HINT = 'Worked out by the sheet. Do not type here.';
+
 // ---------------------------------------------------------------------------
-//  4.1 WEEK SETTINGS
+//  THE WEEK THE WORKBOOK IS ON  (calculated, 4.1)
 // ---------------------------------------------------------------------------
 
-IS9WD_CFG.WEEK = {
-  key: 'WEEK',
-  title: 'WEEK SETTINGS',
-  help: 'The week every printed label reads, and the two overrides that can quietly move it.',
-  titleRow: 3,
+IS9WD_CFG.WEEKNOW = {
+  key: 'WEEKNOW',
+  tab: 'CONFIG',
+  title: 'THE WEEK THIS WORKBOOK IS ON',
+  help: 'Every label the carousel prints and every email that goes out reads these six ' +
+    'lines. They are worked out from the trimester dates below, so there is nothing to ' +
+    'type here. On a Sunday they describe the week that starts the next morning.',
+  titleRow: 4,
+  hintRow: 5,
   headerRow: 0,
-  firstRow: 4,
-  lastRow: 14,
+  firstRow: 6,
+  lastRow: 11,
   firstCol: 1,
-  lastCol: 3,
+  lastCol: 4,
   rows: [
     {
-      row: 4, name: 'IS9WD_TODAY_OVERRIDE', owner: IS9WD_OWN.ETHAN,
-      label: 'Today override (blank uses today)', value: '',
-      format: IS9WD_FMT.DATE_KEY, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.DATE, help: 'Enter a date, or leave it blank to use today.' },
-      note: '=IF(AND(B4<>"",NOT(ISNUMBER(B4))),"Override is not a date","")'
-    },
-    {
-      row: 5, name: 'IS9WD_EFFECTIVE_TODAY', owner: IS9WD_OWN.SCRIPT,
-      label: 'Effective today',
+      row: 6, name: 'IS9WD_EFFECTIVE_TODAY', owner: IS9WD_OWN.SCRIPT,
+      label: 'Today',
       formula: '=IF(IS9WD_TODAY_OVERRIDE<>"",INT(IS9WD_TODAY_OVERRIDE),TODAY())',
       format: IS9WD_FMT.DATE_LONG, align: IS9WD_ALIGN.RIGHT
     },
     {
-      row: 6, name: 'IS9WD_WEEK_START', owner: IS9WD_OWN.SCRIPT,
-      label: 'Week start (Monday)',
+      row: 7, name: 'IS9WD_WEEK_START', owner: IS9WD_OWN.SCRIPT,
+      label: 'The week starts (a Monday)',
       formula: '=IS9WD_EFFECTIVE_TODAY+1-(WEEKDAY(IS9WD_EFFECTIVE_TODAY+1,2)-1)',
       format: IS9WD_FMT.DATE_LONG, align: IS9WD_ALIGN.RIGHT
     },
     {
-      row: 7, name: 'IS9WD_WEEK_END', owner: IS9WD_OWN.SCRIPT,
-      label: 'Week end (Sunday)', formula: '=IS9WD_WEEK_START+6',
+      row: 8, name: 'IS9WD_WEEK_END', owner: IS9WD_OWN.SCRIPT,
+      label: 'The week ends (a Sunday)', formula: '=IS9WD_WEEK_START+6',
       format: IS9WD_FMT.DATE_LONG, align: IS9WD_ALIGN.RIGHT
     },
     {
-      row: 8, name: 'IS9WD_TERM_ACTIVE', owner: IS9WD_OWN.SCRIPT,
-      label: 'Active trimester',
-      formula: '=IFERROR(INDEX(IS9WD_TERM_CAL,MATCH(1,ARRAYFORMULA((IS9WD_TERM_STARTS<=IS9WD_WEEK_START)*(IS9WD_TERM_ENDS>=IS9WD_WEEK_START)),0),1),"")',
-      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
-    },
-    {
-      row: 9, name: 'IS9WD_TERM_START', owner: IS9WD_OWN.SCRIPT,
-      label: 'Active trimester start',
-      formula: '=IFERROR(INDEX(IS9WD_TERM_CAL,MATCH(1,ARRAYFORMULA((IS9WD_TERM_STARTS<=IS9WD_WEEK_START)*(IS9WD_TERM_ENDS>=IS9WD_WEEK_START)),0),2),"")',
-      format: IS9WD_FMT.DATE_KEY, align: IS9WD_ALIGN.RIGHT
-    },
-    {
-      row: 10, name: 'IS9WD_WEEK_NUMBER', owner: IS9WD_OWN.SCRIPT,
+      row: 9, name: 'IS9WD_WEEK_NUMBER', owner: IS9WD_OWN.SCRIPT,
       label: 'Week number',
       formula: '=IF(IS9WD_WEEK_NUMBER_OVERRIDE<>"",IS9WD_WEEK_NUMBER_OVERRIDE,IF(NOT(IS9WD_IN_TERM),"",IFERROR(INT((IS9WD_WEEK_START-IS9WD_TERM_START)/7)+1,"")))',
       format: IS9WD_FMT.TWO, align: IS9WD_ALIGN.CENTER
     },
     {
+      row: 10, name: 'IS9WD_TERM_ACTIVE', owner: IS9WD_OWN.SCRIPT,
+      label: 'Trimester this week falls in',
+      formula: '=IFERROR(INDEX(IS9WD_TERM_CAL,MATCH(1,ARRAYFORMULA((IS9WD_TERM_STARTS<=IS9WD_WEEK_START)*(IS9WD_TERM_ENDS>=IS9WD_WEEK_START)),0),1),"")',
+      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
+    },
+    {
       row: 11, name: 'IS9WD_IN_TERM', owner: IS9WD_OWN.SCRIPT,
-      label: 'In term', formula: '=IS9WD_TERM_ACTIVE<>""', align: IS9WD_ALIGN.CENTER
+      label: 'Inside a trimester right now',
+      formula: '=IS9WD_TERM_ACTIVE<>""', align: IS9WD_ALIGN.CENTER,
+      note: '=IF(IS9WD_IN_TERM,"","No trimester covers this week, so no email is sent and the carousel says WEEK --. Check the trimester dates below.")'
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  WHAT YOU SET ABOUT THE WEEK  (4.1: the label and the two overrides)
+// ---------------------------------------------------------------------------
+
+IS9WD_CFG.WEEKSET = {
+  key: 'WEEKSET',
+  tab: 'CONFIG',
+  title: 'WHAT YOU SET ABOUT THE WEEK',
+  help: 'Four cells. The first two are printed as they are typed. The last two are ' +
+    'escape hatches: leave them empty unless you mean to overrule the sheet, because ' +
+    'anything left in them quietly changes every date and every week number above.',
+  titleRow: 13,
+  hintRow: 14,
+  headerRow: 0,
+  firstRow: 15,
+  lastRow: 18,
+  firstCol: 1,
+  lastCol: 4,
+  rows: [
+    {
+      row: 15, name: 'IS9WD_AY_LABEL', owner: IS9WD_OWN.ETHAN,
+      label: 'Academic year, printed on the carousel', value: 'A.Y. 2026 - 2027',
+      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Type the academic year exactly as you want it printed on the slides, for ' +
+        'example A.Y. 2026 - 2027. Whatever is here is copied onto the first slide word ' +
+        'for word, so a typo here is a typo on Instagram.'
     },
     {
-      row: 12, name: 'IS9WD_AY_LABEL', owner: IS9WD_OWN.ETHAN,
-      label: 'A.Y. label', value: 'A.Y. 2026 - 2027',
-      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
-    },
-    {
-      row: 13, name: 'IS9WD_CUTOFF_TEXT', owner: IS9WD_OWN.ETHAN,
-      label: 'Entry cutoff (display text)',
+      row: 16, name: 'IS9WD_CUTOFF_TEXT', owner: IS9WD_OWN.ETHAN,
+      label: 'Deadline for entering next week, printed in emails',
       value: 'Saturday 8 PM before the week starts',
+      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Type the cut-off you want the emails to quote, in your own words. This is ' +
+        'a sentence in an email and nothing else: it does not stop anybody entering ' +
+        'anything, and changing it changes no date.'
+    },
+    {
+      row: 17, name: 'IS9WD_TODAY_OVERRIDE', owner: IS9WD_OWN.ETHAN,
+      label: 'Pretend today is a different date', value: '',
+      format: IS9WD_FMT.DATE_KEY, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.DATE, help: 'A date, or leave it empty to use the real today.' },
+      hint: 'Leave this empty almost always. Type a date only when you want to see what ' +
+        'the sheet would say on that day, for example to rehearse a Sunday. Anything ' +
+        'left here makes every date above, every email and the carousel describe the ' +
+        'wrong week, and it stops the automatic jobs running. Clear it when you are done.',
+      note: '=IF(AND(B17<>"",NOT(ISNUMBER(B17))),"That is not a date. Clear the cell or pick a date.",IF(B17<>"","This is switched on, so the whole sheet is pretending. Clear the cell to go back to the real today.",""))'
+    },
+    {
+      row: 18, name: 'IS9WD_WEEK_NUMBER_OVERRIDE', owner: IS9WD_OWN.ETHAN,
+      label: 'Force a week number', value: '',
+      format: IS9WD_FMT.TWO, align: IS9WD_ALIGN.CENTER,
+      validate: { kind: IS9WD_V.INT, min: 1, max: 30, help: 'A whole number from 1 to 30, or leave it empty.' },
+      hint: 'Leave this empty almost always. Type a whole number from 1 to 30 only when ' +
+        'IS9 counts the week differently from the calendar, for example after a ' +
+        'suspended week. Anything here wins over the number above and is printed on ' +
+        'every slide, so clear it when the numbering catches up.',
+      note: '=IF(IS9WD_WEEK_NUMBER_OVERRIDE<>"","This is switched on, so the week number above is ignored. Clear the cell to go back to counting.","")'
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  TRIMESTER DATES  (4.3)
+// ---------------------------------------------------------------------------
+
+IS9WD_CFG.TERMS = {
+  key: 'TERMS',
+  tab: 'CONFIG',
+  title: 'TRIMESTER DATES',
+  help: 'Three rows, one per trimester. Week numbers start again at 01 in each one. ' +
+    'Fill the trimester you are in; leave the others empty until DLSU publishes them.',
+  titleRow: 20,
+  hintRow: 21,
+  headerRow: 22,
+  firstRow: 23,
+  lastRow: 25,
+  firstCol: 1,
+  lastCol: 4,
+  checkCol: 4,
+  checkFormula: '=IF($B{row}="","",IF(WEEKDAY($B{row},2)<>1,"The start is not a Monday. Pick the Monday that trimester begins.",IF($C{row}<$B{row},"The end is before the start. Check both dates.","OK")))',
+  columns: [
+    {
+      header: 'Trimester', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'A name for the trimester, for example Term 1. Any wording is fine: nothing ' +
+        'reads it except you.'
+    },
+    {
+      header: 'First day (a Monday)', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.RIGHT,
+      format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP,
+      validate: { kind: IS9WD_V.DATE, help: 'A Monday. The last column says so when it is not.' },
+      hint: 'Pick the Monday the trimester starts. It must be a Monday, and the last ' +
+        'column tells you when it is not. Every week number is counted from this date, ' +
+        'so a date one day out shifts every week label on the carousel.'
+    },
+    {
+      header: 'Last day', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.RIGHT,
+      format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP,
+      validate: { kind: IS9WD_V.DATE, help: 'The last day of the trimester. Leaving it empty pauses every job.' },
+      hint: 'Pick the last day of the trimester. This one must never be left empty on ' +
+        'the trimester you are in: an empty cell here stops every email, blanks the week ' +
+        'number and makes the carousel read WEEK --. If the official date is not out ' +
+        'yet, put a generous later date and correct it when it is.'
+    },
+    {
+      header: 'Check', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.WRAP, hint: IS9WD_CFG_CHECK_HINT
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  THE PEOPLE  (4.8, the seven columns a president fills)
+// ---------------------------------------------------------------------------
+
+// Fourteen rows: the nine committees that reach Canva, then the President and the four
+// EVPs, who have items, links and emails and no Canva page. The carousel order, the
+// hierarchy order and the two token columns are all machinery and live on `_Engine`,
+// keyed on the same Key in the same row order, which is what keeps this tab to the seven
+// columns a person fills and reads.
+IS9WD_CFG.DIRECTORY = {
+  key: 'DIRECTORY',
+  tab: 'CONFIG',
+  title: 'THE PEOPLE',
+  help: 'One row per officer, fourteen in all. Paste the names into Full name and the ' +
+    'DLSU addresses into Email. Do not add, remove or reorder rows: the private links ' +
+    'are tied to the Key in the first column.',
+  titleRow: 27,
+  hintRow: 28,
+  headerRow: 29,
+  firstRow: 30,
+  lastRow: 43,
+  firstCol: 1,
+  lastCol: 7,
+  checkCol: 7,
+  adminKey: 'K10',
+  columns: [
+    {
+      header: 'Key', owner: IS9WD_OWN.ONCE, align: IS9WD_ALIGN.CENTER,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'Never change this. It is the name of that person\'s private link, and ' +
+        'editing it breaks the link they already have.'
+    },
+    {
+      header: 'Committee or office', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'The committee or office, spelled exactly as you want it printed in capitals ' +
+        'on the slide. Change it only if the spelling is wrong: every deliverable you ' +
+        'have already entered points at this wording, and changing it orphans them.'
+    },
+    {
+      header: 'Full name', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'Type the person\'s name as you want it printed on the slide and used in ' +
+        'their emails. Leave it empty and the last column says No name, and that row ' +
+        'gets no email.'
+    },
+    {
+      header: 'Position label', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'The title printed under the name on the slide, in capitals, for example ' +
+        'VICE PRESIDENT. It is printed exactly as typed.'
+    },
+    {
+      header: 'Email', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'That person\'s DLSU address, one address only, no names and no brackets ' +
+        'around it. Everything addressed to them goes here. Leave it empty and the last ' +
+        'column says No email and nothing is sent to them.'
+    },
+    {
+      header: 'On the carousel', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER,
+      wrap: IS9WD_WRAP.WRAP, validate: { kind: IS9WD_V.CHECKBOX },
+      hint: 'Tick this for a row that gets its own Instagram slide. It is ticked for the ' +
+        'nine committees and left clear for the President and the four EVPs, who are ' +
+        'tracked and emailed exactly the same way and simply do not have a slide. ' +
+        'Ticking a tenth row needs a new Canva master, so ask before you do.'
+    },
+    {
+      header: 'Check', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.WRAP, hint: IS9WD_CFG_CHECK_HINT
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  SWITCHES  (4.6, the seven a president turns on and off)
+// ---------------------------------------------------------------------------
+
+IS9WD_CFG.SWITCHES = {
+  key: 'SWITCHES',
+  tab: 'CONFIG',
+  title: 'SWITCHES',
+  help: 'Seven tick boxes. A tick means on. Test mode is the important one: while it is ' +
+    'ticked, nothing reaches the officers and every email comes to you instead.',
+  titleRow: 45,
+  hintRow: 46,
+  headerRow: 0,
+  firstRow: 47,
+  lastRow: 53,
+  firstCol: 1,
+  lastCol: 4,
+  rows: [
+    {
+      row: 47, name: 'IS9WD_AUTOMATION_ON', label: 'Run the automatic jobs',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to let the sheet work on its own: it checks every hour and sends what ' +
+        'is due. Clear it to pause everything at once, which is the switch to use if ' +
+        'something looks wrong. Nothing catches up later except inside the same day.'
+    },
+    {
+      row: 48, name: 'IS9WD_TEST_MODE', label: 'Test mode: send every email to me instead',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to keep every email coming to your own address so you can read it ' +
+        'first. It ships ticked on purpose. Clear it only when you are happy with the ' +
+        'wording, because the next job then writes to all fourteen people for real.'
+    },
+    {
+      row: 49, name: 'IS9WD_MAIL_MONDAY', label: 'Monday email: this week\'s list',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to send each officer their list on Monday morning. Somebody with ' +
+        'nothing entered gets nothing, which is why an empty week is worth checking on ' +
+        'the dashboard before Monday.'
+    },
+    {
+      row: 50, name: 'IS9WD_MAIL_DAILY', label: 'Daily email: due tomorrow or late',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to nudge an officer on any day something of theirs is due tomorrow or ' +
+        'already late. One email per person per day, never one per task.'
+    },
+    {
+      row: 51, name: 'IS9WD_MAIL_SUNDAY', label: 'Sunday email: your own summary',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to get your Sunday summary before the carousel goes out: what is ' +
+        'ready, what is late, what was finished. It goes to you only.'
+    },
+    {
+      row: 52, name: 'IS9WD_MAIL_ALERT', label: 'Email me when something breaks',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to be told when an automatic job fails, at most once a day per job. ' +
+        'Leave it ticked: the alternative is a job that has been failing quietly for a ' +
+        'fortnight.'
+    },
+    {
+      row: 53, name: 'IS9WD_APP_ON', label: 'Officers\' phone links work',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to let the fourteen private links open and tick things off. Clear it ' +
+        'to close the links for everybody, for example while you rearrange a week. ' +
+        'Nothing is lost while it is off.'
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  ADDRESSES AND LINKS  (4.6: the three a president pastes in)
+// ---------------------------------------------------------------------------
+
+IS9WD_CFG.ADDRESSES = {
+  key: 'ADDRESSES',
+  tab: 'CONFIG',
+  title: 'ADDRESSES AND LINKS',
+  help: 'Three cells you paste in once. They are empty on purpose: this project\'s code ' +
+    'is public, so no address and no link is ever written into it.',
+  titleRow: 55,
+  hintRow: 56,
+  headerRow: 0,
+  firstRow: 57,
+  lastRow: 59,
+  firstCol: 1,
+  lastCol: 4,
+  rows: [
+    {
+      row: 57, name: 'IS9WD_ADMIN_EMAIL', label: 'Your own email address',
+      owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Paste your DLSU address. Your Sunday summary, every alert and everything ' +
+        'test mode holds back comes here. Leave it empty and none of those can be sent.',
+      note: '=IF(IS9WD_ADMIN_EMAIL="","Paste your own address here, or nothing can be emailed to you.","")'
+    },
+    {
+      row: 58, name: 'IS9WD_APP_BASE_URL', label: 'Web address of the officers\' page',
+      owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Paste the address of the page officers open on their phones, once it has ' +
+        'been published. Every email builds its private link from this, so if it is ' +
+        'wrong here it is wrong in fourteen inboxes. Paste it complete, starting https.'
+    },
+    {
+      row: 59, name: 'IS9WD_ENDPOINT_URL', label: 'Web address the page talks to',
+      owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Paste the address ending in /exec that the Apps Script deployment gives ' +
+        'you. This is the door between the officers\' page and this sheet: if it is ' +
+        'empty or wrong, ticking a box on a phone does nothing.'
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  THIS WEEK'S SIGN-OFF  (4.5B, all five calculated)
+// ---------------------------------------------------------------------------
+
+IS9WD_CFG.SIGNOFF = {
+  key: 'SIGNOFF',
+  tab: 'CONFIG',
+  title: 'THIS WEEK\'S SIGN-OFF',
+  help: 'The two names printed at the bottom of the first slide. They change every week, ' +
+    'so you set them each week in the officers\' page and they appear here. Nothing here ' +
+    'is typed on this tab.',
+  titleRow: 61,
+  hintRow: 62,
+  headerRow: 0,
+  firstRow: 63,
+  lastRow: 67,
+  firstCol: 1,
+  lastCol: 4,
+  rows: [
+    {
+      row: 63, name: 'IS9WD_PREPARED_NAME', owner: IS9WD_OWN.SCRIPT,
+      label: 'Prepared by, name',
+      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_PREPARED_NAME,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
+      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      note: '=IF(NOT(IS9WD_SIGNOFF_SET),"Nobody has signed off on this week yet, so the carousel is held back. Set Prepared by and Checked by in the officers\' page.","")'
+    },
+    {
+      row: 64, name: 'IS9WD_PREPARED_POSITION', owner: IS9WD_OWN.SCRIPT,
+      label: 'Prepared by, position',
+      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_PREPARED_POSITION,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
       format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
     },
     {
-      row: 14, name: 'IS9WD_WEEK_NUMBER_OVERRIDE', owner: IS9WD_OWN.ETHAN,
-      label: 'Week number override (blank uses the calculation)', value: '',
-      format: IS9WD_FMT.TWO, align: IS9WD_ALIGN.CENTER,
-      validate: { kind: IS9WD_V.INT, min: 1, max: 30, help: 'A whole number from 1 to 30, or blank.' },
-      note: '=IF(IS9WD_WEEK_NUMBER_OVERRIDE<>"","Week number override is set: the calculation is ignored","")'
+      row: 65, name: 'IS9WD_CHECKED_NAME', owner: IS9WD_OWN.SCRIPT,
+      label: 'Checked by, name',
+      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_CHECKED_NAME,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
+      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
+    },
+    {
+      row: 66, name: 'IS9WD_CHECKED_POSITION', owner: IS9WD_OWN.SCRIPT,
+      label: 'Checked by, position',
+      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_CHECKED_POSITION,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
+      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
+    },
+    {
+      row: 67, name: 'IS9WD_SIGNOFF_SET', owner: IS9WD_OWN.SCRIPT,
+      label: 'Signed off for this week',
+      formula: '=AND(IS9WD_PREPARED_NAME<>"",IS9WD_PREPARED_POSITION<>"",IS9WD_CHECKED_NAME<>"",IS9WD_CHECKED_POSITION<>"")',
+      align: IS9WD_ALIGN.CENTER
+    }
+  ]
+};
+
+// Painting order, top to bottom. Seven blocks on the tab a president reads, against ten
+// before the split, and the tab ends on row 67 rather than row 168.
+IS9WD_CFG.BLOCKS = ['WEEKNOW', 'WEEKSET', 'TERMS', 'DIRECTORY', 'SWITCHES',
+  'ADDRESSES', 'SIGNOFF'];
+
+// ============================================================================
+//  _ENGINE  (every setting that exists for the code rather than for a president)
+// ============================================================================
+
+// Hidden, and hiding it is not a security boundary: the Canva reader account reads every
+// cell of every tab, hidden or not, which is exactly why no token is ever in one. It is
+// hidden because it is not Ethan's to read, and it is a tab rather than a constant in
+// code because a setting in code is a setting that needs a push to change.
+//
+// Every block here keeps the shape, the owner and the named range it had on
+// `00 | Configuration`, so nothing that reads a setting changed at all.
+var IS9WD_ENG = {
+  BANNER_ROW: 1,
+  HELP_ROW: 2,
+  TITLE_COL: 1,
+  LABEL_COL: 1,
+  VALUE_COL: 2,
+  HINT_COL: 3,
+  NOTE_COL: 4,
+  FIRST_COL: 1,
+  LAST_COL: 9,
+  BANNER: '_ENGINE',
+  HELP: 'Machinery. Every setting on this tab exists for the code rather than for the ' +
+    'president, which is why it is hidden and why 00 | Configuration is short. Nothing ' +
+    'here is secret: the Canva reader account can read every cell of every tab, which is ' +
+    'why no token is ever written into one. Changing a value here changes behaviour, so ' +
+    'change one only on purpose and run Build or repair workbook afterwards.'
+};
+
+// ---------------------------------------------------------------------------
+//  WEEK PLUMBING
+// ---------------------------------------------------------------------------
+
+IS9WD_ENG.WEEKCALC = {
+  key: 'WEEKCALC',
+  tab: 'ENGINE',
+  title: 'WEEK PLUMBING',
+  help: 'The one derived week cell nothing prints: the week number formula divides by it.',
+  titleRow: 4,
+  hintRow: 5,
+  headerRow: 0,
+  firstRow: 6,
+  lastRow: 6,
+  firstCol: 1,
+  lastCol: 4,
+  rows: [
+    {
+      row: 6, name: 'IS9WD_TERM_START', owner: IS9WD_OWN.SCRIPT,
+      label: 'Active trimester start',
+      formula: '=IFERROR(INDEX(IS9WD_TERM_CAL,MATCH(1,ARRAYFORMULA((IS9WD_TERM_STARTS<=IS9WD_WEEK_START)*(IS9WD_TERM_ENDS>=IS9WD_WEEK_START)),0),2),"")',
+      format: IS9WD_FMT.DATE_KEY, align: IS9WD_ALIGN.RIGHT
     }
   ]
 };
@@ -388,58 +865,37 @@ IS9WD_CFG.WEEK = {
 //  4.2 URGENCY WINDOWS
 // ---------------------------------------------------------------------------
 
-// The only Configuration values that reach Canva as machine input rather than as
-// text, so column E validates every hex and the self test fails on any row that is
-// not OK. A hex cell is never painted with the colour it holds: two of them hold
-// #1C2120, which appears nowhere in the workbook (2.5).
-IS9WD_CFG.WINDOWS = {
+// The only settings that reach Canva as machine input rather than as text, so column E
+// validates every hex and the self test fails on any row that is not OK. A hex cell is
+// never painted with the colour it holds: two of them hold #1C2120, which appears
+// nowhere in the workbook (2.5).
+IS9WD_ENG.WINDOWS = {
   key: 'WINDOWS',
+  tab: 'ENGINE',
   title: 'URGENCY WINDOWS',
   help: 'The four deadline windows, and the two hex values each one paints on the carousel.',
-  titleRow: 16,
-  headerRow: 17,
-  firstRow: 18,
-  lastRow: 21,
+  titleRow: 8,
+  hintRow: 9,
+  headerRow: 10,
+  firstRow: 11,
+  lastRow: 14,
   firstCol: 1,
   lastCol: 5,
   checkCol: 5,
-  checkFormula: '=IF(AND(REGEXMATCH($C18,"^#[0-9A-Fa-f]{6}$"),REGEXMATCH($D18,"^#[0-9A-Fa-f]{6}$")),"OK","Hex is not #RRGGBB")',
+  checkFormula: '=IF(AND(REGEXMATCH($C{row},"^#[0-9A-Fa-f]{6}$"),REGEXMATCH($D{row},"^#[0-9A-Fa-f]{6}$")),"OK","Hex is not #RRGGBB")',
   columns: [
     { header: 'Window', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
     { header: 'Dates', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Station hex', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Number text hex', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Check', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP }
-  ]
-};
-
-// ---------------------------------------------------------------------------
-//  4.3 TERM CALENDAR
-// ---------------------------------------------------------------------------
-
-IS9WD_CFG.TERMS = {
-  key: 'TERMS',
-  title: 'TERM CALENDAR',
-  help: 'Week numbers restart at 01 each trimester. A blank End pauses every job, so Term 1 needs a date even a provisional one.',
-  titleRow: 23,
-  headerRow: 24,
-  firstRow: 25,
-  lastRow: 27,
-  firstCol: 1,
-  lastCol: 4,
-  checkCol: 4,
-  checkFormula: '=IF($B25="","",IF(WEEKDAY($B25,2)<>1,"Start is not a Monday",IF($C25<$B25,"End is before start","OK")))',
-  columns: [
-    { header: 'Trimester', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
     {
-      header: 'Start (a Monday)', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.RIGHT,
-      format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP,
-      validate: { kind: IS9WD_V.DATE, help: 'A Monday. Column D says so when it is not.' }
+      header: 'Station hex', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'A colour written as a hash and six characters, for example #e9ebd4. Canva ' +
+        'refuses anything else in the middle of a run.'
     },
     {
-      header: 'End', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.RIGHT,
-      format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP,
-      validate: { kind: IS9WD_V.DATE, help: 'The last day of the trimester. A blank here pauses every job.' }
+      header: 'Number text hex', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'The colour of the number printed on that station, same format.'
     },
     { header: 'Check', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP }
   ]
@@ -449,195 +905,40 @@ IS9WD_CFG.TERMS = {
 //  4.4 STATUS LIST, and the undo window under it
 // ---------------------------------------------------------------------------
 
-IS9WD_CFG.STATUS = {
+IS9WD_ENG.STATUS = {
   key: 'STATUS',
+  tab: 'ENGINE',
   title: 'STATUS LIST',
-  help: 'Exactly one row is terminal. Nothing in the code keys on a label, so renaming a status costs one edit here.',
-  titleRow: 29,
-  headerRow: 30,
-  firstRow: 31,
-  lastRow: 32,
+  help: 'Exactly one row is terminal. Nothing in the code keys on a label, so renaming a ' +
+    'status costs one edit here and one Build or repair workbook.',
+  titleRow: 16,
+  hintRow: 17,
+  headerRow: 18,
+  firstRow: 19,
+  lastRow: 20,
   firstCol: 1,
   lastCol: 4,
-  blankRow: 33,
-  undoRow: 34,
+  blankRow: 21,
+  undoRow: 22,
   undoLabel: 'Undo window (seconds)',
   undoName: 'IS9WD_UNDO_SECONDS',
   undoValidate: { kind: IS9WD_V.INT, min: 0, max: 3600, help: 'Seconds a link holder may untick. 0 disables unticking.' },
+  undoHint: 'How long an officer has to undo a tick, in seconds. 0 means they cannot ' +
+    'undo at all and only you can reopen an item.',
   columns: [
-    { header: 'Status', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Terminal', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.CHECKBOX } },
+    {
+      header: 'Status', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
+      format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
+      hint: 'The words shown on a deliverable. Renaming one renames it everywhere, but ' +
+        'every item already holding the old word is flagged until it is changed too.'
+    },
+    {
+      header: 'Terminal', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER,
+      wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.CHECKBOX },
+      hint: 'Tick the one status that means finished. Exactly one row is ticked.'
+    },
     { header: 'Chip hex', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
     { header: 'Chip text hex', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP }
-  ]
-};
-
-// ---------------------------------------------------------------------------
-//  4.5B WEEKLY SIGN-OFF, the derived cells
-// ---------------------------------------------------------------------------
-
-// All five are formulas over the store at row 107, so nobody types into them and
-// last week's names can never print on this week's carousel.
-IS9WD_CFG.SIGNOFF = {
-  key: 'SIGNOFF',
-  title: 'WEEKLY SIGN-OFF (THIS WEEK)',
-  help: 'Looked up from the store below by this week start. Blank here means Ready for Canva reads NO.',
-  titleRow: 36,
-  headerRow: 0,
-  firstRow: 37,
-  lastRow: 41,
-  firstCol: 1,
-  lastCol: 3,
-  rows: [
-    {
-      row: 37, name: 'IS9WD_PREPARED_NAME', owner: IS9WD_OWN.SCRIPT,
-      label: 'Prepared by name (this week)',
-      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_PREPARED_NAME,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
-      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
-      note: '=IF(NOT(IS9WD_SIGNOFF_SET),"Sign-off not set for this week","")'
-    },
-    {
-      row: 38, name: 'IS9WD_PREPARED_POSITION', owner: IS9WD_OWN.SCRIPT,
-      label: 'Prepared by position (this week)',
-      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_PREPARED_POSITION,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
-      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
-    },
-    {
-      row: 39, name: 'IS9WD_CHECKED_NAME', owner: IS9WD_OWN.SCRIPT,
-      label: 'Checked by name (this week)',
-      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_CHECKED_NAME,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
-      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
-    },
-    {
-      row: 40, name: 'IS9WD_CHECKED_POSITION', owner: IS9WD_OWN.SCRIPT,
-      label: 'Checked by position (this week)',
-      formula: '=IFERROR(INDEX(IS9WD_SIGNOFF_CHECKED_POSITION,MATCH(IS9WD_WEEK_START,IS9WD_SIGNOFF_WEEKS,0)),"")',
-      format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT
-    },
-    {
-      row: 41, name: 'IS9WD_SIGNOFF_SET', owner: IS9WD_OWN.SCRIPT,
-      label: 'Sign-off set for this week',
-      formula: '=AND(IS9WD_PREPARED_NAME<>"",IS9WD_PREPARED_POSITION<>"",IS9WD_CHECKED_NAME<>"",IS9WD_CHECKED_POSITION<>"")',
-      align: IS9WD_ALIGN.CENTER
-    }
-  ]
-};
-
-// ---------------------------------------------------------------------------
-//  4.6 SWITCHES
-// ---------------------------------------------------------------------------
-
-// Three capacity numbers, not one: the frames on a master page, the pages a
-// committee may own, and the product. A continuation page needs those to be
-// different numbers, and B53 is a formula because a multi-cell paste is exactly
-// what replaces a formula with a stale literal (4.6).
-IS9WD_CFG.SWITCHES = {
-  key: 'SWITCHES',
-  title: 'SWITCHES',
-  help: 'Every toggle, number, address and URL the jobs read. Test mode ships ON, and the two URLs ship blank.',
-  titleRow: 42,
-  headerRow: 0,
-  firstRow: 43,
-  lastRow: 75,
-  firstCol: 1,
-  lastCol: 3,
-  rows: [
-    { row: 43, name: 'IS9WD_AUTOMATION_ON', label: 'Automation on', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 44, name: 'IS9WD_TEST_MODE', label: 'Test mode (every email goes to the admin)', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 45, name: 'IS9WD_MAIL_MONDAY', label: 'Monday assignment email on', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 46, name: 'IS9WD_MAIL_DAILY', label: 'Daily digest email on', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 47, name: 'IS9WD_MAIL_SUNDAY', label: 'Sunday brief email on', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 48, name: 'IS9WD_MAIL_ALERT', label: 'Error alert email on', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 49, name: 'IS9WD_MAIL_NOREPLY', label: 'Send as no reply (Workspace only)', owner: IS9WD_OWN.ETHAN, value: false, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 50, name: 'IS9WD_APP_ON', label: 'App on', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    {
-      row: 51, name: 'IS9WD_SLOTS_PER_PAGE', label: 'Slots per Canva page', owner: IS9WD_OWN.ETHAN,
-      value: 10, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 1, max: 50, help: 'The item frames the master page physically carries.' }
-    },
-    {
-      row: 52, name: 'IS9WD_MAX_PARTS', label: 'Maximum Canva pages per committee', owner: IS9WD_OWN.ETHAN,
-      value: 2, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 1, max: 4, help: 'Raising this needs a master rebuild before it can be used.' }
-    },
-    {
-      row: 53, name: 'IS9WD_PUBLISH_MAX', label: 'Publishable items per committee (derived)',
-      owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS',
-      format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      note: '=IF(NOT(ISNUMBER(IS9WD_PUBLISH_MAX)),"Publishable maximum is not a number",IF(IS9WD_PUBLISH_MAX<>IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS,"Capacity numbers disagree: "&IS9WD_SLOTS_PER_PAGE&" times "&IS9WD_MAX_PARTS&" is "&IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS,"OK"))'
-    },
-    { row: 54, name: 'IS9WD_PUBLISH_EMPTY_PAGES', label: 'Publish a page for a committee with no items', owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX }, align: IS9WD_ALIGN.CENTER },
-    { row: 55, name: 'IS9WD_QUOTA_RESERVE', label: 'Email quota reserve', owner: IS9WD_OWN.ETHAN, value: 100, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT, validate: { kind: IS9WD_V.INT, min: 0, max: 1500 } },
-    { row: 56, name: 'IS9WD_RETIRE_DAYS', label: 'Retire accomplished after days', owner: IS9WD_OWN.ETHAN, value: 14, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT, validate: { kind: IS9WD_V.INT, min: 0, max: 365 } },
-    { row: 57, name: 'IS9WD_TOKEN_WARN_DAYS', label: 'Token age warning days', owner: IS9WD_OWN.ETHAN, value: 120, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT, validate: { kind: IS9WD_V.INT, min: 0, max: 3650 } },
-    { row: 58, name: 'IS9WD_ADMIN_EMAIL', label: 'Admin email', owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 59, name: 'IS9WD_AUTOMATION_OWNER', label: 'Automation owner email', owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 60, name: 'IS9WD_REPLY_TO', label: 'Reply-to email', owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 61, name: 'IS9WD_SENDER_NAME', label: 'Sender display name', owner: IS9WD_OWN.ETHAN, value: 'IS9 Deliverables Tracker', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 62, name: 'IS9WD_APP_BASE_URL', label: 'App base URL', owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 63, name: 'IS9WD_ENDPOINT_URL', label: 'Endpoint URL (/exec)', owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    {
-      row: 64, name: 'IS9WD_TRANSPORT', label: 'Transport (fetch or gsrun)', owner: IS9WD_OWN.ETHAN,
-      value: 'fetch', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
-      validate: { kind: IS9WD_V.VALUE_LIST, values: ['fetch', 'gsrun'], help: 'The live shape. Shape A is decided, so this reads fetch.' }
-    },
-    { row: 65, name: 'IS9WD_READER_EMAIL', label: 'Canva reader email (Drive connector fallback)', owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 66, name: 'IS9WD_HEARTBEAT', label: 'Last heartbeat', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.STAMP, align: IS9WD_ALIGN.RIGHT },
-    { row: 67, name: 'IS9WD_LAST_OWNER', label: 'Last dispatcher owner', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-
-    // The eight statistics settings. Every threshold on 03 | Statistics and both
-    // row counts on the two views are here rather than in code, so a number Ethan
-    // disagrees with is one edit and never a push. The two that decide a layout
-    // carry a guard note, because a layout setting changed without a rebuild would
-    // otherwise show a stale tab with nothing saying so (6A, 6B).
-    {
-      row: 68, name: 'IS9WD_STATS_TREND_WEEKS', label: 'Statistics: trend weeks',
-      owner: IS9WD_OWN.ETHAN, value: 8, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 2, max: 26, help: 'A whole number from 2 to 26. Changing it needs Build or repair workbook.' },
-      note: '=IF(IS9WD_STATS_TREND_WEEKS<>IS9WD_STATS_TREND_BUILT,"Run Build or repair workbook: the trend weeks do not match the tab","OK")'
-    },
-    {
-      row: 69, name: 'IS9WD_STATS_MIN_JUDGED',
-      label: 'Statistics: fewest items past their deadline before a rate is scored',
-      owner: IS9WD_OWN.ETHAN, value: 3, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 1, max: 50, help: 'Below this, On time stays blank rather than printing 100% off one item.' }
-    },
-    {
-      row: 70, name: 'IS9WD_STATS_SILENT_DAYS',
-      label: 'Statistics: days without a tick before an officer reads as silent',
-      owner: IS9WD_OWN.ETHAN, value: 7, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 1, max: 60 }
-    },
-    {
-      row: 71, name: 'IS9WD_STATS_LATE_DAYS',
-      label: 'Statistics: days late before the worst-late number flags',
-      owner: IS9WD_OWN.ETHAN, value: 3, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 1, max: 60 }
-    },
-    {
-      row: 72, name: 'IS9WD_STATS_PACE_SLACK',
-      label: "Statistics: slack allowed against the week's pace",
-      owner: IS9WD_OWN.ETHAN, value: 0.15, format: IS9WD_FMT.PCT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.NUM, min: 0, max: 1, help: 'A percentage from 0 to 100. It keeps the pace column from crying on a Tuesday.' }
-    },
-    {
-      row: 73, name: 'IS9WD_STATS_ONTIME_TARGET', label: 'Statistics: on-time target',
-      owner: IS9WD_OWN.ETHAN, value: 0.8, format: IS9WD_FMT.PCT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.NUM, min: 0, max: 1, help: 'A percentage from 0 to 100. An officer below it is flagged.' }
-    },
-    {
-      row: 74, name: 'IS9WD_STATS_ROOM_WEEKS_WARN',
-      label: 'Statistics: weeks of row room left before it flags',
-      owner: IS9WD_OWN.ETHAN, value: 4, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 1, max: 52 }
-    },
-    {
-      row: 75, name: 'IS9WD_STATS_OFFICER_ROWS',
-      label: 'Rows reserved per officer on 04 | Officer Tables',
-      owner: IS9WD_OWN.ETHAN, value: 21, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 3, max: 40, help: 'One row is the overflow notice, so 13 shows 12 items. 21 guarantees nothing is ever hidden and costs 111 more rows of the connector read.' },
-      note: '=IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,"Run Build or repair workbook: the reserved rows do not match the tab","OK")'
-    }
   ]
 };
 
@@ -645,27 +946,29 @@ IS9WD_CFG.SWITCHES = {
 //  4.7 SCHEDULE
 // ---------------------------------------------------------------------------
 
-// Runs and Day are dropdowns with reject input, because a typo would turn a weekly
-// job into one that never runs and nothing would say so.
-IS9WD_CFG.SCHEDULE = {
+IS9WD_ENG.SCHEDULE = {
   key: 'SCHEDULE',
+  tab: 'ENGINE',
   title: 'SCHEDULE',
-  help: 'One row per job, in Manila hours. Catch-up hours is how late a missed run may still fire.',
-  titleRow: 77,
-  headerRow: 78,
-  firstRow: 79,
-  lastRow: 83,
+  help: 'One row per job, in Manila hours. Catch-up hours is how late a missed run may ' +
+    'still fire. Runs and Day are dropdowns, because a typo would turn a weekly job into ' +
+    'one that never runs and nothing would say so.',
+  titleRow: 24,
+  hintRow: 25,
+  headerRow: 26,
+  firstRow: 27,
+  lastRow: 31,
   firstCol: 1,
   lastCol: 9,
   checkCol: 7,
-  checkFormula: '=IF($A79="","",IF(AND(LOWER($B79)="weekly",LOWER($C79)="any"),"Row does not parse",IF(OR(NOT(ISNUMBER($D79)),$D79<>INT($D79),$D79<0,$D79>23),"Row does not parse","OK")))',
+  checkFormula: '=IF($A{row}="","",IF(AND(LOWER($B{row})="weekly",LOWER($C{row})="any"),"Row does not parse",IF(OR(NOT(ISNUMBER($D{row})),$D{row}<>INT($D{row}),$D{row}<0,$D{row}>23),"Row does not parse","OK")))',
   columns: [
     { header: 'Job key', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Runs', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.VALUE_LIST, values: IS9WD_RUNS_LIST } },
-    { header: 'Day', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.VALUE_LIST, values: IS9WD_DAY_LIST } },
-    { header: 'Hour', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.INT, min: 0, max: 23 } },
-    { header: 'Catch-up hours', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.WRAP, validate: { kind: IS9WD_V.INT, min: 0, max: 23 } },
-    { header: 'On', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.CHECKBOX } },
+    { header: 'Runs', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.VALUE_LIST, values: IS9WD_RUNS_LIST }, hint: 'Daily or Weekly, from the dropdown.' },
+    { header: 'Day', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.VALUE_LIST, values: IS9WD_DAY_LIST }, hint: 'A weekday from the dropdown, or Any for a daily job.' },
+    { header: 'Hour', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.INT, min: 0, max: 23 }, hint: 'A whole hour from 0 to 23, Manila time.' },
+    { header: 'Catch-up hours', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.WRAP, validate: { kind: IS9WD_V.INT, min: 0, max: 23 }, hint: 'How many hours late a missed run may still fire.' },
+    { header: 'On', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.CHECKBOX }, hint: 'Tick to let this job run.' },
     { header: 'Check', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
     { header: 'Last run', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.STAMP, wrap: IS9WD_WRAP.CLIP },
     { header: 'Last status', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP }
@@ -673,38 +976,216 @@ IS9WD_CFG.SCHEDULE = {
 };
 
 // ---------------------------------------------------------------------------
-//  4.8 PEOPLE DIRECTORY
+//  4.6A CAROUSEL CAPACITY
 // ---------------------------------------------------------------------------
 
-// Fourteen rows: nine publishing committees, then the President and the four EVPs,
-// who have items, links and emails and no Canva page. Key, Carousel order and
-// Hierarchy order are written once and never rewritten, because the master design's
-// pages are physical: renumbering an ordinal would send two committees to one page.
-IS9WD_CFG.DIRECTORY = {
-  key: 'DIRECTORY',
-  title: 'PEOPLE DIRECTORY',
-  help: 'Paste the 14 names into Full name and the 14 addresses into Email. Publishes is the only cell that decides what reaches Canva.',
-  titleRow: 85,
-  headerRow: 86,
-  firstRow: 87,
-  lastRow: 100,
+// Three capacity numbers, not one: the frames on a master page, the pages a committee may
+// own, and the product. A continuation page needs those to be different numbers, and the
+// derived one is a formula because a multi-cell paste is exactly what replaces a formula
+// with a stale literal (4.6).
+IS9WD_ENG.CAPACITY = {
+  key: 'CAPACITY',
+  tab: 'ENGINE',
+  title: 'CAROUSEL CAPACITY',
+  help: 'The arithmetic behind the slides. Raising either of the first two needs the Canva ' +
+    'master rebuilt by hand before it can be used.',
+  titleRow: 33,
+  hintRow: 34,
+  headerRow: 0,
+  firstRow: 35,
+  lastRow: 38,
   firstCol: 1,
-  lastCol: 12,
-  checkCol: 10,
-  adminKey: 'K10',
-  columns: [
-    { header: 'Key', owner: IS9WD_OWN.ONCE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Carousel order', owner: IS9WD_OWN.ONCE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.WRAP },
-    { header: 'Committee or office', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Full name', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Position label', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Email', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Token prefix', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Token issued', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Revoked', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.CENTER, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.CHECKBOX } },
-    { header: 'Check', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
-    { header: 'Publishes', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.CHECKBOX } },
-    { header: 'Hierarchy order', owner: IS9WD_OWN.ONCE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.WRAP }
+  lastCol: 4,
+  rows: [
+    {
+      row: 35, name: 'IS9WD_SLOTS_PER_PAGE', label: 'Slots per Canva page',
+      owner: IS9WD_OWN.ETHAN, value: 10, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 1, max: 50, help: 'The item frames the master page physically carries.' },
+      hint: 'How many task frames one slide physically holds. Changing it without ' +
+        'rebuilding the Canva master publishes text into frames that are not there.'
+    },
+    {
+      row: 36, name: 'IS9WD_MAX_PARTS', label: 'Maximum Canva pages per committee',
+      owner: IS9WD_OWN.ETHAN, value: 2, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 1, max: 4, help: 'Raising this needs a master rebuild before it can be used.' },
+      hint: 'How many slides one committee may take. Two means a committee with eleven ' +
+        'tasks gets a continuation slide.'
+    },
+    {
+      row: 37, name: 'IS9WD_PUBLISH_MAX', label: 'Publishable items per committee (derived)',
+      owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS',
+      format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      note: '=IF(NOT(ISNUMBER(IS9WD_PUBLISH_MAX)),"Publishable maximum is not a number",IF(IS9WD_PUBLISH_MAX<>IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS,"Capacity numbers disagree: "&IS9WD_SLOTS_PER_PAGE&" times "&IS9WD_MAX_PARTS&" is "&IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS,"OK"))'
+    },
+    {
+      row: 38, name: 'IS9WD_PUBLISH_EMPTY_PAGES',
+      label: 'Publish a page for a committee with no items',
+      owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to give a committee with nothing entered a slide that says so. Clear ' +
+        'it to drop that slide from the carousel.'
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  4.6B MAIL AND APP PLUMBING
+// ---------------------------------------------------------------------------
+
+IS9WD_ENG.PLUMBING = {
+  key: 'PLUMBING',
+  tab: 'ENGINE',
+  title: 'MAIL AND APP PLUMBING',
+  help: 'Defaults that work as they ship. The two code written rows at the bottom are ' +
+    'the dispatcher\'s own record of itself.',
+  titleRow: 40,
+  hintRow: 41,
+  headerRow: 0,
+  firstRow: 42,
+  lastRow: 52,
+  firstCol: 1,
+  lastCol: 4,
+  rows: [
+    {
+      row: 42, name: 'IS9WD_MAIL_NOREPLY', label: 'Send as no reply (Workspace only)',
+      owner: IS9WD_OWN.ETHAN, value: false, validate: { kind: IS9WD_V.CHECKBOX },
+      align: IS9WD_ALIGN.CENTER,
+      hint: 'Tick to send from a no reply address. It works only on a Workspace account.'
+    },
+    {
+      row: 43, name: 'IS9WD_QUOTA_RESERVE', label: 'Email quota reserve',
+      owner: IS9WD_OWN.ETHAN, value: 100, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 0, max: 1500 },
+      hint: 'How many of the day\'s allowed emails to keep back. Sending stops before ' +
+        'the reserve rather than half sending a batch.'
+    },
+    {
+      row: 44, name: 'IS9WD_RETIRE_DAYS', label: 'Retire accomplished after days',
+      owner: IS9WD_OWN.ETHAN, value: 14, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 0, max: 365 },
+      hint: 'How long a finished task stays on the data tab before it is moved to the ' +
+        'archive to reclaim the row.'
+    },
+    {
+      row: 45, name: 'IS9WD_TOKEN_WARN_DAYS', label: 'Token age warning days',
+      owner: IS9WD_OWN.ETHAN, value: 120, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 0, max: 3650 },
+      hint: 'How old a private link may get before the people tab flags it.'
+    },
+    {
+      row: 46, name: 'IS9WD_AUTOMATION_OWNER', label: 'Automation owner email',
+      owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Usually the same address as yours. It is the account the hourly job runs as.'
+    },
+    {
+      row: 47, name: 'IS9WD_REPLY_TO', label: 'Reply-to email',
+      owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Where a reply to one of these emails should land. Usually your own address.'
+    },
+    {
+      row: 48, name: 'IS9WD_SENDER_NAME', label: 'Sender display name',
+      owner: IS9WD_OWN.ETHAN, value: 'IS9 Deliverables Tracker', format: IS9WD_FMT.TEXT,
+      align: IS9WD_ALIGN.LEFT,
+      hint: 'The name an officer sees in the From line.'
+    },
+    {
+      row: 49, name: 'IS9WD_TRANSPORT', label: 'Transport (fetch or gsrun)',
+      owner: IS9WD_OWN.ETHAN, value: 'fetch', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      validate: { kind: IS9WD_V.VALUE_LIST, values: ['fetch', 'gsrun'], help: 'The live shape. Shape A is decided, so this reads fetch.' },
+      hint: 'Leave it on fetch. It records which of the two possible app shapes is live.'
+    },
+    {
+      row: 50, name: 'IS9WD_READER_EMAIL', label: 'Canva reader email (Drive connector fallback)',
+      owner: IS9WD_OWN.ETHAN, value: '', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT,
+      hint: 'Fill this only if the DLSU account cannot read this sheet through the ' +
+        'connector. Empty is the good outcome: it means no share was needed.'
+    },
+    { row: 51, name: 'IS9WD_HEARTBEAT', label: 'Last heartbeat', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.STAMP, align: IS9WD_ALIGN.RIGHT },
+    { row: 52, name: 'IS9WD_LAST_OWNER', label: 'Last dispatcher owner', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  4.6C STATISTICS THRESHOLDS  (the eight, off the dashboard entirely)
+// ---------------------------------------------------------------------------
+
+// Ethan's instruction of 2026-09-27: 03 | Statistics is for viewing, not for setting. So
+// every threshold it reads lives here, hidden, and the dashboard shows numbers and charts
+// and nothing that looks like a form. The two that decide a layout carry a guard note,
+// because a layout setting changed without a rebuild would otherwise show a stale tab
+// with nothing saying so.
+IS9WD_ENG.THRESHOLDS = {
+  key: 'THRESHOLDS',
+  tab: 'ENGINE',
+  title: 'STATISTICS THRESHOLDS',
+  help: 'What the dashboard treats as worth marking. Two of them decide a layout rather ' +
+    'than a threshold, and each of those carries a guard in the fourth column.',
+  titleRow: 54,
+  hintRow: 55,
+  headerRow: 0,
+  firstRow: 56,
+  lastRow: 63,
+  firstCol: 1,
+  lastCol: 4,
+  rows: [
+    {
+      row: 56, name: 'IS9WD_STATS_TREND_WEEKS', label: 'Trend weeks',
+      owner: IS9WD_OWN.ETHAN, value: 8, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 2, max: 26, help: 'A whole number from 2 to 26. Changing it needs Build or repair workbook.' },
+      hint: 'How many past weeks the trend table and the trend chart show.',
+      note: '=IF(IS9WD_STATS_TREND_WEEKS<>IS9WD_STATS_TREND_BUILT,"Run Build or repair workbook: the trend weeks do not match the tab","OK")'
+    },
+    {
+      row: 57, name: 'IS9WD_STATS_MIN_JUDGED',
+      label: 'Fewest items past their deadline before a rate is scored',
+      owner: IS9WD_OWN.ETHAN, value: 3, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 1, max: 50, help: 'Below this, On time stays blank rather than printing 100% off one item.' },
+      hint: 'Below this many judged items an officer gets no score at all, rather than ' +
+        '100% off one task.'
+    },
+    {
+      row: 58, name: 'IS9WD_STATS_SILENT_DAYS',
+      label: 'Days without a tick before an officer reads as silent',
+      owner: IS9WD_OWN.ETHAN, value: 7, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 1, max: 60 },
+      hint: 'How many quiet days before the dashboard says an officer has gone silent.'
+    },
+    {
+      row: 59, name: 'IS9WD_STATS_LATE_DAYS',
+      label: 'Days late before the worst-late number flags',
+      owner: IS9WD_OWN.ETHAN, value: 3, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 1, max: 60 },
+      hint: 'How many days late is bad enough to mark.'
+    },
+    {
+      row: 60, name: 'IS9WD_STATS_PACE_SLACK', label: 'Slack allowed against the week\'s pace',
+      owner: IS9WD_OWN.ETHAN, value: 0.15, format: IS9WD_FMT.PCT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.NUM, min: 0, max: 1, help: 'A percentage from 0 to 100. It keeps the pace column from crying on a Tuesday.' },
+      hint: 'How far behind the week\'s own pace is still acceptable. Type it as a ' +
+        'percentage, not as a whole number.'
+    },
+    {
+      row: 61, name: 'IS9WD_STATS_ONTIME_TARGET', label: 'On-time target',
+      owner: IS9WD_OWN.ETHAN, value: 0.8, format: IS9WD_FMT.PCT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.NUM, min: 0, max: 1, help: 'A percentage from 0 to 100. An officer below it is flagged.' },
+      hint: 'The share of on-time work you expect. An officer below it is marked.'
+    },
+    {
+      row: 62, name: 'IS9WD_STATS_ROOM_WEEKS_WARN',
+      label: 'Weeks of row room left before it flags',
+      owner: IS9WD_OWN.ETHAN, value: 4, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 1, max: 52 },
+      hint: 'How few weeks of space on the data tab is worth a warning.'
+    },
+    {
+      row: 63, name: 'IS9WD_STATS_OFFICER_ROWS',
+      label: 'Rows reserved per officer on 04 | Officer Tables',
+      owner: IS9WD_OWN.ETHAN, value: 21, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 3, max: 40, help: 'One row is the overflow notice, so 13 shows 12 items. 21 guarantees nothing is ever hidden.' },
+      hint: 'How many rows each officer\'s table reserves. One of them is the notice ' +
+        'row, so 21 shows 20 tasks, which is the most any committee can publish.',
+      note: '=IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,"Run Build or repair workbook: the reserved rows do not match the tab","OK")'
+    }
   ]
 };
 
@@ -712,64 +1193,98 @@ IS9WD_CFG.DIRECTORY = {
 //  4.9 DIAGNOSTICS
 // ---------------------------------------------------------------------------
 
-// Read only. The first five are pointers at feed cells so a fix lands in one place.
-// The last five are code written and carry named ranges of their own, added here
-// because 4.9 lists none and a code write by cell address is the one thing 2.5
-// forbids. Nothing else reads them.
-IS9WD_CFG.DIAGNOSTICS = {
+// Read only. The first six are pointers at cells that already exist, so a fix lands in
+// one place; the last five are code written and carry named ranges of their own.
+IS9WD_ENG.DIAGNOSTICS = {
   key: 'DIAGNOSTICS',
+  tab: 'ENGINE',
   title: 'DIAGNOSTICS',
-  help: 'Read only. Five pointers at the feed, then five lines code writes after each run.',
-  titleRow: 102,
+  help: 'Read only. Six pointers at cells that already exist, then five lines code writes ' +
+    'after each run. 03 | Statistics reads these rather than recomputing them.',
+  titleRow: 65,
+  hintRow: 66,
   headerRow: 0,
-  firstRow: 103,
-  lastRow: 113,
+  firstRow: 67,
+  lastRow: 77,
   firstCol: 1,
-  lastCol: 3,
+  lastCol: 4,
   rows: [
-    { row: 103, name: '', label: 'Total active deliverables', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_TOTAL', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
-    { row: 104, name: '', label: 'Rows with a flag', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_FLAGGED', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
-    { row: 105, name: '', label: 'Ready for Canva', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_READY', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 106, name: '', label: 'Feed errors', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_ERRORS', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
-    { row: 107, name: '', label: 'Carousel pages this week', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_PAGES', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
-    { row: 108, name: '', label: 'Rows used of 2000', owner: IS9WD_OWN.SCRIPT, formula: '=COUNTIF(IS9WD_DEL_ID,"?*")', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
-    { row: 109, name: 'IS9WD_DIAG_LAST_RUN', label: 'Last dispatcher run', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.STAMP, align: IS9WD_ALIGN.RIGHT },
-    { row: 110, name: 'IS9WD_DIAG_QUOTA', label: 'Last remaining mail quota', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
-    { row: 111, name: 'IS9WD_DIAG_SELFTEST', label: 'Last self test result', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 112, name: 'IS9WD_DIAG_DEPLOYMENT', label: 'Live deployment access last checked', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
-    { row: 113, name: 'IS9WD_DIAG_OVERRIDES', label: 'Today override and week number override', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT }
+    { row: 67, name: '', label: 'Total active deliverables', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_TOTAL', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
+    { row: 68, name: '', label: 'Rows with a flag', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_FLAGGED', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
+    { row: 69, name: '', label: 'Ready for Canva', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_READY', format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
+    { row: 70, name: '', label: 'Feed errors', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_ERRORS', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
+    { row: 71, name: '', label: 'Carousel pages this week', owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_FEED_PAGES', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
+    { row: 72, name: '', label: 'Rows used of 2000', owner: IS9WD_OWN.SCRIPT, formula: '=COUNTIF(IS9WD_DEL_ID,"?*")', format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
+    { row: 73, name: 'IS9WD_DIAG_LAST_RUN', label: 'Last dispatcher run', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.STAMP, align: IS9WD_ALIGN.RIGHT },
+    { row: 74, name: 'IS9WD_DIAG_QUOTA', label: 'Last remaining mail quota', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
+    { row: 75, name: 'IS9WD_DIAG_SELFTEST', label: 'Last self test result', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
+    { row: 76, name: 'IS9WD_DIAG_DEPLOYMENT', label: 'Live deployment access last checked', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT },
+    { row: 77, name: 'IS9WD_DIAG_OVERRIDES', label: 'Today override and week number override', owner: IS9WD_OWN.CODE, format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT }
   ]
 };
 
 // ---------------------------------------------------------------------------
-//  4.5A WEEKLY SIGN-OFF STORE  (last block, so it can grow downward)
+//  4.8B DIRECTORY MACHINERY  (the five columns a president never sets)
 // ---------------------------------------------------------------------------
 
-// Append or replace by week, never cleared: this is what lets the Archive record
-// who signed off on which week after the names have moved on.
+// Fourteen rows, same order and same Key as `THE PEOPLE` on 00 | Configuration, joined by
+// row position. Key, Carousel order and Hierarchy order are written once and never
+// rewritten: the master design's pages are physical, so renumbering an ordinal would send
+// two committees to one page (4.8). Token prefix and Token issued are code written and
+// exist for identification only: the token itself is never in a cell.
+IS9WD_ENG.DIRECTORY = {
+  key: 'DIRECTORY',
+  tab: 'ENGINE',
+  title: 'DIRECTORY MACHINERY',
+  help: 'One row per officer, in the same order as THE PEOPLE on 00 | Configuration and ' +
+    'joined to it by row. Never insert, delete or sort a row here.',
+  titleRow: 79,
+  hintRow: 80,
+  headerRow: 81,
+  firstRow: 82,
+  lastRow: 95,
+  firstCol: 1,
+  lastCol: 6,
+  columns: [
+    { header: 'Key', owner: IS9WD_OWN.ONCE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+    { header: 'Carousel order', owner: IS9WD_OWN.ONCE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.WRAP },
+    { header: 'Hierarchy order', owner: IS9WD_OWN.ONCE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.WRAP },
+    { header: 'Token prefix', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+    { header: 'Token issued', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP },
+    { header: 'Revoked', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.CENTER, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.CHECKBOX } }
+  ]
+};
+
+// ---------------------------------------------------------------------------
+//  4.5A WEEKLY SIGN-OFF STORE  (last block on the tab, so it can grow downward)
+// ---------------------------------------------------------------------------
+
+// Append or replace by week, never cleared: this is what lets the Archive record who
+// signed off on which week after the names have moved on.
 //
-// THIS BLOCK MOVED DOWN EIGHT ROWS when the switches block took the eight
-// statistics settings, and it is the one block where moving is not free: setup may
-// widen an append only block and may never migrate its rows, so a filled row at the
-// old first row would fall outside the block and outside every named range over it.
-// Today the store holds zero filled rows, so the cost of the move is zero. It has to
-// land before Gate A, because after it the move is a migration setup cannot perform.
-IS9WD_CFG.STORE = {
+// IT IS THE LAST BLOCK ON `_Engine` FOR THE REASON IT WAS THE LAST BLOCK ON
+// `00 | Configuration`: setup may widen an append only block and may never migrate its
+// rows, so nothing may ever sit below it. The move itself was free, because the store
+// holds zero filled rows today, and it had to land before Gate A for the same reason.
+IS9WD_ENG.STORE = {
   key: 'STORE',
+  tab: 'ENGINE',
   title: 'WEEKLY SIGN-OFF STORE',
-  help: 'One row per week, keyed on that week Monday. Set from the app each week, or typed here when the app is down.',
-  titleRow: 115,
-  headerRow: 116,
-  firstRow: 117,
-  lastRow: 168,
+  help: 'One row per week, keyed on that week Monday. Written by the officers\' page each ' +
+    'week, or typed here when the page is down.',
+  titleRow: 97,
+  hintRow: 98,
+  headerRow: 99,
+  firstRow: 100,
+  lastRow: 151,
   firstCol: 1,
   lastCol: 7,
   checkCol: 7,
-  checkFormula: '=IF($A117="","",IF(WEEKDAY($A117,2)<>1,"Week start is not a Monday",IF(COUNTIF($A$117:$A$168,$A117)>1,"Duplicate week","OK")))',
+  checkFormula: '=IF($A{row}="","",IF(WEEKDAY($A{row},2)<>1,"Week start is not a Monday",IF(COUNTIF($A${first}:$A${last},$A{row})>1,"Duplicate week","OK")))',
   growBy: 52,
   minFreeRows: 4,
   columns: [
-    { header: 'Week start', owner: IS9WD_OWN.APPEND, align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.DATE, help: 'The Monday the week starts.' } },
+    { header: 'Week start', owner: IS9WD_OWN.APPEND, align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.DATE_KEY, wrap: IS9WD_WRAP.CLIP, validate: { kind: IS9WD_V.DATE, help: 'The Monday the week starts.' }, hint: 'The Monday that week starts.' },
     { header: 'Prepared by name', owner: IS9WD_OWN.APPEND, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
     { header: 'Prepared by position', owner: IS9WD_OWN.APPEND, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
     { header: 'Checked by name', owner: IS9WD_OWN.APPEND, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
@@ -780,8 +1295,66 @@ IS9WD_CFG.STORE = {
 };
 
 // Painting order, top to bottom. The store is last because it grows downward.
-IS9WD_CFG.BLOCKS = ['WEEK', 'WINDOWS', 'TERMS', 'STATUS', 'SIGNOFF', 'SWITCHES',
-  'SCHEDULE', 'DIRECTORY', 'DIAGNOSTICS', 'STORE'];
+IS9WD_ENG.BLOCKS = ['WEEKCALC', 'WINDOWS', 'STATUS', 'SCHEDULE', 'CAPACITY',
+  'PLUMBING', 'THRESHOLDS', 'DIAGNOSTICS', 'DIRECTORY', 'STORE'];
+
+// One short blank row before each block's title, computed from the block list rather
+// than typed, so a block that moves takes its own spacer with it. A plain loop over
+// object literals: nothing here calls into IS9WD_Core.js, which is not loaded yet.
+function IS9WD_spacerRowsFor_(holder, blocks) {
+  var out = [];
+  for (var i = 0; i < blocks.length; i++) {
+    var block = holder[blocks[i]];
+    if (!block) continue;
+    var before = block.titleRow - 1;
+    if (before > holder.HELP_ROW) out.push(before);
+  }
+  return out;
+}
+
+IS9WD_CFG.SPACER_ROWS = IS9WD_spacerRowsFor_(IS9WD_CFG, IS9WD_CFG.BLOCKS);
+IS9WD_ENG.SPACER_ROWS = IS9WD_spacerRowsFor_(IS9WD_ENG, IS9WD_ENG.BLOCKS);
+
+// The two settings tabs, in the order setup writes them. Both carry the same two block
+// shapes, so one writer and one painter cover both.
+var IS9WD_SETTINGS_TABS = [
+  { tabKey: 'CONFIG', holder: IS9WD_CFG },
+  { tabKey: 'ENGINE', holder: IS9WD_ENG }
+];
+
+function IS9WD_settingsHolder_(tabKey) {
+  var key = IS9WD_trim_(tabKey).toUpperCase();
+  for (var i = 0; i < IS9WD_SETTINGS_TABS.length; i++) {
+    if (IS9WD_SETTINGS_TABS[i].tabKey === key) return IS9WD_SETTINGS_TABS[i].holder;
+  }
+  return null;
+}
+
+// Every row block on either settings tab, flattened, so the name list, the guard list and
+// the self test all walk one list instead of four.
+function IS9WD_settingsRowBlocks_() {
+  var out = [];
+  for (var t = 0; t < IS9WD_SETTINGS_TABS.length; t++) {
+    var holder = IS9WD_SETTINGS_TABS[t].holder;
+    for (var b = 0; b < holder.BLOCKS.length; b++) {
+      var block = holder[holder.BLOCKS[b]];
+      if (block && block.rows) out.push(block);
+    }
+  }
+  return out;
+}
+
+function IS9WD_settingsTableBlocks_() {
+  var out = [];
+  for (var t = 0; t < IS9WD_SETTINGS_TABS.length; t++) {
+    var holder = IS9WD_SETTINGS_TABS[t].holder;
+    for (var b = 0; b < holder.BLOCKS.length; b++) {
+      var block = holder[holder.BLOCKS[b]];
+      if (block && block.columns) out.push(block);
+    }
+  }
+  return out;
+}
 
 // ============================================================================
 //  DEFAULTS  (what setup writes into a blank workbook, and only when blank)
@@ -861,8 +1434,14 @@ var IS9WD_ITEMS = {
   BANNER_ROW: 1,
   HELP_ROW: 2,
   headerRow: 3,
-  firstRow: 4,
-  lastRow: 2003,
+  // Row 4 is the plain English hint row, added on Ethan's instruction of 2026-09-27:
+  // every cell he types into carries an explanation, and on a 2,000 row table the honest
+  // place for it is one sentence per column immediately above the column, inside the
+  // frozen pane, plus the same sentence as the note on each of that column's cells. A
+  // note per cell would be 10,000 notes and a minute of every build.
+  hintRow: 4,
+  firstRow: 5,
+  lastRow: 2004,
   firstCol: 1,
   lastCol: 17,
   BANNER: '02 | DELIVERABLES',
@@ -880,27 +1459,37 @@ var IS9WD_ITEMS = {
     {
       header: 'Committee', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
       format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
-      validate: { kind: IS9WD_V.NAMED_LIST, source: 'IS9WD_DIR_NAME', help: 'Pick a committee or office from the directory.' }
+      validate: { kind: IS9WD_V.NAMED_LIST, source: 'IS9WD_DIR_NAME', help: 'Pick a committee or office from the directory.' },
+      hint: 'Pick whose task this is from the dropdown. Typing anything not on the list ' +
+        'flags the row and keeps it off the carousel.'
     },
     {
       header: 'Title of Task', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
       format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
-      validate: { kind: IS9WD_V.FORMULA, formula: '=LEN($C{row})<=40', help: 'Max 40 characters. Start with a verb.' }
+      validate: { kind: IS9WD_V.FORMULA, formula: '=LEN($C{row})<=40', help: 'Max 40 characters. Start with a verb.' },
+      hint: 'What has to be done, in 40 characters or fewer, starting with a verb. This ' +
+        'is printed on the slide exactly as typed, so anything longer is refused.'
     },
     {
       header: 'Deadline', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.RIGHT,
       format: IS9WD_FMT.DEADLINE, wrap: IS9WD_WRAP.CLIP,
-      validate: { kind: IS9WD_V.DATE, help: 'A date, no time. A time goes in the remark.' }
+      validate: { kind: IS9WD_V.DATE, help: 'A date, no time. A time goes in the remark.' },
+      hint: 'The day it is due. A date only, never a time: put a time in the remark. ' +
+        'Leave it empty and the row is flagged and never reaches a slide.'
     },
     {
       header: 'Remark', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
       format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
-      validate: { kind: IS9WD_V.FORMULA, formula: '=LEN($E{row})<=30', help: 'Instructions only (where it goes, who signs off). Never progress or status.' }
+      validate: { kind: IS9WD_V.FORMULA, formula: '=LEN($E{row})<=30', help: 'Instructions only (where it goes, who signs off). Never progress or status.' },
+      hint: 'One short instruction, 30 characters or fewer: where it goes, who signs it ' +
+        'off. Never progress and never a status, because this is printed under the task.'
     },
     {
       header: 'Status', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.LEFT,
       format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP,
-      validate: { kind: IS9WD_V.NAMED_LIST, source: 'IS9WD_STATUS_LIST', help: 'Pick a status from the Configuration list.' }
+      validate: { kind: IS9WD_V.NAMED_LIST, source: 'IS9WD_STATUS_LIST', help: 'Pick a status from the status list.' },
+      hint: 'Leave this on Open. The officer changes it from their phone, and you change ' +
+        'it here only to reopen something that was ticked by mistake.'
     },
     { header: 'Status at', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.RIGHT, format: IS9WD_FMT.STAMP, wrap: IS9WD_WRAP.CLIP },
     { header: 'Status by', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.LEFT, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
@@ -1084,12 +1673,17 @@ function IS9WD_defaultPublishingRows_() {
   return n;
 }
 
-// Looks a switch default up by its range name in the block above, so the two
-// capacity numbers are written once, in the switches block, and read from there.
+// Looks a setting's shipping default up by its range name, across every row block on
+// both settings tabs, so a value is written once where it lives and read from there. It
+// walks both tabs because the capacity numbers and the statistics thresholds moved to
+// `_Engine` and the switches stayed, and no caller should have to know which.
 function IS9WD_switchDefault_(name) {
-  var rows = IS9WD_CFG.SWITCHES.rows;
-  for (var i = 0; i < rows.length; i++) {
-    if (rows[i].name === name) return rows[i].value;
+  var blocks = IS9WD_settingsRowBlocks_();
+  for (var b = 0; b < blocks.length; b++) {
+    var rows = blocks[b].rows;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].name === name && rows[i].value !== undefined) return rows[i].value;
+    }
   }
   return null;
 }
@@ -1119,54 +1713,107 @@ function IS9WD_feed_() {
 }
 
 // ============================================================================
-//  03 | STATISTICS  (reference 6A, six blocks in twelve columns)
+//  03 | STATISTICS  (reference 6A: a dashboard, not a settings page)
 // ============================================================================
 
-// Both new tabs are computed views: formulas over 02 | Deliverables, 05 | Archive and
-// 00 | Configuration, and no new source of truth anywhere. Nothing on either one may
-// gate the Canva run, which is why neither appears in the readiness formula.
+// Ethan's instruction of 2026-09-27, verbatim: "for the statistics, i don't it to be a
+// configuration, i want to see KPIs and Charts, literally for viewing". So the tab is
+// four things and nothing else:
 //
-// Two rules the feed already keeps and these two tabs inherit, for the same reason:
-//   · A1 says what the tab is, because the Drive connector strips tab names.
-//   · The last row carries a literal end marker, so a truncated read is self evident
-//     rather than merely short. One row each, against the feed's nine sentinels.
-// And one rule of their own: NOTHING on either tab is merged. The connector renders a
-// merged cell as a repeated `[merged]` value, and both tabs are inside the same read.
-// The band look is column width, type scale and overflow wrap, never a merge.
+//   1. EIGHT KPI TILES. A big number, a small label under it and one short line under
+//      that. Two rows of four. The first tile of each row sits across the two wide
+//      columns, because the week line and the readiness verdict are the two longest
+//      strings; the other three are the same size as each other.
+//   2. ONE TABLE OF SENTENCES, `WHAT NEEDS ATTENTION`, where the long readings live:
+//      who to chase, who has nothing entered, which gate holds the carousel.
+//   3. THREE REAL EMBEDDED CHARTS, built with the Apps Script chart builder and anchored
+//      on the tab: due against accomplished per committee, the fairness adjusted track
+//      record, and the weekly trend. Each one sits in its own reserved band with a
+//      caption above it, and the caption says what will fill the chart when it is empty.
+//   4. THREE TABLES that were already worth reading: by officer, ranked, and the trend.
+//
+// What left the tab: every threshold, which is now on `_Engine`; the whole hidden helper
+// band, which is now on `_Views`; and `OPERATIONAL HEALTH` and `SCHEDULED JOBS`, which
+// are the machine reporting on itself and are on `_Views` too. `READINESS GATES` stayed,
+// because seven words saying what is holding the carousel is the most actionable thing on
+// the tab, and because one cell compares it against the feed's own verdict and fails the
+// self test when the two disagree.
+//
+// Three rules from elsewhere still apply, unchanged and load bearing. A1 carries the
+// tab's own name, because the Drive connector strips tab names. The last row carries the
+// literal end marker, so a truncated read is self evident rather than merely short. And
+// NOTHING on the tab is merged: a tile is a wide column, a big type size and overflow
+// wrap, never a merge, because the connector renders a merged cell as repeated
+// `[merged]` values.
 
 var IS9WD_STATS = {
   BANNER: '03 | STATISTICS',
-  HELP: 'Every number here is a formula over 02 | Deliverables, 05 | Archive and ' +
-    '00 | Configuration: nothing is typed, and nothing on this tab can hold the ' +
-    'carousel. Due, Done and Rate cover this week only. Overdue, Worst late, Silent, ' +
-    'On time, Judged and Avg days cover every row still on the data tab, which ' +
-    'retirement bounds. An item ticked this week counts against the week its deadline ' +
-    'fell in. Silence is evidence and not proof, because a status change from the ' +
-    'Sheet resets it too. The sparkline in the trend block reads as one blank cell ' +
-    'through the Drive connector.',
+  HELP: 'A dashboard. There is nothing to fill in here and nothing here can hold the ' +
+    'carousel: every number is worked out from 02 | Deliverables, 05 | Archive and ' +
+    '00 | Configuration. A plain number needs nothing from you; a number that is marked ' +
+    'names something to do. Due, Done and Rate cover this week only, while Overdue, ' +
+    'Worst late, Silent, On time, Judged and Avg days cover everything still on the data ' +
+    'tab. A task ticked this week counts against the week its deadline fell in. Silence ' +
+    'is evidence and not proof, because changing a status from the Sheet resets it too.',
   END: 'IS9WD STATS END',
-  // The visible sentinel, byte for byte the feed's, for the same reason: a blank
-  // caused by a broken named range is indistinguishable from a legitimately empty
-  // cell, and four places on this tab have blank as their contract.
+  // The visible sentinel, byte for byte the feed's, for the same reason: a blank caused
+  // by a broken named range is indistinguishable from a legitimately empty cell, and
+  // four places on this tab have blank as their contract.
   ERR: '!ERR'
 };
 
-// Key, label. A label beginning `=` is written as a formula, which is how a label
-// that names a setting stays true the day the setting changes.
-var IS9WD_STATS_WEEK_ROWS = [
-  ['W.WEEK', 'The week'],
-  ['W.ACTIVE', 'Active this week'],
-  ['W.DONE', 'Accomplished this week'],
-  ['W.PACE', 'Completion against pace'],
-  ['W.OVERDUE', 'Overdue now'],
-  ['W.SOON', 'Due in the next two days'],
-  ['W.NOITEMS', 'Officers with nothing entered this week'],
-  ['W.SILENT', '="Officers silent for "&IS9WD_STATS_SILENT_DAYS&" days or more"'],
-  ['W.BLOCKING', 'Blocking flags on publishing rows'],
-  ['W.NOTPUB', 'Items past the carousel'],
-  ['W.READY', 'Ready for Canva']
+// The eight tiles, in reading order, four to a row. { key, label, note } where the label
+// is the small caption under the number and the note is the one short line under that.
+// The key is the machine key, so IS9WD_Stats.js throws on an unknown one rather than
+// writing eight formulas one tile out of place.
+//
+// Tile 1 of each row starts in column A and is two columns wide; tiles 2, 3 and 4 are
+// three columns wide each, which is 10 of the 12 columns after the wide pair. The widths
+// in IS9WD_WIDTH.STATS are chosen so those three are the same size.
+var IS9WD_STATS_TILE_COLS = [
+  { col: 1, span: 2 }, { col: 3, span: 3 }, { col: 6, span: 3 }, { col: 9, span: 4 }
 ];
 
+var IS9WD_STATS_TILE_ROW_A = ['T.WEEK', 'T.ACTIVE', 'T.DONE', 'T.PACE'];
+var IS9WD_STATS_TILE_ROW_B = ['T.READY', 'T.OVERDUE', 'T.SOON', 'T.NOITEMS'];
+
+var IS9WD_STATS_TILES = [
+  ['T.WEEK', 'THIS WEEK'],
+  ['T.ACTIVE', 'STILL TO DO'],
+  ['T.DONE', 'DONE'],
+  ['T.PACE', 'AGAINST PACE'],
+  ['T.READY', 'CANVA'],
+  ['T.OVERDUE', 'LATE NOW'],
+  ['T.SOON', 'DUE IN 2 DAYS'],
+  ['T.NOITEMS', 'OFFICERS WITH NOTHING']
+];
+
+// The six sentence rows. Three of them carry a named value of their own; the other three
+// point at a tile, so every one of the eleven measures is named exactly once on the tab.
+var IS9WD_STATS_ATTENTION_ROWS = [
+  ['A.OVERDUE', 'Late right now'],
+  ['A.NOITEMS', 'Officers with nothing entered for this week'],
+  ['A.SILENT', '="Officers silent for "&IS9WD_STATS_SILENT_DAYS&" days or more"'],
+  ['A.BLOCKING', 'Flags blocking the carousel'],
+  ['A.NOTPUB', 'Tasks with no slide'],
+  ['A.READY', 'Ready for Canva']
+];
+
+// Seven gates, the same seven the readiness formula reads, six of them a plain read of a
+// cell that already exists. The seventh reads this tab's own blocking count, so the eight
+// flag names exist once here and nowhere else on the tab (6A).
+var IS9WD_STATS_GATE_ROWS = [
+  ['G.TERM', 'In term'],
+  ['G.SIGNOFF', 'Sign-off set for this week'],
+  ['G.CAPACITY', 'Capacity check'],
+  ['G.PLAN', 'Plan check'],
+  ['G.FLAGCAP', 'Flag list check'],
+  ['G.ERRORS', 'Feed errors'],
+  ['G.BLOCKING', 'Blocking flags on publishing rows']
+];
+
+// `OPERATIONAL HEALTH`, which moved to _Views with the rest of the machinery. It is the
+// machine reporting on itself: useful when something is wrong, noise on a dashboard.
 var IS9WD_STATS_HEALTH_ROWS = [
   ['H.READY', 'Ready for Canva'],
   ['H.PAGES', 'Carousel pages this week'],
@@ -1181,32 +1828,22 @@ var IS9WD_STATS_HEALTH_ROWS = [
   ['H.ROOM', 'Weeks of row room left']
 ];
 
-// Seven gates, the same seven the readiness formula reads, six of them a plain read of
-// a cell that already exists. The seventh reads this tab's own blocking count, so the
-// eight flag names exist once here and nowhere else on the tab (6A).
-var IS9WD_STATS_GATE_ROWS = [
-  ['G.TERM', 'In term'],
-  ['G.SIGNOFF', 'Sign-off set for this week'],
-  ['G.CAPACITY', 'Capacity check'],
-  ['G.PLAN', 'Plan check'],
-  ['G.FLAGCAP', 'Flag list check'],
-  ['G.ERRORS', 'Feed errors'],
-  ['G.BLOCKING', 'Blocking flags on publishing rows']
-];
-
 var IS9WD_STATS_HEADERS = {
-  KV: ['Measure', 'Value', 'Reading'],
+  ATTENTION: ['What', 'Number', 'What to do about it'],
   OFFICER: ['Committee or office', 'Attention', 'Due', 'Done', 'Rate', 'Overdue',
-    'Worst late', 'Silent', 'On time', 'Judged', 'Avg days', 'Not on carousel'],
+    'Worst late', 'Silent', 'On time', 'Judged', 'Avg days', 'No slide'],
   RANKED: ['Rank', 'Officer', 'On time', 'Judged', 'Note'],
   TREND: ['Week', 'Week start', 'Published', 'Accomplished', 'On time', 'Recorded'],
-  // Three columns rather than the four a first draft had: two sentences side by side
-  // in a 65 px and a 100 px column both clip, and one sentence that names what the
-  // gate reads and what to do about it says the same thing and can be read.
   GATES: ['Gate', 'State', 'What it reads, and what to do'],
-  // Last run before On, against the reading order elsewhere on the tab, because a
-  // timestamp needs 210 px and column C is 65: the value has to sit where it fits.
-  JOBS: ['Job key', 'Last run', 'On', 'Last status']
+  KV: ['Measure', 'Value', 'Reading'],
+  // Last run before On, against the reading order elsewhere, because a timestamp needs
+  // 210 px and the value has to sit where it fits.
+  JOBS: ['Job key', 'Last run', 'On', 'Last status'],
+  // _Views' own two helper tables.
+  VIEW_OFFICER: ['Officer', 'Person', 'Position', 'Carousel', 'Hierarchy', 'Load',
+    'First due', 'Last tick', 'Silent n', 'Blocking', 'Active all', 'Done all', 'Total'],
+  VIEW_RANK: ['Officer', 'Score', 'Judged'],
+  VIEW_TREND: ['Monday', 'Term start']
 };
 
 // The twelve visible officer columns, in column order.
@@ -1216,102 +1853,260 @@ var IS9WD_STATS_OFF_COL_NAMES = ['IS9WD_STATS_OFF_NAME', 'IS9WD_STATS_OFF_ATTENT
   'IS9WD_STATS_OFF_ONTIME', 'IS9WD_STATS_OFF_JUDGED', 'IS9WD_STATS_OFF_AVGDAYS',
   'IS9WD_STATS_OFF_NOTPUB'];
 
-// The hidden band, by sheet column. M carries the KPI flag booleans in the two label
-// and value blocks and the identity sort's first column in the officer block, so it
-// holds no name of its own: column A mirrors it. N to Q are the rest of that one
-// spilling sort, and R to Y are one broadcast formula each. 04 | Officer Tables reads
-// the last three rather than recomputing them, which is what stops the two views
+// The officer helper band, by column, now on `_Views`. Column A is the identity sort's
+// own first column and carries a name of its own, because the visible column on
+// 03 | Statistics is a pointer at it rather than a second lookup. 04 | Officer Tables
+// reads the last three rather than recomputing them, which is what stops the two views
 // disagreeing about a count.
 var IS9WD_STATS_OFF_HELPER_NAMES = {
-  14: 'IS9WD_STATS_OFF_VP', 15: 'IS9WD_STATS_OFF_POSITION',
-  16: 'IS9WD_STATS_OFF_CAROUSEL', 17: 'IS9WD_STATS_OFF_HIER',
-  18: 'IS9WD_STATS_OFF_LOAD', 19: 'IS9WD_STATS_OFF_FIRSTDUE',
-  20: 'IS9WD_STATS_OFF_LASTTICK', 21: 'IS9WD_STATS_OFF_SILENT_N',
-  22: 'IS9WD_STATS_OFF_BLOCKING', 23: 'IS9WD_STATS_OFF_ACTIVE_ALL',
-  24: 'IS9WD_STATS_OFF_DONE_ALL', 25: 'IS9WD_STATS_OFF_TOTAL'
+  1: 'IS9WD_STATS_OFF_SORTNAME', 2: 'IS9WD_STATS_OFF_VP',
+  3: 'IS9WD_STATS_OFF_POSITION', 4: 'IS9WD_STATS_OFF_CAROUSEL',
+  5: 'IS9WD_STATS_OFF_HIER', 6: 'IS9WD_STATS_OFF_LOAD',
+  7: 'IS9WD_STATS_OFF_FIRSTDUE', 8: 'IS9WD_STATS_OFF_LASTTICK',
+  9: 'IS9WD_STATS_OFF_SILENT_N', 10: 'IS9WD_STATS_OFF_BLOCKING',
+  11: 'IS9WD_STATS_OFF_ACTIVE_ALL', 12: 'IS9WD_STATS_OFF_DONE_ALL',
+  13: 'IS9WD_STATS_OFF_TOTAL'
 };
 
-// One name per row of the two label and value blocks, so the officer tables tab, the
-// gates block and a future Sunday brief read a number instead of recomputing it.
+// The ranked block's three sort helpers, on `_Views`.
+var IS9WD_STATS_RANK_HELPER_NAMES = {
+  1: 'IS9WD_STATS_RANK_KEY', 2: 'IS9WD_STATS_RANK_SCORE', 3: 'IS9WD_STATS_RANK_JUDGED'
+};
+
+// The trend block's two helpers, on `_Views`. Deliberately not IS9WD_STATS_TREND_WEEK,
+// which is one character from the setting IS9WD_STATS_TREND_WEEKS and would be read
+// wrong by eye in a formula.
+var IS9WD_STATS_TREND_HELPER_NAMES = {
+  1: 'IS9WD_STATS_TRENDMONDAY', 2: 'IS9WD_STATS_TRENDTERM'
+};
+
+// One name per tile and per named attention row, so 04 | Officer Tables, the gates block
+// and the Sunday brief read a number instead of recomputing it.
 var IS9WD_STATS_VALUE_NAMES = {
-  'W.WEEK': 'IS9WD_STATS_WEEK',
-  'W.ACTIVE': 'IS9WD_STATS_ACTIVE_WEEK',
-  'W.DONE': 'IS9WD_STATS_DONE_WEEK',
-  'W.PACE': 'IS9WD_STATS_PACE',
-  'W.OVERDUE': 'IS9WD_STATS_OVERDUE_NOW',
-  'W.SOON': 'IS9WD_STATS_DUE_SOON',
-  'W.NOITEMS': 'IS9WD_STATS_NO_ITEMS',
-  'W.SILENT': 'IS9WD_STATS_SILENT',
-  'W.BLOCKING': 'IS9WD_STATS_BLOCKING',
-  'W.NOTPUB': 'IS9WD_STATS_PAST_CAROUSEL',
-  'W.READY': 'IS9WD_STATS_READY',
+  'T.WEEK': 'IS9WD_STATS_WEEK',
+  'T.ACTIVE': 'IS9WD_STATS_ACTIVE_WEEK',
+  'T.DONE': 'IS9WD_STATS_DONE_WEEK',
+  'T.PACE': 'IS9WD_STATS_PACE',
+  'T.READY': 'IS9WD_STATS_READY',
+  'T.OVERDUE': 'IS9WD_STATS_OVERDUE_NOW',
+  'T.SOON': 'IS9WD_STATS_DUE_SOON',
+  'T.NOITEMS': 'IS9WD_STATS_NO_ITEMS',
+  'A.SILENT': 'IS9WD_STATS_SILENT',
+  'A.BLOCKING': 'IS9WD_STATS_BLOCKING',
+  'A.NOTPUB': 'IS9WD_STATS_PAST_CAROUSEL',
   'H.ROOM': 'IS9WD_STATS_ROOM_WEEKS'
 };
 
-// The six trend columns and their two hidden helpers. Deliberately not
-// IS9WD_STATS_TREND_WEEK, which is one character from the setting
-// IS9WD_STATS_TREND_WEEKS and would be read wrong by eye in a formula.
+// The six visible trend columns.
 var IS9WD_STATS_TREND_COL_NAMES = {
   1: 'IS9WD_STATS_TRENDNO', 2: 'IS9WD_STATS_TRENDSTART',
   3: 'IS9WD_STATS_TRENDPUBLISHED', 4: 'IS9WD_STATS_TRENDDONE',
-  5: 'IS9WD_STATS_TRENDONTIME', 6: 'IS9WD_STATS_TRENDRECORDED',
-  14: 'IS9WD_STATS_TRENDMONDAY', 15: 'IS9WD_STATS_TRENDTERM'
+  5: 'IS9WD_STATS_TRENDONTIME', 6: 'IS9WD_STATS_TRENDRECORDED'
 };
 
-// Every row number on the tab, computed from the directory's own row count, the trend
-// weeks setting and the schedule block's span, so no module hardcodes 95. Build or
-// repair rewrites the six blocks, the hidden band and the error scan together or none
-// of them, exactly as it does on the feed.
-function IS9WD_statsLayout_(directoryRows, trendWeeks, jobRows) {
+// THE THREE CHARTS, declared here so the layout, the painter and the self test agree
+// about how many there are and where each one sits.
+//
+// `rows` is the band of blank rows the chart is drawn over. A chart is an overlay: it
+// does not consume cells, so the rows underneath it must be empty or the chart hides
+// content. At 26 px a row, 14 rows is 364 px of grid for a 330 px chart.
+//
+// `kind` is the builder's chart type. `caption` is the row above the chart, and it is a
+// formula rather than a literal precisely so an empty chart says what will fill it.
+var IS9WD_STATS_CHART_ROWS = 14;
+var IS9WD_STATS_CHART_HEIGHT = 330;
+
+var IS9WD_STATS_CHARTS = [
+  {
+    key: 'C.OFFICER', kind: 'COLUMN',
+    title: 'DUE AGAINST DONE, BY COMMITTEE',
+    help: 'This week only, fourteen officers in hierarchy order. A tall Due bar beside a ' +
+      'short Done bar is the committee to chase.'
+  },
+  {
+    key: 'C.RANK', kind: 'BAR',
+    title: 'TRACK RECORD, FAIRNESS ADJUSTED',
+    help: 'The share of each officer\'s past-deadline tasks that were ticked on or before ' +
+      'the deadline, so a busy committee is not punished for being busy. An officer with ' +
+      'too few judged tasks is not scored at all.'
+  },
+  {
+    key: 'C.TREND', kind: 'LINE',
+    title: 'WEEK BY WEEK',
+    help: 'Read from 05 | Archive, oldest week on the left. Published is reliable; ' +
+      'Accomplished is recorded only for a task that has been retired.'
+  }
+];
+
+// Every row number on the tab, computed from the directory's own row count and the trend
+// weeks setting, so no module hardcodes the last row. Build or repair rewrites every
+// block, every chart and the error scan together or none of them.
+function IS9WD_statsLayout_(directoryRows, trendWeeks) {
   var dir = IS9WD_posInt_(directoryRows) || IS9WD_DIR_ROWS;
   var trend = IS9WD_posInt_(trendWeeks) ||
     IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_TREND_WEEKS')) || 8;
-  var jobs = IS9WD_posInt_(jobRows) ||
-    (IS9WD_CFG.SCHEDULE.lastRow - IS9WD_CFG.SCHEDULE.firstRow + 1);
   var out = {
-    directoryRows: dir, trendWeeks: trend, jobRows: jobs,
-    weekRows: IS9WD_STATS_WEEK_ROWS.length,
-    healthRows: IS9WD_STATS_HEALTH_ROWS.length,
+    directoryRows: dir, trendWeeks: trend,
+    tileRows: 2, tilesPerRow: IS9WD_STATS_TILE_COLS.length,
+    attentionRows: IS9WD_STATS_ATTENTION_ROWS.length,
     gateRows: IS9WD_STATS_GATE_ROWS.length,
     firstCol: 1, lastCol: 12,
-    helperFirstCol: 13, helperLastCol: 25,
     bannerRow: 1, helpRow: 2,
+    chartRows: IS9WD_STATS_CHART_ROWS,
+    chartHeight: IS9WD_STATS_CHART_HEIGHT,
     BANNER: IS9WD_STATS.BANNER, HELP: IS9WD_STATS.HELP
   };
-  // The elapsed fraction of the week and the trend row count setup actually built,
-  // both in the hidden band's first two rows, where no block can reach them.
-  out.elapsedCell = { row: 1, col: out.helperFirstCol + 1 };
-  out.trendBuiltCell = { row: 2, col: out.helperFirstCol + 1 };
 
   out.spacerRows = [];
   var r = out.helpRow;
   var spacer = function () { r++; out.spacerRows.push(r); };
-  var block = function (prefix, rows) {
+  // A block is a spacer, a band, a hint row under the band, then a header row and the
+  // rows themselves. The hint row under the heading rather than crammed beside it is
+  // Ethan's instruction of 2026-09-27.
+  var block = function (prefix, rows, header) {
     spacer();
     r++; out[prefix + 'Band'] = r;
-    r++; out[prefix + 'Header'] = r;
+    r++; out[prefix + 'Hint'] = r;
+    if (header) { r++; out[prefix + 'Header'] = r; }
     out[prefix + 'First'] = r + 1;
     r += rows;
     out[prefix + 'Last'] = r;
   };
 
-  block('week', out.weekRows);
-  block('officer', dir);
-  block('rank', dir);
-  block('trend', trend);
-  r++; out.sparkRow = r;
-  block('gate', out.gateRows);
-  block('health', out.healthRows);
-  block('job', jobs);
+  // The tiles. One band and one hint row cover both rows of four, with a spacer between
+  // them so the two rows read as two rows.
+  spacer();
+  r++; out.tileBand = r;
+  r++; out.tileHint = r;
+  out.tileGroups = [];
+  for (var g = 0; g < out.tileRows; g++) {
+    if (g > 0) spacer();
+    out.tileGroups.push({ valueRow: r + 1, labelRow: r + 2, noteRow: r + 3 });
+    r += 3;
+  }
+
+  block('attention', out.attentionRows, true);
+  block('gate', out.gateRows, true);
+  block('officer', dir, true);
+
+  out.charts = [];
+  var chart = function (index) {
+    spacer();
+    r++; var band = r;
+    r++; var hint = r;
+    r++; var caption = r;
+    var first = r + 1;
+    r += out.chartRows;
+    out.charts.push({
+      index: index, key: IS9WD_STATS_CHARTS[index].key,
+      bandRow: band, hintRow: hint, captionRow: caption,
+      firstRow: first, lastRow: r
+    });
+  };
+
+  chart(0);
+  block('rank', dir, true);
+  chart(1);
+  block('trend', trend, true);
+  chart(2);
+
   r++; out.endRow = r;
 
-  out.bandRows = [out.weekBand, out.officerBand, out.rankBand, out.trendBand,
-    out.gateBand, out.healthBand, out.jobBand];
+  out.bandRows = [out.tileBand, out.attentionBand, out.gateBand, out.officerBand,
+    out.rankBand, out.trendBand];
+  for (var c = 0; c < out.charts.length; c++) out.bandRows.push(out.charts[c].bandRow);
   // The scan stops one row short of the end row for the reason the feed's stops two
   // short of its own: the count lives on that row and a scan over itself is circular.
   out.scanLastRow = out.endRow - 1;
   out.errorsCell = { row: out.endRow, col: 3 };
   out.agreeCell = { row: out.endRow, col: 5 };
+  return out;
+}
+
+// The tile a key belongs to: which group, which of the four positions, and therefore
+// which column and how wide. Keyed rather than ordered, so a list that grew a tile throws
+// on the unknown key rather than painting eight tiles one position out of place.
+function IS9WD_statsTileAt_(layout, key) {
+  var groups = [IS9WD_STATS_TILE_ROW_A, IS9WD_STATS_TILE_ROW_B];
+  for (var g = 0; g < groups.length && g < layout.tileGroups.length; g++) {
+    for (var i = 0; i < groups[g].length; i++) {
+      if (groups[g][i] !== key) continue;
+      var spec = IS9WD_STATS_TILE_COLS[i];
+      return {
+        group: g, position: i, col: spec.col, span: spec.span,
+        valueRow: layout.tileGroups[g].valueRow,
+        labelRow: layout.tileGroups[g].labelRow,
+        noteRow: layout.tileGroups[g].noteRow
+      };
+    }
+  }
+  return null;
+}
+
+// ============================================================================
+//  _VIEWS  (the helper band both computed views used to hide inside themselves)
+// ============================================================================
+
+// Hidden, script owned end to end, never typed into. It exists so 03 | Statistics is
+// twelve visible columns and nothing else: Ethan's instruction of 2026-09-27 was that
+// hidden helper columns move to a hidden tab where they are not in his way.
+//
+// It also carries `OPERATIONAL HEALTH` and `SCHEDULED JOBS`, which are the machine
+// reporting on itself. Both keep every named range they had, so the self test and the
+// Sunday brief read them exactly as before.
+var IS9WD_VIEWS = {
+  BANNER: '_VIEWS',
+  HELP: 'Working out for 03 | Statistics and 04 | Officer Tables, and the machine ' +
+    'reporting on itself. Every cell here is a formula and nothing here is typed. It is ' +
+    'hidden because it is plumbing, not because it is secret.',
+  END: 'IS9WD VIEWS END',
+  ERR: '!ERR'
+};
+
+function IS9WD_viewsLayout_(directoryRows, trendWeeks, jobRows, officerRows) {
+  var dir = IS9WD_posInt_(directoryRows) || IS9WD_DIR_ROWS;
+  var trend = IS9WD_posInt_(trendWeeks) ||
+    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_TREND_WEEKS')) || 8;
+  var jobs = IS9WD_posInt_(jobRows) ||
+    (IS9WD_ENG.SCHEDULE.lastRow - IS9WD_ENG.SCHEDULE.firstRow + 1);
+  var reserved = IS9WD_posInt_(officerRows) ||
+    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 21;
+  var out = {
+    directoryRows: dir, trendWeeks: trend, jobRows: jobs, officerRows: reserved,
+    healthRows: IS9WD_STATS_HEALTH_ROWS.length,
+    firstCol: 1, lastCol: 13,
+    bannerRow: 1, helpRow: 2,
+    BANNER: IS9WD_VIEWS.BANNER, HELP: IS9WD_VIEWS.HELP
+  };
+  out.spacerRows = [];
+  var r = out.helpRow;
+  var spacer = function () { r++; out.spacerRows.push(r); };
+  var block = function (prefix, rows, header) {
+    spacer();
+    r++; out[prefix + 'Band'] = r;
+    r++; out[prefix + 'Hint'] = r;
+    if (header) { r++; out[prefix + 'Header'] = r; }
+    out[prefix + 'First'] = r + 1;
+    r += rows;
+    out[prefix + 'Last'] = r;
+  };
+
+  // The three build markers, each one a number code writes so a setting changed without a
+  // rebuild is caught by the guard note beside it rather than by a stale tab.
+  block('marker', 3, false);
+  out.elapsedCell = { row: out.markerFirst, col: 2 };
+  out.trendBuiltCell = { row: out.markerFirst + 1, col: 2 };
+  out.rowsBuiltCell = { row: out.markerFirst + 2, col: 2 };
+
+  block('officer', dir, true);
+  block('rank', dir, true);
+  block('trend', trend, true);
+  block('health', out.healthRows, true);
+  block('job', jobs, true);
+
+  r++; out.endRow = r;
+  out.scanLastRow = out.endRow - 1;
+  out.errorsCell = { row: out.endRow, col: 3 };
   return out;
 }
 
@@ -1321,12 +2116,12 @@ function IS9WD_statsLayout_(directoryRows, trendWeeks, jobRows) {
 
 var IS9WD_OT = {
   BANNER: '04 | OFFICER TABLES',
-  HELP: 'One table per officer, in hierarchy order, with every titled item still on ' +
-    '02 | Deliverables: active first, then accomplished, each group by deadline and ' +
-    'then by ID, which is the order Canva publishes. Every count in a band row is ' +
-    'read from 03 | Statistics rather than recomputed, so the two views cannot ' +
-    'disagree, and those counts cover all items rather than this week. Nothing here ' +
-    'is typed and nothing here can hold the carousel.',
+  HELP: 'One numbered section per officer, in order of rank, each with every task still ' +
+    'on 02 | Deliverables: unfinished first, then finished, each group by deadline and ' +
+    'then by ID, which is the order Canva publishes. There is nothing to fill in here. ' +
+    'Every count in a heading is read from 03 | Statistics rather than worked out again, ' +
+    'so the two tabs cannot disagree, and those counts cover all tasks rather than this ' +
+    'week only.',
   END: 'IS9WD OFFICER TABLES END',
   ERR: '!ERR'
 };
@@ -1334,11 +2129,11 @@ var IS9WD_OT = {
 var IS9WD_OT_HEADERS = ['Title of Task', 'Deadline', 'Days left', 'Status', 'Flag',
   'Remark', 'ID'];
 
-// Fourteen structurally identical blocks, each of band, header, R-1 item rows, one
-// overflow notice and one spacer. Fixed blocks plus an explicit notice is what keeps
-// this idempotent: sizing each block to its officer's current count would mean setup
-// rewriting the tab whenever a count changed, and every block below moving when one
-// officer gained an item.
+// Fourteen structurally identical sections, each of a numbered heading, a column header,
+// R-1 task rows, one overflow notice and one spacer. Fixed sections plus an explicit
+// notice is what keeps this idempotent: sizing each one to its officer's current count
+// would mean setup rewriting the tab whenever a count changed, and every section below
+// moving when one officer gained a task.
 function IS9WD_otLayout_(directoryRows, officerRows) {
   var dir = IS9WD_posInt_(directoryRows) || IS9WD_DIR_ROWS;
   var reserved = IS9WD_posInt_(officerRows) ||
@@ -1366,7 +2161,6 @@ function IS9WD_otLayout_(directoryRows, officerRows) {
     out.spacerRows.push(last + 2);
   }
   out.endRow = 5 + dir * out.stride;
-  out.rowsBuiltCell = { row: 1, col: out.keyCol };
   out.errorsCell = { row: out.endRow, col: 3 };
   out.scanLastRow = out.endRow - 1;
   return out;
@@ -1378,15 +2172,23 @@ function IS9WD_otLayout_(directoryRows, officerRows) {
 // down with one TypeError.
 var IS9WD_STATS_CACHE_ = null;
 var IS9WD_OT_CACHE_ = null;
+var IS9WD_VIEWS_CACHE_ = null;
 
 function IS9WD_stats_() {
-  if (!IS9WD_STATS_CACHE_) IS9WD_STATS_CACHE_ = IS9WD_statsLayout_(IS9WD_DIR_ROWS, 0, 0);
+  if (!IS9WD_STATS_CACHE_) IS9WD_STATS_CACHE_ = IS9WD_statsLayout_(IS9WD_DIR_ROWS, 0);
   return IS9WD_STATS_CACHE_;
 }
 
 function IS9WD_officerTables_() {
   if (!IS9WD_OT_CACHE_) IS9WD_OT_CACHE_ = IS9WD_otLayout_(IS9WD_DIR_ROWS, 0);
   return IS9WD_OT_CACHE_;
+}
+
+function IS9WD_views_() {
+  if (!IS9WD_VIEWS_CACHE_) {
+    IS9WD_VIEWS_CACHE_ = IS9WD_viewsLayout_(IS9WD_DIR_ROWS, 0, 0, 0);
+  }
+  return IS9WD_VIEWS_CACHE_;
 }
 
 // ============================================================================
@@ -1485,13 +2287,24 @@ function IS9WD_a1_(row, col, numRows, numCols) {
 }
 
 // Column to name maps, in the reference's own order. A gap is deliberate: the
-// directory's Check column (J) and the store's Check column (G) carry no name,
-// because nothing reads either one from code.
+// directory's Check column and the store's Check column carry no name, because nothing
+// reads either one from code.
+//
+// The directory is now two blocks on two tabs, joined by row position: the seven columns
+// a president fills on `00 | Configuration`, and the five the code owns on `_Engine`.
+// Every one of the eleven names is the name it always was, so no formula, no email and no
+// reader changed. That is the whole point of reading by name.
 var IS9WD_DIR_COL_NAMES = {
-  1: 'IS9WD_DIR_KEY', 2: 'IS9WD_DIR_CAROUSEL', 3: 'IS9WD_DIR_NAME',
-  4: 'IS9WD_DIR_VP', 5: 'IS9WD_DIR_POSITION', 6: 'IS9WD_DIR_EMAIL',
-  7: 'IS9WD_DIR_PREFIX', 8: 'IS9WD_DIR_ISSUED', 9: 'IS9WD_DIR_REVOKED',
-  11: 'IS9WD_DIR_PUBLISHES', 12: 'IS9WD_DIR_HIERARCHY'
+  1: 'IS9WD_DIR_KEY', 2: 'IS9WD_DIR_NAME', 3: 'IS9WD_DIR_VP',
+  4: 'IS9WD_DIR_POSITION', 5: 'IS9WD_DIR_EMAIL', 6: 'IS9WD_DIR_PUBLISHES'
+};
+
+// Column 1 is the Key mirror, which carries no name of its own: `IS9WD_DIR_KEY` is the
+// one on 00 | Configuration, and the self test asserts the two columns hold the same
+// fourteen keys in the same order, which is what makes the join by row position safe.
+var IS9WD_DIR_ENG_COL_NAMES = {
+  2: 'IS9WD_DIR_CAROUSEL', 3: 'IS9WD_DIR_HIERARCHY', 4: 'IS9WD_DIR_PREFIX',
+  5: 'IS9WD_DIR_ISSUED', 6: 'IS9WD_DIR_REVOKED'
 };
 
 var IS9WD_STORE_COL_NAMES = {
@@ -1523,64 +2336,71 @@ var IS9WD_FEED_A_NAMES = {
 // resolve at all (4.8).
 var IS9WD_RETIRED_NAMES = ['IS9WD_DIR_PAGE', 'IS9WD_MAX_OPEN'];
 
-// { name, tab (a key of IS9WD_TAB), a1 }
+// { name, tab (a key of IS9WD_TAB), a1 }. One walk over both settings tabs, so a block
+// that moves from one to the other carries its names with it and this function does not
+// need to know which tab it landed on.
 function IS9WD_configNames_() {
   var out = [];
-  var blocks = ['WEEK', 'SIGNOFF', 'SWITCHES', 'DIAGNOSTICS'];
-  for (var b = 0; b < blocks.length; b++) {
-    var rows = IS9WD_CFG[blocks[b]].rows;
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].name) {
-        out.push({ name: rows[i].name, tab: 'CONFIG', a1: IS9WD_a1_(rows[i].row, IS9WD_CFG.VALUE_COL, 1, 1) });
-      }
+  var push = function (name, tab, row, col, rows, cols) {
+    out.push({ name: name, tab: tab, a1: IS9WD_a1_(row, col, rows, cols) });
+  };
+
+  // Every named value cell in every row block on either tab.
+  var rowBlocks = IS9WD_settingsRowBlocks_();
+  for (var b = 0; b < rowBlocks.length; b++) {
+    var block = rowBlocks[b];
+    var holder = IS9WD_settingsHolder_(block.tab);
+    for (var i = 0; i < block.rows.length; i++) {
+      if (!block.rows[i].name) continue;
+      push(block.rows[i].name, block.tab, block.rows[i].row, holder.VALUE_COL, 1, 1);
     }
   }
-  var w = IS9WD_CFG.WINDOWS;
+
+  var w = IS9WD_ENG.WINDOWS;
   var wRows = w.lastRow - w.firstRow + 1;
-  out.push({ name: 'IS9WD_WINDOW_NAMES', tab: 'CONFIG', a1: IS9WD_a1_(w.firstRow, 1, wRows, 1) });
-  out.push({ name: 'IS9WD_HEX', tab: 'CONFIG', a1: IS9WD_a1_(w.firstRow, 3, wRows, 2) });
+  push('IS9WD_WINDOW_NAMES', w.tab, w.firstRow, 1, wRows, 1);
+  push('IS9WD_HEX', w.tab, w.firstRow, 3, wRows, 2);
 
   var t = IS9WD_CFG.TERMS;
   var tRows = t.lastRow - t.firstRow + 1;
-  out.push({ name: 'IS9WD_TERM_CAL', tab: 'CONFIG', a1: IS9WD_a1_(t.firstRow, 1, tRows, 3) });
-  out.push({ name: 'IS9WD_TERM_STARTS', tab: 'CONFIG', a1: IS9WD_a1_(t.firstRow, 2, tRows, 1) });
-  out.push({ name: 'IS9WD_TERM_ENDS', tab: 'CONFIG', a1: IS9WD_a1_(t.firstRow, 3, tRows, 1) });
+  push('IS9WD_TERM_CAL', t.tab, t.firstRow, 1, tRows, 3);
+  push('IS9WD_TERM_STARTS', t.tab, t.firstRow, 2, tRows, 1);
+  push('IS9WD_TERM_ENDS', t.tab, t.firstRow, 3, tRows, 1);
 
-  var s = IS9WD_CFG.STATUS;
+  var s = IS9WD_ENG.STATUS;
   var sRows = s.lastRow - s.firstRow + 1;
-  out.push({ name: 'IS9WD_STATUS_LIST', tab: 'CONFIG', a1: IS9WD_a1_(s.firstRow, 1, sRows, 1) });
-  out.push({ name: 'IS9WD_STATUS_TERMINAL', tab: 'CONFIG', a1: IS9WD_a1_(s.firstRow, 2, sRows, 1) });
-  out.push({ name: 'IS9WD_STATUS_HEX', tab: 'CONFIG', a1: IS9WD_a1_(s.firstRow, 3, sRows, 2) });
-  out.push({ name: s.undoName, tab: 'CONFIG', a1: IS9WD_a1_(s.undoRow, IS9WD_CFG.VALUE_COL, 1, 1) });
+  push('IS9WD_STATUS_LIST', s.tab, s.firstRow, 1, sRows, 1);
+  push('IS9WD_STATUS_TERMINAL', s.tab, s.firstRow, 2, sRows, 1);
+  push('IS9WD_STATUS_HEX', s.tab, s.firstRow, 3, sRows, 2);
+  push(s.undoName, s.tab, s.undoRow, IS9WD_ENG.VALUE_COL, 1, 1);
 
-  var j = IS9WD_CFG.SCHEDULE;
-  out.push({
-    name: 'IS9WD_SCHEDULE', tab: 'CONFIG',
-    a1: IS9WD_a1_(j.firstRow, 1, j.lastRow - j.firstRow + 1, j.lastCol)
-  });
+  var j = IS9WD_ENG.SCHEDULE;
+  push('IS9WD_SCHEDULE', j.tab, j.firstRow, 1, j.lastRow - j.firstRow + 1, j.lastCol);
 
   var d = IS9WD_CFG.DIRECTORY;
   var dRows = d.lastRow - d.firstRow + 1;
-  out.push({ name: 'IS9WD_DIRECTORY', tab: 'CONFIG', a1: IS9WD_a1_(d.firstRow, 1, dRows, d.lastCol) });
+  push('IS9WD_DIRECTORY', d.tab, d.firstRow, 1, dRows, d.lastCol);
   for (var dc in IS9WD_DIR_COL_NAMES) {
     if (!Object.prototype.hasOwnProperty.call(IS9WD_DIR_COL_NAMES, dc)) continue;
-    out.push({
-      name: IS9WD_DIR_COL_NAMES[dc], tab: 'CONFIG',
-      a1: IS9WD_a1_(d.firstRow, Number(dc), dRows, 1)
-    });
+    push(IS9WD_DIR_COL_NAMES[dc], d.tab, d.firstRow, Number(dc), dRows, 1);
   }
 
-  var st = IS9WD_CFG.STORE;
+  var de = IS9WD_ENG.DIRECTORY;
+  var deRows = de.lastRow - de.firstRow + 1;
+  push('IS9WD_DIR_ENGINE', de.tab, de.firstRow, 1, deRows, de.lastCol);
+  for (var ec in IS9WD_DIR_ENG_COL_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(IS9WD_DIR_ENG_COL_NAMES, ec)) continue;
+    push(IS9WD_DIR_ENG_COL_NAMES[ec], de.tab, de.firstRow, Number(ec), deRows, 1);
+  }
+
+  var st = IS9WD_ENG.STORE;
   var stRows = st.lastRow - st.firstRow + 1;
   // IS9WD_SIGNOFF is the six data columns, not the Check column beside them, which
   // is what Core's IS9WD_signoffFor reads row by row.
-  out.push({ name: 'IS9WD_SIGNOFF', tab: 'CONFIG', a1: IS9WD_a1_(st.firstRow, 1, stRows, 6) });
+  push('IS9WD_SIGNOFF', st.tab, st.firstRow, 1, stRows, 6);
   for (var sc in IS9WD_STORE_COL_NAMES) {
     if (!Object.prototype.hasOwnProperty.call(IS9WD_STORE_COL_NAMES, sc)) continue;
-    out.push({
-      name: IS9WD_STORE_COL_NAMES[sc], tab: 'CONFIG',
-      a1: IS9WD_a1_(st.firstRow, Number(sc), stRows, 1)
-    });
+    push(IS9WD_STORE_COL_NAMES[sc], st.tab, st.firstRow, Number(sc), stRows, 1);
   }
   return out;
 }
@@ -1655,7 +2475,8 @@ function IS9WD_archiveNames_() {
 }
 
 // Every name on 03 | Statistics, built from the layout rather than typed, so a tab
-// resized by a changed setting carries its names with it.
+// resized by a changed setting carries its names with it. The eight tiles and the six
+// sentence rows are keyed, so a name always lands on the cell its key names.
 function IS9WD_statsNames_(layout) {
   var s = layout || IS9WD_stats_();
   var out = [];
@@ -1665,36 +2486,37 @@ function IS9WD_statsNames_(layout) {
     out.push({ name: name, tab: 'STATS', a1: IS9WD_a1_(row, col, rows, cols) });
   };
 
-  add('IS9WD_STATS_ELAPSED', s.elapsedCell.row, s.elapsedCell.col, 1, 1);
-  add('IS9WD_STATS_TREND_BUILT', s.trendBuiltCell.row, s.trendBuiltCell.col, 1, 1);
   add('IS9WD_STATS_ERRORS', s.errorsCell.row, s.errorsCell.col, 1, 1);
   add('IS9WD_STATS_GATE_AGREE', s.agreeCell.row, s.agreeCell.col, 1, 1);
   add('IS9WD_STATS_END', s.endRow, 1, 1, 1);
 
-  var kv = [[IS9WD_STATS_WEEK_ROWS, s.weekFirst], [IS9WD_STATS_HEALTH_ROWS, s.healthFirst]];
-  for (var b = 0; b < kv.length; b++) {
-    var rows = kv[b][0];
-    for (var i = 0; i < rows.length; i++) {
-      var name = IS9WD_STATS_VALUE_NAMES[rows[i][0]];
-      if (name) add(name, kv[b][1] + i, 2, 1, 1);
-    }
+  // The eight tiles. The named cell is the big number itself, so every reader of a KPI
+  // reads the cell a person is looking at rather than a copy of it.
+  for (var t = 0; t < IS9WD_STATS_TILES.length; t++) {
+    var key = IS9WD_STATS_TILES[t][0];
+    var name = IS9WD_STATS_VALUE_NAMES[key];
+    var at = IS9WD_statsTileAt_(s, key);
+    if (name && at) add(name, at.valueRow, at.col, 1, 1);
+  }
+
+  // The three sentence rows that carry a measure of their own. The other three point at a
+  // tile, which is why they carry no name: a measure is named exactly once on the tab.
+  for (var a = 0; a < IS9WD_STATS_ATTENTION_ROWS.length; a++) {
+    var aName = IS9WD_STATS_VALUE_NAMES[IS9WD_STATS_ATTENTION_ROWS[a][0]];
+    if (aName) add(aName, s.attentionFirst + a, 2, 1, 1);
   }
 
   add('IS9WD_STATS_OFFICER', s.officerFirst, 1, dir, s.lastCol);
   for (var c = 0; c < IS9WD_STATS_OFF_COL_NAMES.length; c++) {
     add(IS9WD_STATS_OFF_COL_NAMES[c], s.officerFirst, c + 1, dir, 1);
   }
-  for (var h in IS9WD_STATS_OFF_HELPER_NAMES) {
-    if (!Object.prototype.hasOwnProperty.call(IS9WD_STATS_OFF_HELPER_NAMES, h)) continue;
-    add(IS9WD_STATS_OFF_HELPER_NAMES[h], s.officerFirst, Number(h), dir, 1);
-  }
 
   add('IS9WD_STATS_RANKED', s.rankFirst, 1, s.rankLast - s.rankFirst + 1,
     IS9WD_STATS_HEADERS.RANKED.length);
 
-  for (var t in IS9WD_STATS_TREND_COL_NAMES) {
-    if (!Object.prototype.hasOwnProperty.call(IS9WD_STATS_TREND_COL_NAMES, t)) continue;
-    add(IS9WD_STATS_TREND_COL_NAMES[t], s.trendFirst, Number(t), trend, 1);
+  for (var tc in IS9WD_STATS_TREND_COL_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(IS9WD_STATS_TREND_COL_NAMES, tc)) continue;
+    add(IS9WD_STATS_TREND_COL_NAMES[tc], s.trendFirst, Number(tc), trend, 1);
   }
 
   add('IS9WD_STATS_GATE_LABEL', s.gateFirst, 1, s.gateLast - s.gateFirst + 1, 1);
@@ -1702,21 +2524,57 @@ function IS9WD_statsNames_(layout) {
   return out;
 }
 
+// Every name on _Views: the three build markers, the officer helper band, the ranked sort
+// helpers, the two trend helpers and the one health value the self test reads.
+function IS9WD_viewsNames_(layout) {
+  var v = layout || IS9WD_views_();
+  var out = [];
+  var dir = v.officerLast - v.officerFirst + 1;
+  var trend = v.trendLast - v.trendFirst + 1;
+  var add = function (name, row, col, rows, cols) {
+    out.push({ name: name, tab: 'VIEWS', a1: IS9WD_a1_(row, col, rows, cols) });
+  };
+
+  add('IS9WD_STATS_ELAPSED', v.elapsedCell.row, v.elapsedCell.col, 1, 1);
+  add('IS9WD_STATS_TREND_BUILT', v.trendBuiltCell.row, v.trendBuiltCell.col, 1, 1);
+  add('IS9WD_OT_ROWS_BUILT', v.rowsBuiltCell.row, v.rowsBuiltCell.col, 1, 1);
+  add('IS9WD_VIEWS_ERRORS', v.errorsCell.row, v.errorsCell.col, 1, 1);
+  add('IS9WD_VIEWS_END', v.endRow, 1, 1, 1);
+
+  for (var h in IS9WD_STATS_OFF_HELPER_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(IS9WD_STATS_OFF_HELPER_NAMES, h)) continue;
+    add(IS9WD_STATS_OFF_HELPER_NAMES[h], v.officerFirst, Number(h), dir, 1);
+  }
+  for (var rk in IS9WD_STATS_RANK_HELPER_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(IS9WD_STATS_RANK_HELPER_NAMES, rk)) continue;
+    add(IS9WD_STATS_RANK_HELPER_NAMES[rk], v.rankFirst, Number(rk), dir, 1);
+  }
+  for (var tr in IS9WD_STATS_TREND_HELPER_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(IS9WD_STATS_TREND_HELPER_NAMES, tr)) continue;
+    add(IS9WD_STATS_TREND_HELPER_NAMES[tr], v.trendFirst, Number(tr), trend, 1);
+  }
+  for (var hr = 0; hr < IS9WD_STATS_HEALTH_ROWS.length; hr++) {
+    var hName = IS9WD_STATS_VALUE_NAMES[IS9WD_STATS_HEALTH_ROWS[hr][0]];
+    if (hName) add(hName, v.healthFirst + hr, 2, 1, 1);
+  }
+  return out;
+}
+
 function IS9WD_otNames_(layout) {
   var o = layout || IS9WD_officerTables_();
   return [
     { name: 'IS9WD_OT_SUMMARY', tab: 'TABLES', a1: IS9WD_a1_(o.summaryRow, 1, 1, 1) },
-    { name: 'IS9WD_OT_ROWS_BUILT', tab: 'TABLES', a1: IS9WD_a1_(o.rowsBuiltCell.row, o.rowsBuiltCell.col, 1, 1) },
     { name: 'IS9WD_OT_ERRORS', tab: 'TABLES', a1: IS9WD_a1_(o.errorsCell.row, o.errorsCell.col, 1, 1) },
     { name: 'IS9WD_OT_END', tab: 'TABLES', a1: IS9WD_a1_(o.endRow, 1, 1, 1) }
   ];
 }
 
-function IS9WD_allNames_(layout, statsLayout, otLayout) {
+function IS9WD_allNames_(layout, statsLayout, otLayout, viewsLayout) {
   return IS9WD_configNames_()
     .concat(IS9WD_itemNames_())
     .concat(IS9WD_feedNames_(layout))
     .concat(IS9WD_statsNames_(statsLayout))
+    .concat(IS9WD_viewsNames_(viewsLayout))
     .concat(IS9WD_otNames_(otLayout))
     .concat(IS9WD_archiveNames_());
 }
@@ -1969,6 +2827,78 @@ function IS9WD_paintBanner_(sheet, row, firstCol, lastCol, text) {
   return range;
 }
 
+// The plain English line that rides under a section band rather than at the end of it.
+// Ethan's instruction of 2026-09-27: hint text under a heading, not crammed beside it. It
+// is the same treatment as the tab help line and a little taller, so a block always says
+// what it is for before a reader meets a number.
+function IS9WD_paintHint_(sheet, row, firstCol, lastCol, text) {
+  var range = sheet.getRange(row, firstCol, 1, lastCol - firstCol + 1);
+  IS9WD_style_(range, {
+    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, align: IS9WD_ALIGN.LEFT,
+    bg: IS9WD_ROLE.BODY_BG, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
+  });
+  sheet.getRange(row, firstCol).setValue(IS9WD_txt_(text));
+  sheet.setRowHeight(row, IS9WD_ROW_H.HINT);
+  return range;
+}
+
+// THE CREAM RULE, and it is a rule rather than a decoration. Ethan's instruction of
+// 2026-09-27: "for the things i need to encode, put a cream background on it". So the fill
+// #e9ebd4 means exactly one thing in this workbook, everywhere it appears on a settings or
+// entry tab: this cell is yours to type into. A cell the workbook calculates must never
+// carry it, which is why banding was withdrawn from every block that holds an input
+// column: a banded row would put cream under half the calculated cells and destroy the
+// only visual rule a first time reader can learn in one second.
+var IS9WD_INPUT_BG = IS9WD_CLR.CREAM;
+
+// The hint lands twice on every input cell: visibly beside it, and as the cell's own note,
+// which is what a person gets when they click the cell and hover. Notes are set over a
+// whole column in one call, because a 2,000 row column cannot afford one call per cell.
+function IS9WD_paintInput_(range, hint) {
+  range.setBackground(IS9WD_INPUT_BG);
+  if (IS9WD_blank_(hint)) {
+    range.clearNote();
+    return range;
+  }
+  var text = IS9WD_txt_(hint);
+  var rows = range.getNumRows();
+  var cols = range.getNumColumns();
+  var notes = [];
+  for (var r = 0; r < rows; r++) {
+    var line = [];
+    for (var c = 0; c < cols; c++) line.push(text);
+    notes.push(line);
+  }
+  range.setNotes(notes);
+  return range;
+}
+
+// A calculated cell reads as calculated: no cream, the accent colour, and the sentence
+// that says so as its note. The note matters more than it looks: without it, the only
+// thing telling a reader not to type here is the absence of a fill.
+function IS9WD_paintCalculated_(range) {
+  range.setBackground(IS9WD_ROLE.BODY_BG);
+  var rows = range.getNumRows();
+  var cols = range.getNumColumns();
+  var notes = [];
+  for (var r = 0; r < rows; r++) {
+    var line = [];
+    for (var c = 0; c < cols; c++) line.push(IS9WD_CFG_CALC_HINT);
+    notes.push(line);
+  }
+  range.setNotes(notes);
+  return range;
+}
+
+// Banding removed and not reapplied, which is the other half of the cream rule. Every
+// existing banding on the range goes, because applying twice stacks two bandings and
+// neither shows up on screen until the file is slow (2.5).
+function IS9WD_clearBanding_(range) {
+  var existing = range.getBandings();
+  for (var i = 0; i < existing.length; i++) existing[i].remove();
+  return range;
+}
+
 // One line under a banner saying what the tab is for, in the secondary colour.
 function IS9WD_paintHelp_(sheet, row, firstCol, lastCol, text) {
   var range = sheet.getRange(row, firstCol, 1, lastCol - firstCol + 1);
@@ -2167,16 +3097,34 @@ function IS9WD_namedMap_() {
   return map;
 }
 
+// TWO SHEETS IN ONE SNAPSHOT. Settings live on `00 | Configuration` and `_Engine`, so one
+// snapshot covers both: two bulk reads for every setting in the workbook rather than
+// sixty. A named range that points at neither is still an error, and it is the same error
+// it always was, because it still means a block moved somewhere nothing expects.
 function IS9WD_cfgSnapshot_() {
-  var sheet = IS9WD_sheet_('CONFIG');
-  var rows = Math.max(sheet.getLastRow(), IS9WD_CFG.STORE.lastRow);
-  var cols = Math.max(sheet.getLastColumn(), IS9WD_CFG.LAST_COL);
+  var sheets = {};
+  var order = [];
+  for (var i = 0; i < IS9WD_SETTINGS_TABS.length; i++) {
+    var tabKey = IS9WD_SETTINGS_TABS[i].tabKey;
+    var holder = IS9WD_SETTINGS_TABS[i].holder;
+    var sheet = IS9WD_sheet_(tabKey);
+    var last = holder.STORE ? holder.STORE.lastRow : 0;
+    var rows = Math.max(sheet.getLastRow(), last, holder.HELP_ROW);
+    var cols = Math.max(sheet.getLastColumn(), holder.LAST_COL);
+    var name = sheet.getName();
+    sheets[name] = {
+      tabKey: tabKey, sheet: sheet, name: name, rows: rows, cols: cols,
+      values: sheet.getRange(1, 1, rows, cols).getValues()
+    };
+    order.push(name);
+  }
   return {
-    sheet: sheet,
-    name: sheet.getName(),
-    rows: rows,
-    cols: cols,
-    values: sheet.getRange(1, 1, rows, cols).getValues(),
+    sheets: sheets,
+    order: order,
+    // The Configuration tab stays the snapshot's own identity, because that is the tab
+    // every error message names and the tab a reader would go and look at.
+    sheet: sheets[order[0]].sheet,
+    name: order[0],
     names: IS9WD_namedMap_()
   };
 }
@@ -2190,15 +3138,18 @@ function IS9WD_read_(snap, name) {
       ' is missing. Run IS9 Deliverables > Build or repair workbook.');
   }
   var on = range.getSheet().getName();
-  if (on !== snap.name) {
-    throw new Error('The named range ' + name + ' points at "' + on + '" instead of "' +
-      snap.name + '". Run IS9 Deliverables > Build or repair workbook.');
+  var page = snap.sheets[on];
+  if (!page) {
+    throw new Error('The named range ' + name + ' points at "' + on +
+      '" instead of one of the settings tabs (' + snap.order.join(', ') +
+      '). Run IS9 Deliverables > Build or repair workbook.');
   }
   var box = {
     row: range.getRow(), col: range.getColumn(),
-    rows: range.getNumRows(), cols: range.getNumColumns()
+    rows: range.getNumRows(), cols: range.getNumColumns(),
+    tab: page.tabKey
   };
-  if (box.row + box.rows - 1 > snap.rows || box.col + box.cols - 1 > snap.cols) {
+  if (box.row + box.rows - 1 > page.rows || box.col + box.cols - 1 > page.cols) {
     box.values = range.getValues();
     return box;
   }
@@ -2206,7 +3157,7 @@ function IS9WD_read_(snap, name) {
   for (var r = 0; r < box.rows; r++) {
     var line = [];
     for (var c = 0; c < box.cols; c++) {
-      line.push(snap.values[box.row - 1 + r][box.col - 1 + c]);
+      line.push(page.values[box.row - 1 + r][box.col - 1 + c]);
     }
     out.push(line);
   }
@@ -2376,28 +3327,44 @@ function IS9WD_readSchedule_(snap) {
 
 // Fourteen rows in key order. Hierarchy order is the order every list a person reads
 // is sorted by; carousel order is the master page arithmetic and nothing else (4.8).
+// TWO BLOCKS, ONE ENTRY PER OFFICER, JOINED BY ROW POSITION. The seven columns a
+// president fills are on `00 | Configuration` and the five the code owns are on `_Engine`,
+// in the same order with the same Key. The join is by index rather than by a lookup on the
+// Key, because a lookup would make a mistyped Key on one tab read as a different officer
+// on the other; by index it reads as a mismatch, which `keyMismatch` reports and the self
+// test fails on.
 function IS9WD_readDirectory_(snap) {
   var block = IS9WD_read_(snap, 'IS9WD_DIRECTORY');
+  var engine = IS9WD_read_(snap, 'IS9WD_DIR_ENGINE');
   var rows = [];
   var byKey = {};
   var byCommittee = {};
+  var keyMismatch = [];
   for (var i = 0; i < block.values.length; i++) {
     var r = block.values[i];
     if (IS9WD_blank_(r[0])) continue;
+    var e = engine.values[i] || ['', '', '', '', '', ''];
+    var mine = IS9WD_trim_(r[0]).toUpperCase();
+    var theirs = IS9WD_trim_(e[0]).toUpperCase();
+    if (theirs !== '' && theirs !== mine) {
+      keyMismatch.push('row ' + (block.row + i) + ' reads ' + mine + ' on ' +
+        IS9WD_TAB.CONFIG + ' and ' + theirs + ' on ' + IS9WD_TAB.ENGINE);
+    }
     var entry = {
-      key: IS9WD_trim_(r[0]).toUpperCase(),
-      carouselOrder: IS9WD_int_(r[1]),
-      committee: IS9WD_txt_(r[2]),
-      fullName: IS9WD_txt_(r[3]),
-      position: IS9WD_txt_(r[4]),
-      email: IS9WD_trim_(r[5]),
-      tokenPrefix: IS9WD_trim_(r[6]),
-      tokenIssued: IS9WD_midnight_(r[7]),
-      revoked: IS9WD_bool_(r[8]),
-      check: IS9WD_trim_(r[9]),
-      publishes: IS9WD_bool_(r[10]),
-      hierarchy: IS9WD_int_(r[11]),
-      row: block.row + i
+      key: mine,
+      carouselOrder: IS9WD_int_(e[1]),
+      committee: IS9WD_txt_(r[1]),
+      fullName: IS9WD_txt_(r[2]),
+      position: IS9WD_txt_(r[3]),
+      email: IS9WD_trim_(r[4]),
+      tokenPrefix: IS9WD_trim_(e[3]),
+      tokenIssued: IS9WD_midnight_(e[4]),
+      revoked: IS9WD_bool_(e[5]),
+      check: IS9WD_trim_(r[6]),
+      publishes: IS9WD_bool_(r[5]),
+      hierarchy: IS9WD_int_(e[2]),
+      row: block.row + i,
+      engineRow: engine.row + i
     };
     rows.push(entry);
     byKey[entry.key] = entry;
@@ -2413,6 +3380,8 @@ function IS9WD_readDirectory_(snap) {
   });
   return {
     rows: rows, raw: block.values, firstRow: block.row, lastRow: block.row + block.rows - 1,
+    engineRaw: engine.values, engineFirstRow: engine.row,
+    keyMismatch: keyMismatch,
     byKey: byKey, byCommittee: byCommittee,
     publishing: publishing, publishingRows: publishing.length,
     inHierarchy: inHierarchy
@@ -2446,8 +3415,8 @@ function IS9WD_readSignoff_(snap, weekStart) {
     lastRow: block.row + block.rows - 1,
     usedRows: used,
     freeRows: block.rows - used,
-    growBy: IS9WD_CFG.STORE.growBy,
-    minFreeRows: IS9WD_CFG.STORE.minFreeRows,
+    growBy: IS9WD_ENG.STORE.growBy,
+    minFreeRows: IS9WD_ENG.STORE.minFreeRows,
     current: IS9WD_signoffFor(weekStart, block.values),
     derivedSet: IS9WD_bool_(IS9WD_readCell_(snap, 'IS9WD_SIGNOFF_SET')),
     preparedName: IS9WD_txt_(IS9WD_readCell_(snap, 'IS9WD_PREPARED_NAME')),
@@ -2482,18 +3451,19 @@ function IS9WD_readConfig_(force) {
   // The two views size themselves the same way: from the directory's own row count and
   // from settings, never from a number in code. The job block spills the whole schedule
   // named range, so its height is that range's height and not the filled row count.
-  cfg.stats = IS9WD_statsLayout_(cfg.directory.rows.length, cfg.switches.statsTrendWeeks,
-    cfg.schedule.raw.length);
+  cfg.stats = IS9WD_statsLayout_(cfg.directory.rows.length, cfg.switches.statsTrendWeeks);
   cfg.ot = IS9WD_otLayout_(cfg.directory.rows.length, cfg.switches.statsOfficerRows);
+  cfg.views = IS9WD_viewsLayout_(cfg.directory.rows.length, cfg.switches.statsTrendWeeks,
+    cfg.schedule.raw.length, cfg.switches.statsOfficerRows);
   IS9WD_CONFIG_CACHE_ = cfg;
   return cfg;
 }
 
 // Which expected names do not resolve, and which retired ones still do. The self
 // test reads both lists; a retired name that resolves is a formula nobody updated.
-function IS9WD_nameAudit_(layout, statsLayout, otLayout) {
+function IS9WD_nameAudit_(layout, statsLayout, otLayout, viewsLayout) {
   var map = IS9WD_namedMap_();
-  var want = IS9WD_allNames_(layout, statsLayout, otLayout);
+  var want = IS9WD_allNames_(layout, statsLayout, otLayout, viewsLayout);
   var missing = [];
   for (var i = 0; i < want.length; i++) {
     if (!map[want[i].name]) missing.push(want[i].name);
@@ -2516,11 +3486,15 @@ function IS9WD_nameAudit_(layout, statsLayout, otLayout) {
 var IS9WD_GUARD_PREFIX = 'IS9WD guard: ';
 
 // { tab, a1, whole, description }. whole means the sheet rather than a range.
-// Publishes (K79:K92) is deliberately absent: it is the one cell Ethan is meant to
-// edit to change the publish set, and a warning prompt there would be a prompt on
-// the intended action (4.8).
+//
+// `On the carousel` is deliberately absent: it is the one cell Ethan is meant to edit to
+// change the publish set, and a warning prompt there would be a prompt on the intended
+// action (4.8). Every other cream cell is absent for the same reason: cream means "yours
+// to type into", and a guard on a cream cell would contradict the fill.
+//
+// Every calculated cell is guarded, built from the block descriptors rather than typed, so
+// a block that moves takes its guard with it.
 function IS9WD_guardRanges_() {
-  var c = IS9WD_CFG;
   var out = [];
   var add = function (tab, a1) {
     out.push({
@@ -2529,53 +3503,60 @@ function IS9WD_guardRanges_() {
     });
   };
 
-  // The derived week cells, the two override notes and every Check column.
-  add('CONFIG', IS9WD_a1_(c.WEEK.firstRow + 1, c.VALUE_COL, 7, 1));
-  add('CONFIG', IS9WD_a1_(c.WEEK.lastRow, c.NOTE_COL, 1, 1));
-  add('CONFIG', IS9WD_a1_(c.WINDOWS.firstRow, c.WINDOWS.checkCol,
-    c.WINDOWS.lastRow - c.WINDOWS.firstRow + 1, 1));
-  add('CONFIG', IS9WD_a1_(c.TERMS.firstRow, c.TERMS.checkCol,
-    c.TERMS.lastRow - c.TERMS.firstRow + 1, 1));
-  add('CONFIG', IS9WD_a1_(c.SIGNOFF.firstRow, c.VALUE_COL,
-    c.SIGNOFF.lastRow - c.SIGNOFF.firstRow + 1, 1));
-  add('CONFIG', IS9WD_a1_(c.SIGNOFF.firstRow, c.NOTE_COL, 1, 1));
-
-  // The derived publishable maximum and its guard, which is the pair a paste breaks.
-  var pubMax = 0;
-  for (var i = 0; i < c.SWITCHES.rows.length; i++) {
-    if (c.SWITCHES.rows[i].name === 'IS9WD_PUBLISH_MAX') pubMax = c.SWITCHES.rows[i].row;
+  // Every calculated value cell and every guard note on both settings tabs, walked from
+  // the descriptors: a row with a formula is the workbook's, and so is the note beside it.
+  var rowBlocks = IS9WD_settingsRowBlocks_();
+  for (var b = 0; b < rowBlocks.length; b++) {
+    var block = rowBlocks[b];
+    var holder = IS9WD_settingsHolder_(block.tab);
+    for (var i = 0; i < block.rows.length; i++) {
+      var row = block.rows[i];
+      if (row.formula) add(block.tab, IS9WD_a1_(row.row, holder.VALUE_COL, 1, 1));
+      if (row.note) add(block.tab, IS9WD_a1_(row.row, holder.NOTE_COL, 1, 1));
+    }
   }
-  if (pubMax) add('CONFIG', IS9WD_a1_(pubMax, c.VALUE_COL, 1, 2));
 
-  var d = c.DIRECTORY;
+  // Every Check column on both tabs, which is the workbook talking rather than a person.
+  var tables = IS9WD_settingsTableBlocks_();
+  for (var t = 0; t < tables.length; t++) {
+    var table = tables[t];
+    if (!table.checkCol) continue;
+    var last = table.lastRow;
+    if (table.growBy) {
+      // The store grows in 52 row steps and Apply sheet guards is always its own
+      // execution, so the declared last row goes stale the first time it grows.
+      var grown = IS9WD_namedOrNull_('IS9WD_SIGNOFF_WEEKS');
+      if (grown) last = Math.max(last, grown.getRow() + grown.getNumRows() - 1);
+    }
+    add(table.tab, IS9WD_a1_(table.firstRow, table.checkCol, last - table.firstRow + 1, 1));
+  }
+
+  // The directory's Key column on both tabs, and the three write-once ordinals on
+  // `_Engine`: a renumbered ordinal sends two committees to one Canva page.
+  var d = IS9WD_CFG.DIRECTORY;
   var dRows = d.lastRow - d.firstRow + 1;
-  add('CONFIG', IS9WD_a1_(d.firstRow, 1, dRows, 2));            // keys and carousel order
-  add('CONFIG', IS9WD_a1_(d.firstRow, 7, dRows, 3));            // token prefix to revoked
-  add('CONFIG', IS9WD_a1_(d.firstRow, d.checkCol, dRows, 1));   // check
-  add('CONFIG', IS9WD_a1_(d.firstRow, 12, dRows, 1));           // hierarchy order
+  add('CONFIG', IS9WD_a1_(d.firstRow, 1, dRows, 1));
+  var de = IS9WD_ENG.DIRECTORY;
+  var deRows = de.lastRow - de.firstRow + 1;
+  add('ENGINE', IS9WD_a1_(de.firstRow, 1, deRows, de.lastCol));
 
-  add('CONFIG', IS9WD_a1_(c.DIAGNOSTICS.firstRow, 1,
-    c.DIAGNOSTICS.lastRow - c.DIAGNOSTICS.firstRow + 1, 3));
-
-  // The store grows in 52 row steps, and Apply sheet guards is always its own
-  // execution, so the declared last row goes stale the first time it grows.
-  var storeLast = c.STORE.lastRow;
+  // The store's two code written columns.
+  var st = IS9WD_ENG.STORE;
+  var storeLast = st.lastRow;
   var storeRange = IS9WD_namedOrNull_('IS9WD_SIGNOFF_WEEKS');
   if (storeRange) {
     storeLast = Math.max(storeLast, storeRange.getRow() + storeRange.getNumRows() - 1);
   }
-  add('CONFIG', IS9WD_a1_(c.STORE.firstRow, 6,
-    storeLast - c.STORE.firstRow + 1, 2));                      // Set at and Check
+  add('ENGINE', IS9WD_a1_(st.firstRow, 6, storeLast - st.firstRow + 1, 1));
 
-  // The derived block on the data tab, and the three tabs nobody types into.
+  // The derived block on the data tab, and the tabs nobody types into at all.
   add('ITEMS', IS9WD_a1_(IS9WD_ITEMS.firstRow, IS9WD_ITEMS.derivedFirstCol,
     IS9WD_ITEMS.lastRow - IS9WD_ITEMS.firstRow + 1,
     IS9WD_ITEMS.derivedLastCol - IS9WD_ITEMS.derivedFirstCol + 1));
-  // Both new tabs are script owned end to end and are never typed into, so each takes
-  // one whole tab guard, exactly as the feed does.
   add('FEED', '');
   add('STATS', '');
   add('TABLES', '');
+  add('VIEWS', '');
   add('ARCHIVE', '');
   add('LOG', '');
   return out;

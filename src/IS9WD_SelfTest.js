@@ -84,7 +84,9 @@ function IS9WD_selfTest_() {
   IS9WD_stFeedPlan_(suite, ctx);
   IS9WD_stFeedFlags_(suite, ctx);
   IS9WD_stTabOrder_(suite, ctx);
+  IS9WD_stSettingsTabs_(suite, ctx);
   IS9WD_stStatsStructure_(suite, ctx);
+  IS9WD_stStatsCharts_(suite, ctx);
   IS9WD_stStatsOfficers_(suite, ctx);
   IS9WD_stStatsTrend_(suite, ctx);
   IS9WD_stOfficerTables_(suite, ctx);
@@ -144,15 +146,21 @@ function IS9WD_checkTerms_() {
 
 function IS9WD_stGather_(suite) {
   var ctx = {
-    cfg: null, layout: null, statsLayout: null, otLayout: null,
-    names: null, audit: null, sheetNames: {},
-    feed: null, items: null, stats: null, tables: null
+    cfg: null, layout: null, statsLayout: null, otLayout: null, viewsLayout: null,
+    names: null, audit: null, sheetNames: {}, settings: {},
+    feed: null, items: null, stats: null, tables: null, views: null
   };
 
   try {
     ctx.cfg = IS9WD_readConfig_(true);
     ctx.layout = ctx.cfg.feed;
     ctx.statsLayout = ctx.cfg.stats;
+    // The helper tab is sized from the same two settings, and it is read here so half the
+    // assertions below have something to compare a dashboard cell against.
+    var trendBuilt = IS9WD_namedOrNull_('IS9WD_STATS_TREND_BUILT');
+    ctx.viewsLayout = IS9WD_viewsLayout_(ctx.cfg.directory.rows.length,
+      trendBuilt ? IS9WD_int_(trendBuilt.getValue()) : 0,
+      ctx.cfg.schedule.raw.length, ctx.cfg.switches.statsOfficerRows);
     // Every row map below must describe the tab as it was BUILT, not as the setting
     // currently reads, or a setting changed without a rebuild fails the whole suite
     // instead of the one check that exists to catch exactly that.
@@ -171,7 +179,7 @@ function IS9WD_stGather_(suite) {
     // One getNamedRanges for the whole run: resolving 188 names three times over
     // is three server calls for one answer.
     ctx.names = IS9WD_namedMap_();
-    ctx.audit = IS9WD_nameAudit_(ctx.layout, ctx.statsLayout, ctx.otLayout);
+    ctx.audit = IS9WD_nameAudit_(ctx.layout, ctx.statsLayout, ctx.otLayout, ctx.viewsLayout);
     for (var i = 0; i < IS9WD_TAB_ORDER.length; i++) {
       var key = IS9WD_TAB_ORDER[i];
       ctx.sheetNames[key] = IS9WD_sheet_(key).getName();
@@ -231,9 +239,36 @@ function IS9WD_stGather_(suite) {
   // an error cell has to arrive as the text `#REF!` for a scan to see it at all, and
   // the hidden band is read too, because half the assertions are about it.
   ctx.stats = IS9WD_stView_(suite, 'Statistics reads', 'STATS', ctx.statsLayout,
-    ctx.statsLayout ? ctx.statsLayout.helperLastCol : 0);
+    ctx.statsLayout ? ctx.statsLayout.lastCol : 0);
   ctx.tables = IS9WD_stView_(suite, 'Officer Tables reads', 'TABLES', ctx.otLayout,
     ctx.otLayout ? ctx.otLayout.lastCol : 0);
+  ctx.views = IS9WD_stView_(suite, 'Views helper tab reads', 'VIEWS', ctx.viewsLayout,
+    ctx.viewsLayout ? ctx.viewsLayout.lastCol : 0);
+
+  // Both settings tabs, read whole: the cream-and-note assertions need the fills and the
+  // notes of every cell on them, which is three reads per tab and cannot come out of the
+  // configuration reader.
+  ctx.settings = {};
+  for (var t = 0; t < IS9WD_SETTINGS_TABS.length; t++) {
+    var tabKey = IS9WD_SETTINGS_TABS[t].tabKey;
+    var holder = IS9WD_SETTINGS_TABS[t].holder;
+    try {
+      var sheet = IS9WD_sheet_(tabKey);
+      var lastRow = Math.min(sheet.getMaxRows(),
+        holder.STORE ? holder.STORE.lastRow : holder.SIGNOFF.lastRow);
+      var lastCol = Math.min(sheet.getMaxColumns(), holder.LAST_COL);
+      var range = sheet.getRange(1, 1, lastRow, lastCol);
+      ctx.settings[tabKey] = {
+        sheet: sheet, holder: holder, rows: lastRow, cols: lastCol,
+        backgrounds: range.getBackgrounds(),
+        notes: range.getNotes(),
+        disp: range.getDisplayValues()
+      };
+    } catch (err) {
+      IS9WD_stAdd_(suite, IS9WD_TAB[tabKey] + ' reads', IS9WD_ST.FAIL, IS9WD_stErr_(err));
+      ctx.settings[tabKey] = null;
+    }
+  }
   return ctx;
 }
 
@@ -375,7 +410,7 @@ function IS9WD_stNames_(suite, ctx) {
 // comparison would fail on a healthy workbook.
 function IS9WD_stGrowingNames_() {
   var out = {};
-  var store = IS9WD_CFG.STORE;
+  var store = IS9WD_ENG.STORE;
   var storeRows = store.lastRow - store.firstRow + 1;
   var put = function (name, col, cols, firstRow, rows, growBy, block) {
     out[name] = {
@@ -1113,6 +1148,287 @@ function IS9WD_stTabOrder_(suite, ctx) {
   });
 }
 
+// ============================================================================
+//  THE SETTINGS TABS  (4: the cream rule, the hints, and what is hidden)
+// ============================================================================
+
+// THE CREAM RULE IS AN ACCEPTANCE CHECK, not a style preference. Ethan's instruction of
+// 2026-09-27 was that every cell he is expected to type into carries the cream fill and a
+// plain English explanation, per cell, and that a cell he must never type into is not
+// cream and reads as calculated. A fill and a note are exactly the two things a person
+// cannot verify by reading the code, so they are asserted here over the live tabs:
+//
+//   · every Ethan owned or append owned cell is #e9ebd4 and carries a note
+//   · every calculated cell is NOT #e9ebd4 and carries the calculated note
+//   · every input row carries visible hint text in the hint column
+//   · every table block carries one hint per column in the row under its band
+//
+// A workbook that passes every other check and fails this one is a workbook that is
+// correct and unreadable, which is the failure this whole revision was about.
+function IS9WD_stSettingsTabs_(suite, ctx) {
+  for (var t = 0; t < IS9WD_SETTINGS_TABS.length; t++) {
+    IS9WD_stSettingsTab_(suite, ctx, IS9WD_SETTINGS_TABS[t].tabKey);
+  }
+
+  IS9WD_stRun_(suite, 'Hidden tabs are hidden and the feed is not', ctx.cfg, function () {
+    var problems = [];
+    for (var i = 0; i < IS9WD_TAB_ORDER.length; i++) {
+      var key = IS9WD_TAB_ORDER[i];
+      var sheet = IS9WD_sheet_(key);
+      var shouldHide = IS9WD_ST_HAS_(IS9WD_HIDDEN_TABS, key);
+      if (shouldHide && !sheet.isSheetHidden()) {
+        problems.push(IS9WD_TAB[key] + ' is visible and should be hidden');
+      }
+      if (!shouldHide && sheet.isSheetHidden()) {
+        problems.push(IS9WD_TAB[key] + ' is hidden and should be visible');
+      }
+    }
+    // The one that matters most, and the reason it is its own sentence: whether the Drive
+    // connector includes a hidden tab in its read is unmeasured, and the Sunday Canva run
+    // depends on reading this tab. Hiding it would risk the one thing the build exists for.
+    if (IS9WD_sheet_('FEED').isSheetHidden()) {
+      problems.push(IS9WD_TAB.FEED + ' is hidden, and it must never be: the weekly Canva ' +
+        'run reads it through the Drive connector');
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return IS9WD_HIDDEN_TABS.length + ' tabs hidden (' + IS9WD_HIDDEN_TABS.join(', ') +
+      ') and the other ' + (IS9WD_TAB_ORDER.length - IS9WD_HIDDEN_TABS.length) +
+      ' visible, including ' + IS9WD_TAB.FEED + '.';
+  });
+
+  // The join between the two halves of the directory is by row position, so the two Key
+  // columns have to hold the same fourteen keys in the same order or an officer's slide
+  // number belongs to somebody else.
+  IS9WD_stRun_(suite, 'The two directory halves line up', ctx.cfg, function () {
+    var mismatch = ctx.cfg.directory.keyMismatch || [];
+    if (mismatch.length) {
+      return IS9WD_stFail_(mismatch.length + ' rows disagree: ' + IS9WD_stList_(mismatch) +
+        '. The two halves are joined by row, so never insert, delete or sort a row on ' +
+        'either one.');
+    }
+    var engine = ctx.cfg.directory.engineRaw || [];
+    if (engine.length !== ctx.cfg.directory.rows.length) {
+      return IS9WD_stFail_('The machinery half holds ' + engine.length +
+        ' rows and the people half ' + ctx.cfg.directory.rows.length + '.');
+    }
+    return 'All ' + engine.length + ' rows carry the same key on ' + IS9WD_TAB.CONFIG +
+      ' and on ' + IS9WD_TAB.ENGINE + '.';
+  });
+}
+
+// One settings tab, four assertions in one check, because a reader wants one line per tab
+// rather than four.
+function IS9WD_stSettingsTab_(suite, ctx, tabKey) {
+  var label = IS9WD_TAB[tabKey] + ': cream, notes and hints';
+  IS9WD_stRun_(suite, label, ctx.settings[tabKey], function () {
+    var page = ctx.settings[tabKey];
+    var holder = page.holder;
+    var cream = IS9WD_INPUT_BG.toLowerCase();
+    var problems = [];
+    var inputs = 0;
+    var calculated = 0;
+
+    var at = function (row, col) {
+      if (row < 1 || row > page.rows || col < 1 || col > page.cols) return null;
+      return { row: row, col: col };
+    };
+    var fill = function (cell) {
+      return IS9WD_trim_(page.backgrounds[cell.row - 1][cell.col - 1]).toLowerCase();
+    };
+    var note = function (cell) {
+      return IS9WD_trim_(page.notes[cell.row - 1][cell.col - 1]);
+    };
+    var shown = function (cell) {
+      return IS9WD_trim_(page.disp[cell.row - 1][cell.col - 1]);
+    };
+    var name = function (cell) {
+      return IS9WD_a1_(cell.row, cell.col, 1, 1);
+    };
+
+    for (var b = 0; b < holder.BLOCKS.length; b++) {
+      var block = holder[holder.BLOCKS[b]];
+
+      // Every block carries its own plain English line as the note on its heading, and a
+      // row block carries it visibly in the hint row under the heading as well. A table
+      // block does not: that row holds one hint per column, over the column it describes,
+      // which is worth more than a repeat of the block line.
+      var title = at(block.titleRow, holder.FIRST_COL);
+      if (title && note(title) === '') {
+        problems.push('the heading of ' + block.title + ' carries no explanation as a note');
+      }
+      if (block.rows && block.hintRow) {
+        var hint = at(block.hintRow, holder.FIRST_COL);
+        if (hint && shown(hint) === '') {
+          problems.push('the block ' + block.title + ' has no explanation in row ' +
+            block.hintRow);
+        }
+      }
+
+      if (block.rows) {
+        for (var r = 0; r < block.rows.length; r++) {
+          var row = block.rows[r];
+          var value = at(row.row, holder.VALUE_COL);
+          if (!value) continue;
+          var isInput = !row.formula && row.owner !== IS9WD_OWN.CODE &&
+            row.owner !== IS9WD_OWN.SCRIPT;
+          if (isInput) {
+            inputs++;
+            if (fill(value) !== cream) {
+              problems.push(name(value) + ' is typed into and is not cream');
+            }
+            if (note(value) === '') {
+              problems.push(name(value) + ' is typed into and carries no note');
+            }
+            var beside = at(row.row, holder.HINT_COL);
+            if (beside && shown(beside) === '') {
+              problems.push(name(value) + ' has no hint beside it in column ' +
+                IS9WD_colLetter_(holder.HINT_COL));
+            }
+          } else {
+            calculated++;
+            if (fill(value) === cream) {
+              problems.push(name(value) + ' is calculated and is cream, which says the ' +
+                'opposite of what it is');
+            }
+            if (note(value) !== IS9WD_CFG_CALC_HINT) {
+              problems.push(name(value) + ' is calculated and does not carry the ' +
+                'calculated note');
+            }
+          }
+        }
+        continue;
+      }
+
+      // A table block: one hint per column in the hint row, and cream plus a note on
+      // every cell of every column a person fills.
+      for (var c = 0; c < block.columns.length; c++) {
+        var col = block.columns[c];
+        var colIndex = block.firstCol + c;
+        var head = at(block.hintRow, colIndex);
+        var mine = col.owner === IS9WD_OWN.ETHAN || col.owner === IS9WD_OWN.APPEND;
+        if (col.hint && head && shown(head) !== IS9WD_txt_(col.hint)) {
+          problems.push('the column ' + col.header + ' of ' + block.title +
+            ' has "' + shown(head).substring(0, 40) + '" above it rather than its own hint');
+        }
+        var firstCell = at(block.firstRow, colIndex);
+        var lastCell = at(block.lastRow, colIndex);
+        if (!firstCell || !lastCell) continue;
+        if (mine) {
+          inputs += block.lastRow - block.firstRow + 1;
+          if (fill(firstCell) !== cream || fill(lastCell) !== cream) {
+            problems.push('the column ' + col.header + ' of ' + block.title +
+              ' is typed into and is not cream from ' + name(firstCell) + ' to ' +
+              name(lastCell));
+          }
+          if (col.hint && note(firstCell) === '') {
+            problems.push('the column ' + col.header + ' of ' + block.title +
+              ' is typed into and its cells carry no note');
+          }
+        } else {
+          calculated += block.lastRow - block.firstRow + 1;
+          if (fill(firstCell) === cream) {
+            problems.push('the column ' + col.header + ' of ' + block.title +
+              ' is not typed into and is cream');
+          }
+        }
+      }
+    }
+
+    if (problems.length) {
+      return IS9WD_stFail_(problems.length + ' cells break the cream rule: ' +
+        IS9WD_stList_(problems) + '. Run Build or repair workbook.');
+    }
+    return inputs + ' cells are cream and carry a note, ' + calculated +
+      ' are calculated and carry none, and every block explains itself.';
+  });
+}
+
+// ============================================================================
+//  THE THREE CHARTS  (6A: inserted, anchored, and never doubled)
+// ============================================================================
+
+// THE ONE FAILURE THAT COMPOUNDS SILENTLY. `insertChart` appends and has no replace form,
+// so a build run twice leaves six charts stacked on three anchors and a build run five
+// times leaves fifteen. Nothing on screen says so: the charts sit exactly on top of each
+// other and the tab looks right until the file is slow. So the count is asserted, not
+// trusted, and it is asserted against the declared list rather than against a number.
+function IS9WD_stStatsCharts_(suite, ctx) {
+  IS9WD_stRun_(suite, 'Charts are built and not doubled', ctx.stats, function () {
+    var s = ctx.statsLayout;
+    var charts = ctx.stats.sheet.getCharts();
+    var want = IS9WD_STATS_CHARTS.length;
+    if (charts.length !== want) {
+      return IS9WD_stFail_('The tab holds ' + charts.length + ' charts and the layout ' +
+        'declares ' + want + '. More than ' + want + ' means a build appended instead of ' +
+        'replacing, which doubles on every run. Run Build or repair workbook.');
+    }
+    var problems = [];
+    var anchors = {};
+    for (var i = 0; i < charts.length; i++) {
+      var info = charts[i].getContainerInfo();
+      var row = info.getAnchorRow();
+      if (anchors[row]) problems.push('two charts are anchored on row ' + row);
+      anchors[row] = true;
+      var inside = false;
+      for (var c = 0; c < s.charts.length; c++) {
+        if (row >= s.charts[c].firstRow && row <= s.charts[c].lastRow) inside = true;
+      }
+      if (!inside) {
+        problems.push('a chart is anchored on row ' + row +
+          ', which is not inside any reserved chart band');
+      }
+    }
+    // Every caption has to say something, because a caption is the whole of what an empty
+    // chart can tell a reader.
+    for (var k = 0; k < s.charts.length; k++) {
+      var caption = IS9WD_trim_(ctx.stats.disp[s.charts[k].captionRow - 1][0]);
+      if (caption === '') {
+        problems.push('the caption above the chart on row ' + s.charts[k].firstRow +
+          ' is blank, so an empty chart would say nothing');
+      }
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return want + ' charts, one per reserved band, each with a caption that says what it ' +
+      'shows or what will fill it.';
+  });
+
+  // The helper tab is the other half of the dashboard, and a broken helper reads as a
+  // blank dashboard rather than as an error, so it gets its own line.
+  IS9WD_stRun_(suite, 'The views helper tab is sound', ctx.views, function () {
+    var v = ctx.viewsLayout;
+    var problems = [];
+    if (ctx.views.shortRows > 0) {
+      problems.push('the tab is ' + ctx.views.shortRows + ' rows short of row ' + v.endRow);
+    }
+    if (ctx.views.shortCols > 0) {
+      problems.push('the tab is ' + ctx.views.shortCols + ' columns short of column ' +
+        IS9WD_colLetter_(v.lastCol));
+    }
+    var banner = IS9WD_txt_(ctx.views.disp[0][0]);
+    if (banner !== IS9WD_VIEWS.BANNER) {
+      problems.push('A1 reads "' + banner + '" not "' + IS9WD_VIEWS.BANNER + '"');
+    }
+    var end = IS9WD_txt_(ctx.views.disp[v.endRow - 1][0]);
+    if (end !== IS9WD_VIEWS.END) {
+      problems.push('the last row reads "' + end + '" not "' + IS9WD_VIEWS.END + '"');
+    }
+    var counted = IS9WD_int_(IS9WD_named_('IS9WD_VIEWS_ERRORS').getValue());
+    if (counted !== 0) problems.push('the tab own error count reads ' + counted);
+    for (var r = 0; r < v.endRow; r++) {
+      for (var c = 0; c < v.lastCol; c++) {
+        var text = IS9WD_trim_(ctx.views.disp[r][c]);
+        if (text !== '' && IS9WD_ST_HAS_(IS9WD_ST_ERRORS, text)) {
+          problems.push(IS9WD_a1_(r + 1, c + 1, 1, 1) + ' = ' + text);
+        }
+      }
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems) +
+      '. Run Checks > Rebuild the views.');
+    return 'The helper band, the ranked sort, the trend helpers, operational health and ' +
+      'the scheduled jobs all read clean to row ' + v.endRow + '.';
+  });
+}
+
 // The statistics tab's own furniture: the grid, the end marker, the error count, the
 // gate agreement and the two layout settings that need a rebuild to take effect.
 function IS9WD_stStatsStructure_(suite, ctx) {
@@ -1125,7 +1441,13 @@ function IS9WD_stStatsStructure_(suite, ctx) {
     }
     if (ctx.stats.shortCols > 0) {
       problems.push('the tab is ' + ctx.stats.shortCols + ' columns short of column ' +
-        IS9WD_colLetter_(s.helperLastCol) + ', where the hidden band belongs');
+        IS9WD_colLetter_(s.lastCol));
+    }
+    // The helper band moved to `_Views`, so a hidden column here is a leftover from an
+    // older layout and it hides a KPI tile or a chart caption.
+    if (ctx.stats.sheet.isColumnHiddenByUser(s.lastCol)) {
+      problems.push('column ' + IS9WD_colLetter_(s.lastCol) + ' is hidden, and no column ' +
+        'on this tab may be: the helper band lives on ' + IS9WD_TAB.VIEWS + ' now');
     }
     if (ctx.stats.lastRow > s.endRow) {
       problems.push('there is content down to row ' + ctx.stats.lastRow +
@@ -1145,7 +1467,7 @@ function IS9WD_stStatsStructure_(suite, ctx) {
     problems = problems.concat(IS9WD_stMerged_(ctx.stats.sheet, IS9WD_TAB.STATS));
     if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems) +
       '. Run Build or repair workbook.');
-    return 'The grid reaches ' + IS9WD_colLetter_(s.helperLastCol) + s.endRow +
+    return 'The grid reaches ' + IS9WD_colLetter_(s.lastCol) + s.endRow +
       ', A1 names the tab, the last row carries the end marker, and nothing is merged.';
   });
 

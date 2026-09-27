@@ -84,23 +84,38 @@ function IS9WD_setupWasOurName_(key, current) {
 // How many changed user cells a failure message names before it stops listing.
 var IS9WD_SETUP_REPORT_CELLS_ = 12;
 
-// The directory Check column, 4.8's precedence in 4.8's order. It is the one
-// section 4 formula IS9WD_CFG does not carry, because the block's descriptor names
-// a checkCol and no checkFormula. {row} is the block's first row and {admin} the
-// directory's own admin key, so neither K10 nor row 79 is typed twice.
+// The directory Check column, 4.8's precedence in 4.8's order, written in plain words
+// because Ethan reads it rather than debugging it. It is the one settings formula the
+// layout does not carry, because the block's descriptor names a checkCol and no
+// checkFormula.
+//
+// The directory is two blocks on two tabs now, so the five machinery columns are reached
+// by name rather than by letter: `{off}` is `ROW()-<firstRow-1>`, which gives this row's
+// offset inside the block and is a literal number rather than a reference, so filling the
+// column down with PASTE_FORMULA leaves it alone. `{row}` is the block's first row and
+// `{admin}` the directory's own admin key, so neither K10 nor a row number is typed twice.
 var IS9WD_DIR_CHECK_FORMULA_ =
   '=IF($A{row}="","",' +
-  'IF($D{row}="","No name",' +
-  'IF($F{row}="","No email",' +
-  'IF(AND($K{row}=TRUE,$B{row}=""),"Publishes with no carousel order",' +
-  'IF(AND($B{row}<>"",COUNTIF(IS9WD_DIR_CAROUSEL,$B{row})>1),"Carousel order duplicated",' +
-  'IF(AND($B{row}<>"",OR(NOT(ISNUMBER($B{row})),$B{row}<>INT($B{row}),$B{row}<1,' +
-  '$B{row}>COUNTIF(IS9WD_DIR_PUBLISHES,TRUE))),"Carousel order out of range",' +
-  'IF(AND($G{row}="",$A{row}<>"{admin}"),"No token",' +
-  'IF($A{row}="{admin}","Admin link",' +
-  'IF(AND(ISNUMBER($H{row}),IS9WD_EFFECTIVE_TODAY-$H{row}>IS9WD_TOKEN_WARN_DAYS),' +
-  '"Token is "&INT(IS9WD_EFFECTIVE_TODAY-$H{row})&" days old",' +
-  'IF($I{row}=TRUE,"Revoked","OK"))))))))))';
+  'IF($C{row}="","No name yet",' +
+  'IF($E{row}="","No email yet",' +
+  'IF(AND($F{row}=TRUE,INDEX(IS9WD_DIR_CAROUSEL,{off})=""),' +
+  '"On the carousel with no slide number: ask before changing this",' +
+  'IF(AND(INDEX(IS9WD_DIR_CAROUSEL,{off})<>"",' +
+  'COUNTIF(IS9WD_DIR_CAROUSEL,INDEX(IS9WD_DIR_CAROUSEL,{off}))>1),' +
+  '"Two rows share one slide number",' +
+  'IF(AND(INDEX(IS9WD_DIR_CAROUSEL,{off})<>"",' +
+  'OR(NOT(ISNUMBER(INDEX(IS9WD_DIR_CAROUSEL,{off}))),' +
+  'INDEX(IS9WD_DIR_CAROUSEL,{off})<>INT(INDEX(IS9WD_DIR_CAROUSEL,{off})),' +
+  'INDEX(IS9WD_DIR_CAROUSEL,{off})<1,' +
+  'INDEX(IS9WD_DIR_CAROUSEL,{off})>COUNTIF(IS9WD_DIR_PUBLISHES,TRUE))),' +
+  '"Slide number is out of range",' +
+  'IF(AND(INDEX(IS9WD_DIR_PREFIX,{off})="",$A{row}<>"{admin}"),' +
+  '"No private link yet: run Build or repair workbook",' +
+  'IF($A{row}="{admin}","Your own admin link",' +
+  'IF(AND(ISNUMBER(INDEX(IS9WD_DIR_ISSUED,{off})),' +
+  'IS9WD_EFFECTIVE_TODAY-INDEX(IS9WD_DIR_ISSUED,{off})>IS9WD_TOKEN_WARN_DAYS),' +
+  '"Link is "&INT(IS9WD_EFFECTIVE_TODAY-INDEX(IS9WD_DIR_ISSUED,{off}))&" days old",' +
+  'IF(INDEX(IS9WD_DIR_REVOKED,{off})=TRUE,"Link revoked","OK"))))))))))';
 
 // Resolved once by IS9WD_setupTabs_ and read by everything after it. Without it,
 // setting 116 named ranges is 116 developer metadata searches.
@@ -141,16 +156,24 @@ function IS9WD_buildViews_() {
 }
 
 function IS9WD_buildViewsLocked_() {
-  var report = { lines: [], namesSet: 0, stats: null, tables: null };
+  var report = { lines: [], namesSet: 0, views: null, stats: null, tables: null };
   var say = function (line) { report.lines.push(line); Logger.log(line); };
   var cfg = IS9WD_readConfig_(true);
 
+  report.views = IS9WD_setupCall_('IS9WD_viewsResize_', [cfg], say,
+    'the views helper tab was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.views) {
+    report.namesSet += IS9WD_int_(report.views.namesPointed) || 0;
+    say('views helpers sized: ' + report.views.directoryRows + ' officer rows, last row ' +
+      report.views.lastRow);
+  }
   report.stats = IS9WD_setupCall_('IS9WD_statsResize_', [cfg], say,
     'the statistics tab was not built: IS9WD_Stats.js is not in this project yet');
   if (report.stats) {
     report.namesSet += IS9WD_int_(report.stats.namesPointed) || 0;
     say('statistics sized: ' + report.stats.directoryRows + ' officer rows, ' +
-      report.stats.trendWeeks + ' trend weeks, last row ' + report.stats.lastRow);
+      report.stats.trendWeeks + ' trend weeks, ' + report.stats.charts +
+      ' charts, last row ' + report.stats.lastRow);
   }
   report.tables = IS9WD_setupCall_('IS9WD_officerTablesResize_', [cfg], say,
     'the officer tables tab was not built: IS9WD_Stats.js is not in this project yet');
@@ -234,7 +257,7 @@ function IS9WD_buildOrRepairLocked_() {
   var report = {
     lines: [], tabsCreated: [], namesSet: 0, namesDropped: [], feedResized: false,
     storeLastRow: 0, storeGrown: false, archiveLastRow: 0, archiveGrown: false,
-    items: null, stats: null, tables: null, backfilledIds: 0,
+    items: null, views: null, stats: null, tables: null, backfilledIds: 0,
     backfilledStatus: 0, tokensIssued: 0, userCellsChanged: 0, changedCells: [],
     missingNames: []
   };
@@ -245,7 +268,9 @@ function IS9WD_buildOrRepairLocked_() {
   // Tabs and the grid first, and no cell is written until both are right: the
   // before snapshot has to cover ranges that already reach their full span.
   var sheets = IS9WD_setupTabs_(report, say);
-  report.storeLastRow = IS9WD_setupStoreSpan_(sheets.CONFIG, report, say);
+  // The store lives on `_Engine` now, and it is still the last block on its own tab so it
+  // can grow downward without moving anything above it.
+  report.storeLastRow = IS9WD_setupStoreSpan_(sheets.ENGINE, report, say);
   report.archiveLastRow = IS9WD_setupArchiveSpan_(sheets.ARCHIVE, report, say);
   IS9WD_setupGrids_(sheets, say);
 
@@ -258,12 +283,12 @@ function IS9WD_buildOrRepairLocked_() {
     IS9WD_configNames_().concat(IS9WD_itemNames_()).concat(IS9WD_archiveNames_()));
   report.namesDropped = IS9WD_setupDropRetired_();
 
-  IS9WD_setupWriteConfig_(sheets.CONFIG, say);
+  IS9WD_setupWriteSettings_(say);
   SpreadsheetApp.flush();
   IS9WD_configReset_();
   var cfg = IS9WD_readConfig_(true);
 
-  IS9WD_setupStyleConfig_(sheets.CONFIG, report.storeLastRow);
+  IS9WD_setupStyleSettings_(report.storeLastRow);
   IS9WD_setupAppendTab_(sheets.ARCHIVE, 'ARCHIVE', IS9WD_ARCHIVE);
   IS9WD_setupAppendTab_(sheets.LOG, 'LOG', IS9WD_LOG);
 
@@ -306,14 +331,25 @@ function IS9WD_buildOrRepairLocked_() {
   // and a broken view must not stop the carousel. The feed reference each of them
   // makes falls back to the `!ERR` sentinel, which both tabs count and the self test
   // fails on (6A).
+  // `_Views` first of the three, because 03 | Statistics reads its helper band by name and
+  // 04 | Officer Tables reads both. Three calls in dependency order, and none of them is
+  // gated on the capacity numbers.
+  report.views = IS9WD_setupCall_('IS9WD_viewsResize_', [cfg], say,
+    'the views helper tab was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.views) {
+    report.namesSet += IS9WD_int_(report.views.namesPointed) || 0;
+    say('views helpers sized: ' + report.views.directoryRows + ' officer rows, ' +
+      report.views.trendWeeks + ' trend weeks, ' + report.views.jobRows +
+      ' job rows, last row ' + report.views.lastRow);
+  }
   report.stats = IS9WD_setupCall_('IS9WD_statsResize_', [cfg], say,
     'the statistics tab was not built: IS9WD_Stats.js is not in this project yet');
   if (report.stats) {
     report.namesSet += IS9WD_int_(report.stats.namesPointed) || 0;
     say('statistics sized: ' + report.stats.directoryRows + ' officer rows, ' +
-      report.stats.trendWeeks + ' trend weeks, ' + report.stats.jobRows +
-      ' job rows, last row ' + report.stats.lastRow + ', last column ' +
-      report.stats.lastCol);
+      report.stats.trendWeeks + ' trend weeks, ' + report.stats.tiles + ' KPI tiles, ' +
+      report.stats.charts + ' charts, last row ' + report.stats.lastRow +
+      ', last column ' + report.stats.lastCol);
   }
   report.tables = IS9WD_setupCall_('IS9WD_officerTablesResize_', [cfg], say,
     'the officer tables tab was not built: IS9WD_Stats.js is not in this project yet');
@@ -343,13 +379,13 @@ function IS9WD_buildOrRepairLocked_() {
         (filled[n].status ? ' status ' + filled[n].status : ''));
     }
   }
-  report.tokensIssued = IS9WD_setupEnsureTokens_(sheets.CONFIG, cfg, say);
+  report.tokensIssued = IS9WD_setupEnsureTokens_(sheets.CONFIG, sheets.ENGINE, cfg, say);
 
   SpreadsheetApp.flush();
   IS9WD_configReset_();
 
   var audit = IS9WD_nameAudit_(cfg.switches.capacityOk ? cfg.feed : null,
-    cfg.stats, cfg.ot);
+    cfg.stats, cfg.ot, cfg.views);
   report.missingNames = audit.missing;
   say('named ranges: ' + report.namesSet + ' set of ' + audit.expected +
     ' expected, ' + audit.missing.length + ' missing, ' +
@@ -519,7 +555,7 @@ function IS9WD_setupIsStamped_(sheet) {
 // of this execution, which is what carries the new span into every named range, the
 // guard list and the styling without any of them knowing why.
 function IS9WD_setupStoreSpan_(sheet, report, say) {
-  var store = IS9WD_CFG.STORE;
+  var store = IS9WD_ENG.STORE;
   var declared = store.lastRow;
   var current = declared;
   var existing = IS9WD_namedOrNull_('IS9WD_SIGNOFF_WEEKS');
@@ -599,12 +635,19 @@ function IS9WD_setupGrids_(sheets, say) {
   // re-sizes and re-points both tabs from the live settings later in the run.
   var stats = IS9WD_stats_();
   var tables = IS9WD_officerTables_();
+  var views = IS9WD_views_();
   var plan = {
-    CONFIG: { rows: IS9WD_CFG.STORE.lastRow, cols: IS9WD_CFG.LAST_COL, trimRows: true, chrome: true },
+    // 00 | Configuration ends on the sign-off block now, because every growing and
+    // machine owned block moved to `_Engine`.
+    CONFIG: { rows: IS9WD_CFG.SIGNOFF.lastRow, cols: IS9WD_CFG.LAST_COL, trimRows: true, chrome: true },
     FEED: { rows: feed.endRow, cols: feed.helperLastCol, trimRows: false, chrome: false },
     ITEMS: { rows: IS9WD_ITEMS.lastRow, cols: IS9WD_ITEMS.lastCol, trimRows: false, chrome: false },
-    STATS: { rows: stats.endRow, cols: stats.helperLastCol, trimRows: false, chrome: false },
+    STATS: { rows: stats.endRow, cols: stats.lastCol, trimRows: false, chrome: false },
     TABLES: { rows: tables.endRow, cols: tables.lastCol, trimRows: false, chrome: false },
+    // `_Engine` carries the store, so its last row is the store's live last row, which
+    // IS9WD_setupStoreSpan_ has already updated in place by the time this runs.
+    ENGINE: { rows: IS9WD_ENG.STORE.lastRow, cols: IS9WD_ENG.LAST_COL, trimRows: true, chrome: true },
+    VIEWS: { rows: views.endRow, cols: views.lastCol, trimRows: false, chrome: false },
     // The Archive now declares a last row, because the trend block's six named ranges
     // have to span a real grid. It is grown in place by IS9WD_setupArchiveSpan_.
     ARCHIVE: { rows: IS9WD_ARCHIVE.lastRow, cols: IS9WD_ARCHIVE.lastCol, trimRows: false, chrome: true },
@@ -669,42 +712,56 @@ function IS9WD_setupDropRetired_() {
 }
 
 // ============================================================================
-//  00 | CONFIGURATION, THE VALUES  (section 4, every address out of IS9WD_CFG)
+//  THE SETTINGS TABS, THE VALUES  (section 4, every address out of the layout)
 // ============================================================================
 
-// The banner and the help line are written by the painters in the styling pass, so
-// nothing here touches row 1 or row 2.
-function IS9WD_setupWriteConfig_(sheet, say) {
-  var c = IS9WD_CFG;
-  for (var b = 0; b < c.BLOCKS.length; b++) {
-    var block = c[c.BLOCKS[b]];
-    if (block.rows) {
-      IS9WD_setupWriteRowBlock_(sheet, block);
-    } else {
-      IS9WD_setupWriteTableBlock_(sheet, block);
+// Both settings tabs, same writer, same painter. `00 | Configuration` holds what a
+// president sets and `_Engine` holds what the code needs, and neither one knows that
+// about itself: a block carries its own `tab` and everything here follows it.
+function IS9WD_setupWriteSettings_(say) {
+  var written = 0;
+  for (var t = 0; t < IS9WD_SETTINGS_TABS.length; t++) {
+    var tabKey = IS9WD_SETTINGS_TABS[t].tabKey;
+    var holder = IS9WD_SETTINGS_TABS[t].holder;
+    var sheet = IS9WD_setupSheet_(tabKey);
+    for (var b = 0; b < holder.BLOCKS.length; b++) {
+      var block = holder[holder.BLOCKS[b]];
+      if (block.rows) {
+        IS9WD_setupWriteRowBlock_(sheet, holder, block);
+      } else {
+        IS9WD_setupWriteTableBlock_(sheet, block);
+      }
+      written++;
+    }
+    // The undo window rides under the status list, on its own row, with a label of its
+    // own rather than a header (4.4).
+    if (holder.STATUS) {
+      var status = holder.STATUS;
+      sheet.getRange(status.undoRow, holder.LABEL_COL).setValue(status.undoLabel);
+      var undo = sheet.getRange(status.undoRow, holder.VALUE_COL);
+      if (IS9WD_blank_(undo.getValue())) undo.setValue(IS9WD_DEFAULTS.UNDO_SECONDS);
     }
   }
-  // The undo window rides under the status list, on its own row, with a label of
-  // its own rather than a header (4.4).
-  var status = c.STATUS;
-  sheet.getRange(status.undoRow, c.LABEL_COL).setValue(status.undoLabel);
-  var undo = sheet.getRange(status.undoRow, c.VALUE_COL);
-  if (IS9WD_blank_(undo.getValue())) undo.setValue(IS9WD_DEFAULTS.UNDO_SECONDS);
-  say('configuration: ' + c.BLOCKS.length + ' blocks written');
+  say('settings: ' + written + ' blocks written across ' + IS9WD_SETTINGS_TABS.length +
+    ' tabs');
 }
 
-// Label, then value or formula, then the note beside it. A script row is rewritten
-// every run; an Ethan row is written only into a blank cell; a code row is never
-// written at all and only keeps its format.
-function IS9WD_setupWriteRowBlock_(sheet, block) {
-  var c = IS9WD_CFG;
+// Label, then value or formula, then the plain English hint beside it, then the guard
+// note beside that. A script row is rewritten every run; an Ethan row is written only
+// into a blank cell; a code row is never written at all and only keeps its format.
+//
+// THE HINT IS WRITTEN AS A VALUE, NOT AS A FORMAT. It is the sentence Ethan reads before
+// he types, so it is content: it is rewritten on every run because it belongs to the
+// script, and it sits in the hint column where nothing else ever goes.
+function IS9WD_setupWriteRowBlock_(sheet, holder, block) {
   var rows = block.rows;
   var first = block.firstRow;
   var count = block.lastRow - first + 1;
 
   var labels = [];
-  for (var r = 0; r < count; r++) labels.push(['']);
-  var valueRange = sheet.getRange(first, c.VALUE_COL, count, 1);
+  var hints = [];
+  for (var r = 0; r < count; r++) { labels.push(['']); hints.push(['']); }
+  var valueRange = sheet.getRange(first, holder.VALUE_COL, count, 1);
   var values = valueRange.getValues();
   // A formula Ethan typed into a settings cell is his, so it is read back as a
   // formula and written back as one rather than flattened to this morning's value.
@@ -721,6 +778,7 @@ function IS9WD_setupWriteRowBlock_(sheet, block) {
     var row = rows[j];
     var at = row.row - first;
     labels[at][0] = row.label;
+    hints[at][0] = row.formula ? IS9WD_CFG_CALC_HINT : IS9WD_txt_(row.hint);
     if (row.formula) {
       out[at][0] = row.formula;
     } else if (row.owner === IS9WD_OWN.ETHAN &&
@@ -732,13 +790,15 @@ function IS9WD_setupWriteRowBlock_(sheet, block) {
       hasNote = true;
     }
   }
-  sheet.getRange(first, c.LABEL_COL, count, 1).setValues(labels);
+  sheet.getRange(first, holder.LABEL_COL, count, 1).setValues(labels);
   valueRange.setValues(out);
-  if (hasNote) sheet.getRange(first, c.NOTE_COL, count, 1).setValues(notes);
+  sheet.getRange(first, holder.HINT_COL, count, 1).setValues(hints);
+  if (hasNote) sheet.getRange(first, holder.NOTE_COL, count, 1).setValues(notes);
 }
 
-// A table block writes its header from the column descriptors, its defaults into
-// blank cells column by column, and its Check formula down the check column.
+// A table block writes its header from the column descriptors, one plain English hint per
+// column into the hint row under the band, its defaults into blank cells column by column,
+// and its Check formula down the check column.
 function IS9WD_setupWriteTableBlock_(sheet, block) {
   var count = block.lastRow - block.firstRow + 1;
   var defaults = IS9WD_setupBlockDefaults_(block);
@@ -767,12 +827,26 @@ function IS9WD_setupWriteTableBlock_(sheet, block) {
     }
     if (touched) range.setValues(out);
   }
+  IS9WD_setupWriteHintRow_(sheet, block);
   IS9WD_setupWriteCheckColumn_(sheet, block);
 }
 
-// Positional against the block's rows, which is how IS9WD_DEFAULTS is written: row
-// one of the defaults is the block's first row. The keyed shape carries the
-// directory, whose defaults skip Full name and Email and land in A, B, C, E, K, L.
+// One sentence per column, in the row under the band, so a hint sits directly above the
+// cells it describes. A column with no hint gets a blank rather than a repeat of its
+// header: a hint that says nothing is worse than no hint at all.
+function IS9WD_setupWriteHintRow_(sheet, block) {
+  if (!block.hintRow || !block.columns) return;
+  var line = [];
+  for (var i = 0; i < block.columns.length; i++) {
+    line.push(IS9WD_txt_(block.columns[i].hint));
+  }
+  sheet.getRange(block.hintRow, block.firstCol, 1, line.length).setValues([line]);
+}
+
+// Positional against the block's rows, which is how IS9WD_DEFAULTS is written: row one of
+// the defaults is the block's first row. The directory is the keyed case, and it is keyed
+// twice now: the seven columns on 00 | Configuration take Key, Committee, Position and
+// Publishes, and the six on `_Engine` take Key, Carousel order and Hierarchy order.
 function IS9WD_setupBlockDefaults_(block) {
   var out = {};
   var put = function (col, list) { out[col] = list; };
@@ -795,14 +869,17 @@ function IS9WD_setupBlockDefaults_(block) {
   } else if (block.key === 'SCHEDULE') {
     var j = IS9WD_DEFAULTS.SCHEDULE;
     for (var jc = 0; jc < 6; jc++) put(block.firstCol + jc, column(j, jc));
-  } else if (block.key === 'DIRECTORY') {
+  } else if (block.key === 'DIRECTORY' && block.tab === 'CONFIG') {
     var d = IS9WD_DEFAULTS.DIRECTORY;
     put(block.firstCol, column(d, 0));       // Key
-    put(block.firstCol + 1, column(d, 1));   // Carousel order
-    put(block.firstCol + 2, column(d, 2));   // Committee or office
-    put(block.firstCol + 4, column(d, 3));   // Position label
-    put(block.firstCol + 10, column(d, 4));  // Publishes
-    put(block.firstCol + 11, column(d, 5));  // Hierarchy order
+    put(block.firstCol + 1, column(d, 2));   // Committee or office
+    put(block.firstCol + 3, column(d, 3));   // Position label
+    put(block.firstCol + 5, column(d, 4));   // On the carousel
+  } else if (block.key === 'DIRECTORY' && block.tab === 'ENGINE') {
+    var e = IS9WD_DEFAULTS.DIRECTORY;
+    put(block.firstCol, column(e, 0));       // Key, mirrored for legibility
+    put(block.firstCol + 1, column(e, 1));   // Carousel order
+    put(block.firstCol + 2, column(e, 5));   // Hierarchy order
   }
   return out;
 }
@@ -819,26 +896,28 @@ function IS9WD_setupDates_(list) {
 }
 
 // The formula goes into the block's first check cell and is filled down with
-// PASTE_FORMULA, which translates the relative rows and leaves the absolute ranges
-// alone. Rewriting the string per row would have to know which digits are a row and
-// which are part of a pattern such as {6} in a hex test.
+// PASTE_FORMULA, which translates the relative rows and leaves the absolute ranges alone.
+// Rewriting the string per row would have to know which digits are a row and which are
+// part of a pattern such as {6} in a hex test.
+//
+// Every check formula is a template now, so no row number is typed in this project twice:
+// `{row}` is the block's first row, `{off}` is this row's offset inside the block written
+// as ROW() minus a literal, and `{first}` and `{last}` are the block's live span, which is
+// what keeps the store's duplicate-week test covering a grown store (4.5).
 function IS9WD_setupWriteCheckColumn_(sheet, block) {
   var formula = block.checkFormula;
-  if (block.key === 'DIRECTORY') {
-    formula = IS9WD_DIR_CHECK_FORMULA_
-      .replace(/\{row\}/g, String(block.firstRow))
-      .replace(/\{admin\}/g, IS9WD_trim_(block.adminKey));
+  if (block.key === 'DIRECTORY' && block.tab === 'CONFIG') {
+    formula = IS9WD_DIR_CHECK_FORMULA_.replace(/\{admin\}/g, IS9WD_trim_(block.adminKey));
   }
   if (!formula || !block.checkCol) return;
-  if (block.key === 'STORE') {
-    // The duplicate week test spans the whole block, so a grown store needs the end
-    // of that absolute range moved with it, or the test covers only the first 52
-    // weeks and a duplicate typed into week 53 reads OK (4.5). Only the range end is
-    // rewritten, and the declared number is never typed here.
-    formula = formula.replace(/(\$[A-Z]+\$\d+:\$[A-Z]+\$)\d+/g,
-      '$1' + IS9WD_CFG.STORE.lastRow);
-  }
-  var count = block.lastRow - block.firstRow + 1;
+  var last = block.lastRow;
+  if (block.key === 'STORE') last = IS9WD_ENG.STORE.lastRow;
+  formula = formula
+    .replace(/\{off\}/g, 'ROW()-' + (block.firstRow - 1))
+    .replace(/\{first\}/g, String(block.firstRow))
+    .replace(/\{last\}/g, String(last))
+    .replace(/\{row\}/g, String(block.firstRow));
+  var count = last - block.firstRow + 1;
   var head = sheet.getRange(block.firstRow, block.checkCol);
   head.setFormula(formula);
   if (count > 1) {
@@ -848,53 +927,93 @@ function IS9WD_setupWriteCheckColumn_(sheet, block) {
 }
 
 // ============================================================================
-//  00 | CONFIGURATION, THE LOOK  (2.5 palette, Ethan's four instructions)
+//  THE SETTINGS TABS, THE LOOK  (2.5 palette, and the cream rule)
 // ============================================================================
 
-function IS9WD_setupStyleConfig_(sheet, storeLastRow) {
-  var c = IS9WD_CFG;
-  IS9WD_paintBanner_(sheet, c.BANNER_ROW, c.FIRST_COL, c.LAST_COL, c.BANNER);
-  IS9WD_paintHelp_(sheet, c.HELP_ROW, c.FIRST_COL, c.LAST_COL, c.HELP);
+// THE CREAM RULE IS THE WHOLE OF THIS SECTION. Ethan's instruction of 2026-09-27: every
+// cell he is expected to type into carries the cream fill and a plain English explanation,
+// per cell, and a cell he must never type into must not be cream and must read as
+// calculated. So:
+//
+//   · An Ethan owned or append owned value cell gets #e9ebd4 and its hint as a note.
+//   · A script owned or code owned cell gets the page background and the note that says
+//     it is worked out by the sheet.
+//   · NOTHING IS BANDED on a block that holds an input column, because banding would put
+//     cream under half the calculated cells and destroy the one rule a first time reader
+//     can learn in a second. Existing bandings are removed rather than left.
+function IS9WD_setupStyleSettings_(storeLastRow) {
+  for (var t = 0; t < IS9WD_SETTINGS_TABS.length; t++) {
+    var tabKey = IS9WD_SETTINGS_TABS[t].tabKey;
+    var holder = IS9WD_SETTINGS_TABS[t].holder;
+    var sheet = IS9WD_setupSheet_(tabKey);
+    IS9WD_paintBanner_(sheet, holder.BANNER_ROW, holder.FIRST_COL, holder.LAST_COL,
+      holder.BANNER);
+    IS9WD_paintHelp_(sheet, holder.HELP_ROW, holder.FIRST_COL, holder.LAST_COL,
+      holder.HELP);
 
-  for (var b = 0; b < c.BLOCKS.length; b++) {
-    var block = c[c.BLOCKS[b]];
-    IS9WD_paintBand_(sheet, block.titleRow, c.FIRST_COL, c.LAST_COL,
-      block.title, block.help);
-    if (block.rows) {
-      IS9WD_setupStyleRowBlock_(sheet, block);
-    } else {
-      IS9WD_setupStyleTableBlock_(sheet, block);
+    for (var b = 0; b < holder.BLOCKS.length; b++) {
+      var block = holder[holder.BLOCKS[b]];
+      IS9WD_paintBand_(sheet, block.titleRow, holder.FIRST_COL, holder.LAST_COL,
+        block.title, '');
+      // The block's own plain English line is the note on its title, on every block, so
+      // clicking a heading explains the block. Where it is ALSO visible depends on the
+      // shape, and the difference is not cosmetic:
+      //
+      //   · a ROW block has one setting per row, so column C is free on the hint row and
+      //     the block's line goes there, under the heading;
+      //   · a TABLE block needs that same row for one hint per column, and a column's own
+      //     hint has to sit over the column it describes. Writing the block line into
+      //     column A there would silently replace the first column's hint, which is
+      //     exactly the bug this comment exists because of.
+      sheet.getRange(block.titleRow, holder.FIRST_COL).setNote(IS9WD_txt_(block.help));
+      if (block.rows && block.hintRow) {
+        IS9WD_paintHint_(sheet, block.hintRow, holder.FIRST_COL, holder.LAST_COL,
+          block.help);
+      }
+      if (block.rows) {
+        IS9WD_setupStyleRowBlock_(sheet, holder, block);
+      } else {
+        IS9WD_setupStyleTableBlock_(sheet, block);
+      }
     }
+    if (holder.STATUS) IS9WD_setupStyleUndoRow_(sheet, holder);
+    IS9WD_setupStyleSpacers_(sheet, holder);
+    IS9WD_setRules_(sheet, IS9WD_setupSettingsRules_(sheet, tabKey, holder, storeLastRow));
   }
-  IS9WD_setupStyleUndoRow_(sheet);
-  IS9WD_setupStyleSpacers_(sheet);
-  IS9WD_setRules_(sheet, IS9WD_setupConfigRules_(sheet, storeLastRow));
 }
 
-// A label reads as text, a derived value reads as a value, and a note reads as a
-// hint. The accent is what carries the eye to the cells nobody types into.
-function IS9WD_setupStyleRowBlock_(sheet, block) {
-  var c = IS9WD_CFG;
+// A label reads as text, a value Ethan owns reads as cream, a calculated value reads as
+// the accent and carries no fill, the hint reads as a hint and the guard note shouts only
+// when it has something to say.
+function IS9WD_setupStyleRowBlock_(sheet, holder, block) {
   var count = block.lastRow - block.firstRow + 1;
-  var labels = sheet.getRange(block.firstRow, c.LABEL_COL, count, 1);
+  var labels = sheet.getRange(block.firstRow, holder.LABEL_COL, count, 1);
   IS9WD_style_(labels, {
     size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, align: IS9WD_ALIGN.LEFT,
     wrap: IS9WD_WRAP.CLIP
   });
   labels.setBackground(null);
-  var values = sheet.getRange(block.firstRow, c.VALUE_COL, count, 1);
+  var values = sheet.getRange(block.firstRow, holder.VALUE_COL, count, 1);
+  IS9WD_clearBanding_(values);
   values.setBackground(null);
-  var notes = sheet.getRange(block.firstRow, c.NOTE_COL, count, 1);
+  var hints = sheet.getRange(block.firstRow, holder.HINT_COL, count, 1);
+  IS9WD_style_(hints, {
+    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, align: IS9WD_ALIGN.LEFT,
+    wrap: IS9WD_WRAP.WRAP, format: IS9WD_FMT.TEXT
+  });
+  hints.setBackground(null);
+  var notes = sheet.getRange(block.firstRow, holder.NOTE_COL, count, 1);
   IS9WD_style_(notes, {
     size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, align: IS9WD_ALIGN.LEFT,
-    wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
+    wrap: IS9WD_WRAP.WRAP, format: IS9WD_FMT.TEXT
   });
   notes.setBackground(null);
 
   for (var i = 0; i < block.rows.length; i++) {
     var row = block.rows[i];
     var derived = !!row.formula;
-    IS9WD_style_(sheet.getRange(row.row, c.VALUE_COL), {
+    var cell = sheet.getRange(row.row, holder.VALUE_COL);
+    IS9WD_style_(cell, {
       size: IS9WD_SIZE.BODY,
       fg: derived ? IS9WD_ROLE.ACCENT_FG : IS9WD_ROLE.BODY_FG,
       bold: derived,
@@ -902,9 +1021,20 @@ function IS9WD_setupStyleRowBlock_(sheet, block) {
       format: row.format,
       wrap: IS9WD_WRAP.CLIP
     });
+    if (derived || row.owner === IS9WD_OWN.CODE) {
+      IS9WD_paintCalculated_(cell);
+    } else {
+      IS9WD_paintInput_(cell, row.hint);
+    }
   }
-  IS9WD_applyRowValidations_(sheet, block.rows, c.VALUE_COL);
-  IS9WD_setDataHeights_(sheet, block.firstRow, count);
+  // The hint beside each cell is a sentence, wrapped, and a forced 26 px row clips it
+  // to its first line, which is the half of requirement 3 nobody would notice was
+  // missing. Auto fit lets the tallest hint in each row decide.
+  sheet.autoResizeRows(block.firstRow, count);
+  IS9WD_applyRowValidations_(sheet, block.rows, holder.VALUE_COL);
+  // A hint is a paragraph, so a hint row is taller than a data row. One height for the
+  // whole block keeps the block reading as a block.
+  sheet.setRowHeights(block.firstRow, count, IS9WD_ROW_H.DATA);
 }
 
 function IS9WD_setupStyleTableBlock_(sheet, block) {
@@ -913,77 +1043,106 @@ function IS9WD_setupStyleTableBlock_(sheet, block) {
   for (var i = 0; i < block.columns.length; i++) labels.push(block.columns[i].header);
   IS9WD_paintHeader_(sheet, block.headerRow, block.firstCol, labels);
 
+  // The hint row is per column here, so it is styled per column rather than as one
+  // overflowing sentence: a hint above a 120 px checkbox column has to wrap.
+  if (block.hintRow) {
+    var hintRange = sheet.getRange(block.hintRow, block.firstCol, 1, block.columns.length);
+    IS9WD_style_(hintRange, {
+      size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, align: IS9WD_ALIGN.LEFT,
+      bg: IS9WD_ROLE.BODY_BG, wrap: IS9WD_WRAP.WRAP, format: IS9WD_FMT.TEXT
+    });
+    sheet.setRowHeight(block.hintRow, IS9WD_ROW_H.HINT);
+  }
+
   var body = sheet.getRange(block.firstRow, block.firstCol, count, block.columns.length);
   IS9WD_style_(body, {
     size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, align: IS9WD_ALIGN.LEFT,
     wrap: IS9WD_WRAP.CLIP
   });
-  // Cleared, not filled: an explicit background beats banding, so a fill a paste
-  // left behind would survive every future run and show as a dead stripe.
-  body.setBackground(null);
+  // Banding removed and never reapplied: cream now means "type here", and a banded row
+  // would put cream under a calculated cell.
+  IS9WD_clearBanding_(body);
+  body.setBackground(IS9WD_ROLE.BODY_BG);
   IS9WD_applyColumnStyles_(sheet, block.firstRow, count, block.firstCol, block.columns);
   IS9WD_applyValidations_(sheet, block.firstRow, count, block.firstCol, block.columns);
-  IS9WD_banding_(body);
-  IS9WD_setDataHeights_(sheet, block.firstRow, count);
+
+  for (var c = 0; c < block.columns.length; c++) {
+    var col = block.columns[c];
+    var range = sheet.getRange(block.firstRow, block.firstCol + c, count, 1);
+    var mine = col.owner === IS9WD_OWN.ETHAN || col.owner === IS9WD_OWN.APPEND;
+    if (mine) {
+      IS9WD_paintInput_(range, col.hint);
+    } else {
+      IS9WD_paintCalculated_(range);
+      if (col.owner === IS9WD_OWN.SCRIPT || col.owner === IS9WD_OWN.CODE ||
+        col.owner === IS9WD_OWN.ONCE) {
+        range.setFontColor(IS9WD_ROLE.HINT_FG);
+      }
+    }
+  }
+  sheet.setRowHeights(block.firstRow, count, IS9WD_ROW_H.DATA);
 }
 
-function IS9WD_setupStyleUndoRow_(sheet) {
-  var c = IS9WD_CFG;
-  var status = c.STATUS;
-  IS9WD_style_(sheet.getRange(status.undoRow, c.LABEL_COL), {
+function IS9WD_setupStyleUndoRow_(sheet, holder) {
+  var status = holder.STATUS;
+  IS9WD_style_(sheet.getRange(status.undoRow, holder.LABEL_COL), {
     size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, align: IS9WD_ALIGN.LEFT
   });
-  IS9WD_style_(sheet.getRange(status.undoRow, c.VALUE_COL), {
+  var value = sheet.getRange(status.undoRow, holder.VALUE_COL);
+  IS9WD_style_(value, {
     size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, align: IS9WD_ALIGN.RIGHT,
     format: IS9WD_FMT.INT
   });
-  sheet.getRange(status.undoRow, c.LABEL_COL, 1, 2).setBackground(null);
+  sheet.getRange(status.undoRow, holder.LABEL_COL).setBackground(null);
+  IS9WD_paintInput_(value, status.undoHint);
+  var hint = sheet.getRange(status.undoRow, holder.HINT_COL);
+  IS9WD_style_(hint, {
+    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, align: IS9WD_ALIGN.LEFT,
+    wrap: IS9WD_WRAP.WRAP, format: IS9WD_FMT.TEXT
+  });
+  hint.setValue(IS9WD_txt_(status.undoHint));
+  hint.setBackground(null);
   IS9WD_applyRowValidations_(sheet,
-    [{ row: status.undoRow, validate: status.undoValidate }], c.VALUE_COL);
+    [{ row: status.undoRow, validate: status.undoValidate }], holder.VALUE_COL);
   sheet.setRowHeight(status.undoRow, IS9WD_ROW_H.DATA);
 }
 
-// One short blank row between blocks, so a twelve row block reads as a block rather
-// than as part of the next one.
-function IS9WD_setupStyleSpacers_(sheet) {
-  var rows = IS9WD_CFG.SPACER_ROWS;
+// One blank row between blocks, taller than it was, so a twelve row block reads as a block
+// rather than as part of the next one. More air was Ethan's instruction.
+function IS9WD_setupStyleSpacers_(sheet, holder) {
+  var rows = holder.SPACER_ROWS;
   for (var i = 0; i < rows.length; i++) {
-    var range = sheet.getRange(rows[i], IS9WD_CFG.FIRST_COL, 1, IS9WD_CFG.LAST_COL);
+    var range = sheet.getRange(rows[i], holder.FIRST_COL, 1, holder.LAST_COL);
     range.setBackground(null);
     range.setDataValidation(null);
+    range.clearNote();
     sheet.setRowHeight(rows[i], IS9WD_ROW_H.SPACER);
   }
 }
 
-// A Check column that does not read OK is the workbook telling Ethan something, so
-// it is the one place in Configuration that shouts: bold strong purple on cream.
-function IS9WD_setupConfigRules_(sheet, storeLastRow) {
-  var c = IS9WD_CFG;
+// A Check column that does not read OK is the workbook telling Ethan something, so it is
+// the one place on a settings tab that shouts: bold strong purple on cream.
+function IS9WD_setupSettingsRules_(sheet, tabKey, holder, storeLastRow) {
   var rules = [];
-  var checks = [
-    { block: c.WINDOWS, col: c.WINDOWS.checkCol },
-    { block: c.TERMS, col: c.TERMS.checkCol },
-    { block: c.SCHEDULE, col: c.SCHEDULE.checkCol },
-    { block: c.DIRECTORY, col: c.DIRECTORY.checkCol },
-    { block: c.STORE, col: c.STORE.checkCol, lastRow: storeLastRow }
-  ];
-  for (var i = 0; i < checks.length; i++) {
-    var block = checks[i].block;
-    var last = checks[i].lastRow || block.lastRow;
-    var range = sheet.getRange(block.firstRow, checks[i].col,
+  for (var b = 0; b < holder.BLOCKS.length; b++) {
+    var block = holder[holder.BLOCKS[b]];
+    if (!block.columns || !block.checkCol) continue;
+    var last = block.growBy ? (storeLastRow || block.lastRow) : block.lastRow;
+    var range = sheet.getRange(block.firstRow, block.checkCol,
       last - block.firstRow + 1, 1);
-    var cell = '$' + IS9WD_colLetter_(checks[i].col) + block.firstRow;
+    var cell = '$' + IS9WD_colLetter_(block.checkCol) + block.firstRow;
     rules.push(IS9WD_ruleFormula_([range],
       '=AND(' + cell + '<>"",' + cell + '<>"OK")',
       { bg: IS9WD_ROLE.FLAG_BG, fg: IS9WD_ROLE.FLAG_FG, bold: true }));
     rules.push(IS9WD_ruleFormula_([range], '=' + cell + '="OK"',
       { fg: IS9WD_ROLE.HINT_FG }));
   }
-  // The four guard notes: each one is blank while the thing it guards is right.
-  var notes = IS9WD_setupGuardNoteRows_();
+  // Every guard note on this tab: each one is blank or reads OK while the thing it guards
+  // is right, and shouts when it is not.
+  var notes = IS9WD_setupGuardNoteRows_(tabKey);
   for (var n = 0; n < notes.length; n++) {
-    var noteCell = sheet.getRange(notes[n], c.NOTE_COL);
-    var a1 = '$' + IS9WD_colLetter_(c.NOTE_COL) + notes[n];
+    var noteCell = sheet.getRange(notes[n], holder.NOTE_COL);
+    var a1 = '$' + IS9WD_colLetter_(holder.NOTE_COL) + notes[n];
     rules.push(IS9WD_ruleFormula_([noteCell],
       '=AND(' + a1 + '<>"",' + a1 + '<>"OK")',
       { fg: IS9WD_ROLE.FLAG_FG, bold: true }));
@@ -991,12 +1150,13 @@ function IS9WD_setupConfigRules_(sheet, storeLastRow) {
   return rules;
 }
 
-function IS9WD_setupGuardNoteRows_() {
-  var c = IS9WD_CFG;
+function IS9WD_setupGuardNoteRows_(tabKey) {
+  var want = IS9WD_trim_(tabKey).toUpperCase();
   var out = [];
-  var blocks = ['WEEK', 'SIGNOFF', 'SWITCHES', 'DIAGNOSTICS'];
+  var blocks = IS9WD_settingsRowBlocks_();
   for (var b = 0; b < blocks.length; b++) {
-    var rows = c[blocks[b]].rows;
+    if (blocks[b].tab !== want) continue;
+    var rows = blocks[b].rows;
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].note) out.push(rows[i].row);
     }
@@ -1081,14 +1241,19 @@ function IS9WD_setupBackfillDirectory_(sheet, say) {
 // A token never touches a cell. The directory keeps the first six characters and the
 // issue date for identification, because the Drive connector pulls every tab into a
 // chat every Sunday and a token in any cell would go with it.
-function IS9WD_setupEnsureTokens_(sheet, cfg, say) {
+// The two identification columns are on `_Engine` now, which is why this takes both
+// sheets: the Key it reads is the one on 00 | Configuration, because that is the column
+// the private links are named after, and the prefix and the date it writes are the code's
+// own and sit with the rest of the machinery.
+function IS9WD_setupEnsureTokens_(sheet, engineSheet, cfg, say) {
   var d = IS9WD_CFG.DIRECTORY;
+  var e = IS9WD_ENG.DIRECTORY;
   var count = d.lastRow - d.firstRow + 1;
   var store = PropertiesService.getScriptProperties();
   var held = store.getProperties();
   var admin = IS9WD_trim_(d.adminKey).toUpperCase();
-  var prefixes = sheet.getRange(d.firstRow, 7, count, 1).getValues();
-  var issued = sheet.getRange(d.firstRow, 8, count, 1).getValues();
+  var prefixes = engineSheet.getRange(e.firstRow, 4, count, 1).getValues();
+  var issued = engineSheet.getRange(e.firstRow, 5, count, 1).getValues();
   var keys = sheet.getRange(d.firstRow, 1, count, 1).getValues();
   var today = IS9WD_todayManila_();
   var minted = 0;
@@ -1121,8 +1286,8 @@ function IS9WD_setupEnsureTokens_(sheet, cfg, say) {
     minted++;
     say('admin token issued');
   }
-  if (prefixTouched) sheet.getRange(d.firstRow, 7, count, 1).setValues(prefixes);
-  if (issuedTouched) sheet.getRange(d.firstRow, 8, count, 1).setValues(issued);
+  if (prefixTouched) engineSheet.getRange(e.firstRow, 4, count, 1).setValues(prefixes);
+  if (issuedTouched) engineSheet.getRange(e.firstRow, 5, count, 1).setValues(issued);
   return minted;
 }
 
@@ -1248,28 +1413,37 @@ function IS9WD_listProtections_() {
 // say every cell setup may fill when it is blank and may never change once it is
 // not. Script owned ranges are deliberately absent: they are rewritten every run.
 function IS9WD_setupUserRanges_() {
-  var c = IS9WD_CFG;
   var out = [];
   var push = function (tab, a1) { out.push({ tab: tab, a1: a1 }); };
 
-  var rowBlocks = ['WEEK', 'SIGNOFF', 'SWITCHES', 'DIAGNOSTICS'];
+  // Both settings tabs, walked from the descriptors rather than from a list of block
+  // names, so a block that moved from one tab to the other is still covered and a new
+  // block is covered the day it is declared.
+  var rowBlocks = IS9WD_settingsRowBlocks_();
   for (var b = 0; b < rowBlocks.length; b++) {
-    var block = c[rowBlocks[b]];
-    var runs = IS9WD_setupRuns_(block.rows.length, function (i) {
-      return block.rows[i].owner !== IS9WD_OWN.SCRIPT;
-    });
+    var block = rowBlocks[b];
+    var holder = IS9WD_settingsHolder_(block.tab);
+    var runs = IS9WD_setupRuns_(block.rows.length, (function (rows) {
+      return function (i) { return rows[i].owner !== IS9WD_OWN.SCRIPT; };
+    })(block.rows));
     for (var i = 0; i < runs.length; i++) {
       var firstRow = block.rows[runs[i].first].row;
       var rows = block.rows[runs[i].last].row - firstRow + 1;
-      push('CONFIG', IS9WD_a1_(firstRow, c.VALUE_COL, rows, 1));
+      push(block.tab, IS9WD_a1_(firstRow, holder.VALUE_COL, rows, 1));
     }
   }
-  push('CONFIG', IS9WD_a1_(c.STATUS.undoRow, c.VALUE_COL, 1, 1));
+  for (var h = 0; h < IS9WD_SETTINGS_TABS.length; h++) {
+    var hold = IS9WD_SETTINGS_TABS[h].holder;
+    if (hold.STATUS) {
+      push(IS9WD_SETTINGS_TABS[h].tabKey,
+        IS9WD_a1_(hold.STATUS.undoRow, hold.VALUE_COL, 1, 1));
+    }
+  }
 
-  var tables = ['WINDOWS', 'TERMS', 'STATUS', 'SCHEDULE', 'DIRECTORY', 'STORE'];
+  var tables = IS9WD_settingsTableBlocks_();
   for (var t = 0; t < tables.length; t++) {
-    out = out.concat(IS9WD_setupColumnRanges_('CONFIG', c[tables[t]],
-      c[tables[t]].firstRow, c[tables[t]].lastRow));
+    out = out.concat(IS9WD_setupColumnRanges_(tables[t].tab, tables[t],
+      tables[t].firstRow, tables[t].lastRow));
   }
   out = out.concat(IS9WD_setupColumnRanges_('ITEMS', IS9WD_ITEMS,
     IS9WD_ITEMS.firstRow, IS9WD_ITEMS.lastRow));
