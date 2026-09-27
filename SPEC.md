@@ -1,219 +1,113 @@
-# IS9 Weekly Deliverables Tracker: Build Spec
+# IS9 Weekly Deliverables Tracker: Spec v2
 
-## 1. Purpose
+Supersedes v1 (commit 43b1631), which assumed nine VPs filling in nine tabs. Ethan enters everything, so everything downstream of that changed.
 
-This spreadsheet is the single source of truth for each IS9 committee's weekly deliverables.
+This file is the contract. Every cell address, formula, endpoint action and acceptance check lives in [docs/BUILD-REFERENCE.md](docs/BUILD-REFERENCE.md), which is written for whoever builds it, not for whoever runs it.
 
-Every Sunday, Claude (in a claude.ai chat, using the Canva connector) reads this spreadsheet through Google Drive and updates a 10-page Canva carousel: page 1 is a title page, pages 2 to 10 are one page per committee. Canva design ID: DAHVvLLgskQ. Canva editing is NOT part of this build.
+## 1. What it is
 
-The spreadsheet must do two jobs:
+Ethan writes each officer's weekly deliverables. Each officer opens a private link on their phone and ticks items off. Every Sunday, Claude reads one tab through the Google Drive connector and updates the 10-page Canva carousel `DAHVvLLgskQ`. Canva editing is not part of this build; the weekly procedure lives in `canva/CANVA_RUN.md`.
 
-1. Make data entry by each committee's Vice President (VP) simple, validated, and protected.
-2. Compute every string, count, and color the Canva pages need in one flat tab (`01 | Canva Feed`), so the weekly Canva update is a mechanical copy with no interpretation.
+| Who | What they touch |
+|---|---|
+| Ethan, on his DLSU account | Owns the Sheet, the script, the deployment, the repo. Adds, edits and reopens every item. |
+| 13 officers: 4 EVPs and 9 VPs | One private link each, their own items only. One action: tick or untick. They never open the Sheet and never sign in. |
+| Claude, through the Drive connector | Reads `01 \| Canva Feed`. |
 
-Out of scope: editing Canva, touching the EBEXECOM MasterSheet, and any task status (deliverables have no status field by design).
+Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet access, progress percentages, file uploads as proof.
 
-## 2. Stack and conventions
+## 2. The pieces
 
-- Google Sheets with a container-bound Apps Script project, developed locally with clasp, then pushed.
-- Local folder: `D:\apps-script\dlsu\is9-deliverables-tracker`
-- DLSU-owned project: every clasp command must include `--user dlsu`.
-- Create the spreadsheet and bound script with clasp (title: `[IS9] Weekly Deliverables Tracker`). Check `clasp --help` on the installed clasp 3.4.1 for the exact create command and flags before running anything.
-- Settings live in the `00 | Configuration` tab. Code reads them at runtime; nothing organization-specific is hardcoded except tab names and the default values written during setup.
-- Setup is idempotent: re-running it creates missing pieces and resets formatting and validation, but never deletes tabs, duplicates tabs, or wipes VP-entered data.
-- No em dashes anywhere in user-facing text (tab labels, menu items, notes, emails). Use commas, colons, or pipes.
-- Spreadsheet time zone: Asia/Manila. Spreadsheet locale must be English (en_PH or en_US) so `TEXT(date, "ddd, mmm d")` returns English day and month names.
-- Set recalculation to "On change and every hour" (`setRecalculationInterval(SpreadsheetApp.RecalculationInterval.HOUR)`), because Claude reads cached values through Drive and date-based formulas must stay current.
-- Prefix constants and functions with `IS9WD` where it helps, matching Ethan's other sistemas (IS9PA, IS9POST).
+- **A Google Sheet** on Ethan's DLSU account, five tabs: `00 | Configuration`, `01 | Canva Feed`, `02 | Deliverables`, `03 | Archive`, `04 | Log` (hidden).
+- **A container-bound Apps Script project**: the JSON endpoint, the emails, the hourly job, and the setup that builds and repairs the workbook.
+- **A React app** in `app/`, built to static files, hosted free on GitHub Pages under `github.com/is9-dlsu`. The repo is public, because a free organization cannot publish Pages from a private repo.
+- **One hourly trigger** that runs every scheduled job.
+- **Four emails**, all sent by the script from Ethan's DLSU account.
 
-## 3. Workbook structure (exact tab names, in order)
+## 3. The rules that matter
 
-1. `00 | Configuration`
-2. `01 | Canva Feed` (formulas only; admins can edit, nobody else)
-3. `02 | Partnerships`
-4. `03 | Publication`
-5. `04 | Marketing and Advocacy`
-6. `05 | Memberships`
-7. `06 | Team Management`
-8. `07 | Investments Strategy & Literacy`
-9. `08 | Investment Research`
-10. `09 | Documentation`
-11. `10 | Finance`
-12. `11 | Archive`
+**Status is a checklist.** `Open` or `Accomplished`, defined in Configuration, never hardcoded. Ticking is reversible for 60 seconds, then only Ethan can reopen an item. Nothing in the code keys on the label: everything reads a derived `Active` flag, so renaming a status, or going back to four of them, costs one Configuration edit.
 
-Tab numbers 02 to 10 equal the committee's page number in the Canva carousel.
+**No cap on items, ten slots per page.** A committee with eleven active items gets a second Canva page, so the carousel is 1 title page plus 9 committee pages plus one continuation page per overflowing committee. The worst case is 19 slides, which is under Instagram's manual limit of 20. Beyond 20 items one committee cannot be shown in full: the extra items live in the app, the emails and the Sunday brief, and the feed flags what was not published.
 
-## 4. `00 | Configuration`
+**The week rolls over on Sunday.** Week start is the Monday of the week containing tomorrow. So Sunday's run always describes the week that starts the next morning, and Monday to Saturday describe the week in progress.
 
-**A. Week settings**
+**Overdue has two meanings, deliberately.** Everywhere a human reads it, overdue means the deadline has passed and the item is still active. In the Canva feed, the `OVERDUE` window means the deadline falls before the week start, exactly as v1 defined it. They agree on Sunday, which is the only day the feed is read.
 
-| Setting | Type | Default |
-|---|---|---|
-| Term start (Monday of Week 1) | date input | blank, Ethan fills |
-| Today override | date input, optional | blank. When filled, every formula uses it instead of TODAY(). Used for testing and for re-running a past week |
-| Effective today | formula | `IF(override<>"", override, TODAY())` |
-| Week start (Monday) | formula | next Monday on or after effective today: `today + MOD(8 - WEEKDAY(today, 2), 7)`. On a Sunday this returns the next day |
-| Week end (Sunday) | formula | week start + 6 |
-| Week number | formula | `INT((week start - term start) / 7) + 1`, shown as two digits (04) |
-| A.Y. label | text input | `A.Y. 2026 - 2027` |
-| Entry cutoff | display text | `Saturday 8 PM before the week starts` |
+**Fourteen people, nine publish.** The President and the four EVPs have deliverables, private links, emails and a line in the Sunday brief like everyone else, but no Canva page. Only the nine committees publish, and only their flags can hold the carousel. The reason is arithmetic: Instagram caps a carousel at 20 slides, and publishing all 14 with continuation pages reaches 29 in the worst case, produced by ordinary use rather than by anything anyone did wrong.
 
-**Urgency windows** (computed from week start):
+**Carousel pages are computed, not fixed.** A page is identified by its owner and part number, not by a page number that never moves. The master design holds 19 pages built once by hand, each committee's page followed by its continuation page, and the weekly run edits text and exports only the pages that week needs. Canva's connector can add a page but cannot duplicate one, and where an added page lands is undocumented, so nothing in the weekly run creates or deletes pages.
 
-| Window | Dates | Station color | Number text color |
-|---|---|---|---|
-| OVERDUE | deadline before week start | `#e9ebd4` | `#1C2120` |
-| W1 | Monday to Tuesday of the week | `#e9ebd4` | `#1C2120` |
-| W2 | Wednesday to Sunday of the week | `#8a64a9` | `#F8FBFD` |
-| W3 | after week end | `#085040` | `#F8FBFD` |
+**The sign-off is weekly, not a setting.** Prepared by and Checked by change every week, so Ethan sets them in the app each week, from a picker over the 14, and the Sheet keeps one row per week. `Ready for Canva` reads NO until this week's sign-off is set, because the alternative is quietly printing last week's names.
 
-Store the colors in Configuration cells so they can be changed without code.
+**Tokens live in Script Properties, never in a cell.** The Canva reader account has view access to the whole workbook, so a token in Configuration would be a token published to it.
 
-**B. Sign-off**: Prepared by (full name, position) and Checked by (full name, position). All four are text inputs, blank by default.
+**Nothing personal reaches the repo.** No name, no address, no token, no URL that matters. The roster lives in the Sheet; the endpoint and app URLs live in Configuration and are read by every email. A pre-commit scan enforces it.
 
-**C. Committee directory** (9 rows, pre-filled with page number, committee name, and tab name):
+**The endpoint is public, so it is hostile until proven otherwise.** Every request is a POST with `Content-Type: text/plain` carrying JSON, because that is what works cross-origin (measured 2026-09-27: a JSON content type and any custom header both fail). No request does anything before its token is validated.
 
-| Page | Committee | Tab name | VP full name | VP position label | VP email | Extra editor emails |
-|---|---|---|---|---|---|---|
+## 4. The Canva feed contract
 
-- VP position label defaults to `VICE PRESIDENT`.
-- Extra editor emails are comma-separated.
-
-**D. Admin editors**: one email per row. Default: `ethan_gabriel@dlsu.edu.ph`. Admins can edit every range in the workbook.
-
-## 5. Committee tabs (`02` to `10`), identical layout
-
-- Rows 1 to 4, header block: committee name, VP name (from Configuration), and this instruction text:
-  > One row per deliverable, 10 maximum. Fill in by Saturday 8 PM. Clear a row once it is delivered. Anything left with a past deadline shows as overdue.
-- Row 6, table header: `No.` | `Title of Task` | `Deadline` | `Remarks` | `Check`
-- Rows 7 to 16: exactly 10 rows, with `No.` pre-filled `01` to `10`.
-
-**Field rules**
-
-- **Title of Task:** required when the row is used. Maximum 40 characters, enforced with data validation (custom formula `LEN(B7)<=40`, reject input). Help text: `Max 40 characters. Start with a verb.`
-- **Deadline:** date only, enforced with data validation (valid date, reject input), with the date picker. Format `ddd, mmm d`. Times do not go here; a time goes in Remarks. This keeps the Canva date line one fixed width.
-- **Remarks:** optional, maximum 30 characters, enforced with data validation. Help text: `Instructions only (where it goes, who signs off). Never progress or status.`
-- **Check:** a formula, not editable. It shows `Missing title`, `Missing deadline`, `Overdue`, or blank.
-
-**Protection**
-
-- Only `B7:D16` is editable, by the committee's VP email, the extra editors, and the admins.
-- Everything else on the tab is admin-only.
-
-**Formatting**
-
-- Use the IS9 palette:
-  - Tab header fill `#5d4170` with `#F8FBFD` text.
-  - Table header fill `#085040` with `#F8FBFD` text.
-  - Input rows alternate `#F8FBFD` and `#e9ebd4`.
-- Use one clean Google Font (for example Montserrat).
-- Freeze the rows through row 6.
-
-## 6. `01 | Canva Feed`: the contract with the weekly Canva run
-
-Every value here is a live formula; nothing needs a manual refresh. Strings must match these formats exactly, including double spaces around pipes, the middle dot, and uppercase.
-
-**A. Readiness summary (top of tab)**
-
-- Total deliverables.
-- Number of rows with a Check flag.
-- `Ready for Canva: YES` or `NO`. It reads NO if any row has `Missing title` or `Missing deadline`.
-
-**B. Title page block (page 1)**
+The strings are v1's, word for word, and they do not change without Ethan's approval:
 
 | Field | Example |
 |---|---|
-| Week line | `WEEK 04  \|  SEP 21 TO 27  \|  A.Y. 2026 - 2027` |
-| Legend 1 | `DUE SEP 21 TO 22` |
-| Legend 2 | `DUE SEP 23 TO 27` |
-| Legend 3 | `DUE AFTER SEP 27` |
-| Prepared by name, position | `JUAN DELA CRUZ`, `Vice President` (name uppercase, position as typed) |
-| Checked by name, position | same format |
-
-Date ranges that cross a month read `SEP 30 TO OCT 4`. Same month reads `SEP 21 TO 27`.
-
-Then add one row per committee, in page order, with these columns: `Page` | `Committee` | `Count` | `Next due text` | `Station hex` | `Number text hex`.
-
-- **Committee:** uppercase, for example `MARKETING AND ADVOCACY`.
-- **Count:** the number of rows with a title.
-- **Next due text:**
-  - `Overdue: Fri, Sep 18` if any row is overdue (use the earliest overdue date).
-  - Otherwise `Next due Mon, Sep 21` (the earliest deadline).
-  - If Count is 0: `No deliverables this week`.
-- **Station hex:** the color of the committee's most urgent window. With no deliverables, use the W3 color.
-
-**C. Committee page block (pages 2 to 10)**
-
-Each committee has a header row:
-
-| Field | Example |
-|---|---|
-| Page | `02` |
-| Headline | `PARTNERSHIPS` |
+| Week line | `WEEK 04  \|  SEP 28 TO OCT 4  \|  A.Y. 2026 - 2027` |
+| Legends | `DUE SEP 28 TO 29`, `DUE SEP 30 TO OCT 4`, `DUE AFTER OCT 4` |
 | VP line | `JUAN DELA CRUZ  \|  VICE PRESIDENT` |
-| Tagline | `WEEKLY DELIVERABLES  \|  WEEK 04  \|  SEP 21 TO 27  \|  10 TASKS` (`1 TASK` when singular) |
+| Tagline | `WEEKLY DELIVERABLES  \|  WEEK 04  \|  SEP 28 TO OCT 4  \|  10 TASKS` |
+| Deadline text | `Due Mon, Sep 28`, or `Overdue: Fri, Sep 25` |
+| Remark text | `·  Send final name to Publication` |
 
-Below the header come exactly 10 slot rows per committee (90 in total), sorted overdue first (oldest first), then by deadline ascending, then by original row number. Only rows with a title count; unused slots are blank with `Visible = FALSE`.
+Double spaces around pipes, the middle dot, the uppercase, and the `1 TASK` singular are all part of the contract. Ten proposed changes are listed in the reference's Appendix A2 with the interim behaviour that ships until Ethan rules on each.
 
-| Column | Example / rule |
-|---|---|
-| Page | `02` |
-| Slot | `01` to `10` |
-| Visible | TRUE or FALSE |
-| Title | as typed |
-| Deadline text | `Due Mon, Sep 21`, or `Overdue: Fri, Sep 18` |
-| Remark visible | TRUE if Remarks is non-empty |
-| Remark text | `·  Send final name to Publication` (middle dot, two spaces), or blank |
-| Window | `OVERDUE`, `W1`, `W2`, or `W3` |
-| Station hex | from Configuration |
-| Number text hex | from Configuration |
-| Flag | copied from Check |
+## 5. The emails
 
-**D. Flags list**: every flagged row, with its committee, slot, and flag. Claude reports these to Ethan before touching Canva.
-
-## 7. Menu: `IS9 Deliverables`
-
-1. `Build or repair workbook`: the idempotent setup from sections 3 to 6.
-2. `Apply protections`: reads Configuration and applies section 5 protections plus the admin-only tabs. It logs what it applied to the execution log.
-3. `Seed sample data` and `Clear sample data`: see section 9. Clearing must remove only sample rows.
-4. `Archive this week`: appends the current week's visible feed rows to `11 | Archive`, with week number, committee, title, deadline, remarks, and timestamp. It clears nothing.
-5. `Send reminder emails` (build only after Ethan approves this feature): a manual trigger. It emails each VP whose tab is empty or has flags, from the Configuration directory, and logs a send status per committee in Configuration.
-
-## 8. Archive tab
-
-Columns: `Week` | `Week start` | `Committee` | `Title of Task` | `Deadline` | `Remarks` | `Archived at`. It is append-only.
-
-## 9. Sample data and tests
-
-With `Today override = 2026-09-20` (a Sunday), the week is Sep 21 to 27 and Term start should give Week 04 (set Term start to 2026-08-31 for the test).
-
-Seed these into `02 | Partnerships`:
-
-| Title of Task | Deadline | Remarks |
+| When | To | Sent only if |
 |---|---|---|
-| Confirm speaker for Debt Traps Exposed | 2026-09-21 | Send final name to Publication |
-| Send Homecoming sponsorship deck | 2026-09-21 | |
-| Follow up on 4 pending sponsor replies | 2026-09-22 | |
-| Finalize partner LOI template | 2026-09-23 | For EVP-EXT sign-off |
-| Draft MOA for Homecoming venue partner | 2026-09-24 | Attach venue quotation |
-| Submit xDeals shortlist to Finance | 2026-09-25 | |
-| Prep speaker kit for Debt Traps Exposed | 2026-09-26 | |
-| Pitch Summit Diamond tier to 3 banks | 2026-09-30 | Use the updated tier deck |
-| Renew MOAs with IS8 partners | 2026-10-01 | |
-| Update partner contact directory | 2026-10-02 | |
+| Monday 07:00 | each officer | they have active items |
+| Daily 07:00 | each officer | something of theirs is due tomorrow or overdue |
+| Sunday | Ethan | always: ready or not, what is overdue, what was accomplished, what needs attention |
+| On failure | Ethan | at most once per job per day, and the error is re-thrown so Google's own notice fires |
 
-Add one overdue test row to another committee (deadline 2026-09-18) and leave one committee empty.
+One email per person per type, never one per item. A TEST mode sends everything to Ethan instead. The quota guard stops sending before the daily limit rather than half-sending a batch.
 
-**Acceptance checks**
+## 6. Accepted risks
 
-- A fresh build creates all 12 tabs. A second run changes no data and creates no duplicates.
-- Validation rejects a 41-character title, a 31-character remark, and a non-date deadline.
-- The Partnerships feed shows 10 visible slots in date order:
-  - Slots 01 to 03 are W1 with `#e9ebd4`.
-  - Slots 04 to 07 are W2 with `#8a64a9`.
-  - Slots 08 to 10 are W3 with `#085040`.
-  - Tagline ends `10 TASKS`.
-- The overdue row appears in slot 01 of its committee with `Overdue: Fri, Sep 18`, and that committee's title page text reads `Overdue: Fri, Sep 18`.
-- The empty committee shows Count 0 and `No deliverables this week`.
-- Protections: each VP email can edit only `B7:D16` on their own tab. List all protections to confirm.
-- A search of every string the script writes finds no em dash character.
+- Anyone holding an officer's link can tick that officer's items. Every change is logged with a timestamp, and any link can be reissued from the menu.
+- The endpoint URL is public. Tokens are the only gate.
+- A DLSU administrator could disable Apps Script or external sharing at any time. Both were confirmed available on 2026-09-27.
+- Moving the Sheet to a shared drive breaks the web app until it is redeployed.
+
+## 7. Handover
+
+Ownership transfers inside the DLSU domain, so the next president inherits the Sheet intact. The GitHub organization outlives any one account. A GitHub Pages URL does not redirect after a repo transfer, which is why the app URL is a setting that every email reads rather than a constant. The full checklist is `docs/HANDOVER.md`.
+
+## 8. Phases and gates
+
+| Phase | Deliverable | Gate |
+|---|---|---|
+| 0. Spike | Cross-origin call proven, 2026-09-27 | Done |
+| 1. Spec | This file plus the reference | Ethan approves |
+| 2. Logic | Pure functions plus Node tests, nothing in Drive | Tests pass, sample output reviewed |
+| 3. Sheet | Sheet created, script bound and pushed, Build run twice | Ethan approves before creation |
+| 4. App | Endpoint, React app, deployment, real Drive read | Works on Ethan's phone |
+| 5. Emails | One weekend in TEST mode | Ethan approves the wording |
+| 6. Go live | Links issued, emails live, sample data cleared | First live weekend watched |
+| 7. Canva | `CANVA_RUN.md`, the claude.ai Project, a dry run on a copy | Carousel matches the feed |
+
+## 9. What Ethan supplies at Gate A
+
+1. The 14 names and addresses, pasted into the Sheet.
+2. Term 1 runs `2026-09-07` to `2026-12-13`, 14 weeks. Terms 2 and 3 are filled when DLSU publishes them. A blank end date pauses every job mid-trimester.
+3. The repo name, which fixes the app URL.
+4. A ruling on each proposed contract change in Appendix A2.
+5. The Canva master design built out to 19 pages: the title page, then each committee page followed by its continuation page, in the order this spec lists. One session in Canva, once.
+
+## 10. Conventions
+
+- Settings live in `00 | Configuration` and are read through named ranges, never hardcoded, never by cell address.
+- Setup is idempotent: re-running creates what is missing and repairs formatting and validation, and never touches an item, a token, an archive row or a log row.
+- No em dashes in anything a person reads.
+- Asia/Manila everywhere, in the spreadsheet and in `appsscript.json`.
+- `IS9WD` prefixes functions and named ranges, matching Ethan's other sistemas.
