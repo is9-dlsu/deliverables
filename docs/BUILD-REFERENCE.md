@@ -1636,7 +1636,7 @@ Every check in 13.3 is tagged **[auto]** (a command), **[claude]** (Claude drive
 | `IS9WD_remarkText(remark)` | `·  <remark>` or `""` |
 | `IS9WD_isActive(status, statusList)` | boolean |
 | `IS9WD_undoAllowed(statusAt, now, undoSeconds, role)` | boolean: TRUE for `admin` always, TRUE for `member` only inside the window |
-| `IS9WD_signoffFor(weekStart, signoffRows)` | `{preparedName, preparedPosition, checkedName, checkedPosition, setAt, set}`, with `set` FALSE and the four strings blank when that week has no row |
+| `IS9WD_signoffFor(weekStart, signoffRows)` | `{preparedName, preparedPosition, checkedName, checkedPosition, setAt, set}`, with `set` FALSE and the four strings blank when that week has no row. `setAt` is returned as the text `yyyy-MM-dd HH:mm`, because it crosses the wire as JSON, where a date object cannot survive and a date alone would drop the time the store calls a timestamp |
 | `IS9WD_normalizeText(s)` | trimmed, line breaks and tabs collapsed to single spaces (7.5) |
 | `IS9WD_sortActive(items)` | deadline ascending, then ID ascending |
 | `IS9WD_slotRows(items, weekStart, weekEnd, hex, slotsPerPage, maxParts)` | `{pages: [{part, rows}], notPublished}`, each `rows` exactly `slotsPerPage` long |

@@ -1,0 +1,11 @@
+# Never commit credentials or anything account-specific.
+.clasprc.json
+.clasp.json
+local/
+*.local.json
+
+# Node
+node_modules/
+
+# Build output
+app/dist/
