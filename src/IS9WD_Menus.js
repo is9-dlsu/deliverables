@@ -75,6 +75,12 @@ var IS9WD_ACTION = {
     fn: 'IS9WD_buildViews_', from: 'IS9WD_Setup.js', lock: true,
     label: 'Rebuild the views'
   },
+  // Build-out only, and it is the one action that renumbers a physical Canva page, so
+  // its confirmation is built at click time from the date it last ran (4.8).
+  CAROUSEL: {
+    fn: 'IS9WD_carouselSwitchAll_', from: 'IS9WD_Setup.js', lock: true,
+    label: 'Switch the carousel to all fourteen'
+  },
   RESET: {
     fn: 'IS9WD_resetAndBuild_', from: 'IS9WD_Setup.js', lock: true,
     label: 'Reset and rebuild',
@@ -266,6 +272,8 @@ function IS9WD_buildMenu_() {
   var checks = ui.createMenu('Checks')
     .addItem('Run self test', 'IS9WD_menuSelfTest')
     .addItem('Rebuild the views', 'IS9WD_menuBuildViews')
+    .addItem('Switch the carousel to all fourteen (build-out only)',
+      'IS9WD_menuSwitchCarousel')
     .addItem('Reset and rebuild (build-out only)', 'IS9WD_menuResetAndBuild')
     .addItem('Check the term calendar', 'IS9WD_menuCheckTerms')
     .addItem('List every protection', 'IS9WD_menuListProtections')
@@ -792,9 +800,10 @@ function IS9WD_aboutLines_() {
     IS9WD_SEP + IS9WD_dateKey_(w.weekStart) + ' to ' + IS9WD_dateKey_(w.weekEnd));
   out.push('Trimester' + IS9WD_SEP + (w.termActive === '' ? 'none active' : w.termActive));
   out.push('Officers' + IS9WD_SEP + cfg.directory.rows.length + ' in the directory, ' +
-    cfg.directory.publishingRows + ' publish to Canva');
-  out.push('Carousel' + IS9WD_SEP + s.slotsPerPage + ' slots a page, up to ' +
-    s.maxParts + ' pages a committee, ' + s.publishMax + ' items published a committee');
+    cfg.directory.publishingRows + ' with a slide on the carousel');
+  out.push('Carousel' + IS9WD_SEP + s.slotsPerPage + ' slots a slide, ' +
+    (s.maxParts === 1 ? 'one slide an officer' : 'up to ' + s.maxParts + ' slides an officer') +
+    ', ' + s.publishMax + ' items published an officer');
   out.push('Master pages required' + IS9WD_SEP + cfg.feed.masterPagesRequired);
   out.push('Automation' + IS9WD_SEP + (s.automationOn ? 'on' : 'off') + IS9WD_SEP +
     'test mode ' + (s.testMode ? 'on' : 'off') + IS9WD_SEP +
@@ -821,4 +830,28 @@ function IS9WD_menuResetAndBuild() {
 function IS9WD_menuBuildViews() {
   var ui = IS9WD_assertUiContext_();
   IS9WD_do_(ui, IS9WD_ACTION.VIEWS);
+}
+
+// The one action whose danger is physical rather than digital: it renumbers the slide
+// each officer owns, and a slide number is a page somebody drew by hand. So the question
+// it asks is the question that matters, and it asks a harder one the second time.
+function IS9WD_menuSwitchCarousel() {
+  var ui = IS9WD_assertUiContext_();
+  var ran = '';
+  var reader = IS9WD_impl_('IS9WD_carouselSwitchedOn_');
+  if (reader) {
+    try { ran = IS9WD_txt_(reader()); } catch (err) { ran = ''; }
+  }
+  var question = ran === ''
+    ? 'This puts all fourteen officers on the carousel, one slide each, and numbers the ' +
+      'slides in hierarchy order: you on slide 2, the four EVPs next, then the nine ' +
+      'committees.\n\nIt changes two settings and two columns together, and it builds ' +
+      'afterwards. Nothing you typed is touched.\n\nONLY run this before the Canva ' +
+      'master is built. Renumbering a slide after the master exists sends two officers ' +
+      'to one page.\n\nRun it now?'
+    : 'This already ran on ' + ran + '.\n\nRunning it again renumbers every slide back ' +
+      'to the shipping order. If you have built the Canva master since ' + ran + ', this ' +
+      'will send officers to pages that hold somebody else.\n\nRun it anyway?';
+  if (!IS9WD_confirm_(ui, IS9WD_ACTION.CAROUSEL.label, question)) return;
+  IS9WD_do_(ui, IS9WD_ACTION.CAROUSEL);
 }

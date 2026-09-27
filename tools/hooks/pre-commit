@@ -1,0 +1,55 @@
+#!/bin/sh
+# THE PRE-COMMIT SCAN CLAUDE.md PROMISES, committed rather than left in .git/hooks so a
+# fresh clone gets it. It is wired up with one command, which tools/install-hooks.js runs
+# for you and which a later president can run by hand:
+#
+#   git config core.hooksPath tools/hooks
+#
+# It refuses a commit that carries an email address, a live endpoint, a Drive file id or a
+# token, and one that carries an em dash in anything a person reads. It cannot see a
+# person's name. That is stated in test/leakscan.test.js and it is worth repeating here:
+# the roster stays in the Sheet because that is the rule, not because a scan is watching.
+#
+# To commit anyway, in a genuine emergency and knowing the repo is public:
+#   git commit --no-verify
+
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node is not on PATH, so the leak scan and the em dash scan did not run."
+  echo "pre-commit: install node or commit with --no-verify, knowing this repo is public."
+  exit 1
+fi
+
+# Only files that still exist, and only the ones the scans understand.
+list=""
+for f in $staged; do
+  case "$f" in
+    *.js|*.json|*.md|*.html|*.css|*.ts|*.tsx|*.txt|*.yml) ;;
+    *) continue ;;
+  esac
+  if [ -f "$f" ]; then
+    list="$list $f"
+  fi
+done
+
+if [ -z "$list" ]; then
+  exit 0
+fi
+
+fail=0
+node test/leakscan.test.js $list || fail=1
+node test/emdash.test.js $list || fail=1
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "pre-commit: nothing was committed."
+  exit 1
+fi
+
+exit 0

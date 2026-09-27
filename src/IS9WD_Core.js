@@ -342,8 +342,12 @@ function IS9WD_vpLine(vpName, position) {
   return IS9WD_upper_(vpName) + '  |  ' + IS9WD_upper_(position);
 }
 
-// count is the officer's total for the week and is the same on both of their pages, so
-// a committee with 14 items reads 14 TASKS above page 1's ten slots and page 2's four.
+// count is what the caller decided to print, and the feed passes the count that FIT, not
+// the count the officer holds: an officer holding 16 items on a 15 slot slide reads
+// 15 TASKS, and the 1 that did not fit is reported by the feed rather than on the slide.
+// Ethan ruled on 2026-09-28 that the slide must be internally consistent, so a reader
+// who counts the lines gets the number in the headline. What did not fit is not silent:
+// it is in Not published, in the app, in the emails and in the Sunday brief.
 function IS9WD_tagline(weekNo, rangeText, count) {
   var n = IS9WD_int_(count);
   if (n === null) n = 0;
@@ -546,10 +550,13 @@ function IS9WD_publishSplit(count, slotsPerPage, maxParts) {
   return { parts: parts, published: published, notPublished: Math.max(0, n - published) };
 }
 
-// The one place a physical page number is produced. Page 1 is the title page, carousel
-// order 1 owns 02 and 03, order 9 owns 18 and 19, so a committee's pair is adjacent and
-// any ascending subset of pages is already in reading order. Null when no page can
-// hold it, which the data tab renders as a blank Master page.
+// The one place a physical page number is produced. Page 1 is the title page. At one page
+// per officer, which is the shipping setting, order 1 owns 02 and order 14 owns 15, so the
+// map is simply the order plus one and any ascending subset of pages is already in reading
+// order. The formula still carries the general case: at a cap of 2 an order would own an
+// adjacent pair, which is what the design was before 2026-09-28. Null when no page can
+// hold it, including every part past the cap, which the data tab renders as a blank
+// Master page and which is now the per row proof that continuation pages are gone.
 function IS9WD_masterPage(carouselOrder, part, maxParts) {
   var i = IS9WD_int_(carouselOrder);
   var p = IS9WD_int_(part);
@@ -634,8 +641,9 @@ function IS9WD_slotRow_(item, slot, rank, weekStart, weekEnd, hex) {
   return row;
 }
 
-// The 19 plan rows, one per physical master page, always present and most of them
-// unused in a normal week. Row one is the title page. Used is the only thing that
+// The plan rows, one per physical master page, always present and some of them unused in
+// a normal week. Fifteen of them on the shipping setting, one title page plus fourteen
+// officers, and the count is computed from the capacity numbers rather than fixed. Row one is the title page. Used is the only thing that
 // decides whether a page reaches the carousel, and Position is the slide number the
 // viewer will see, renumbered with no gap whenever a page drops out.
 function IS9WD_pagePlan(officers, slotsPerPage, maxParts, publishEmptyPages) {

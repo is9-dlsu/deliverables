@@ -6,7 +6,7 @@ This file is the contract. Every cell address, formula, endpoint action and acce
 
 ## 1. What it is
 
-Ethan writes each officer's weekly deliverables. Each officer opens a private link on their phone and ticks items off. Every Sunday, Claude reads one tab through the Google Drive connector and updates the 10-page Canva carousel `DAHVvLLgskQ`. Canva editing is not part of this build; the weekly procedure lives in `canva/CANVA_RUN.md`.
+Ethan writes each officer's weekly deliverables. Each officer opens a private link on their phone and ticks items off. Every Sunday, Claude reads one tab through the Google Drive connector and updates the 15-page Canva carousel `DAHVvLLgskQ`. Canva editing is not part of this build; the weekly procedure lives in `canva/CANVA_RUN.md`.
 
 | Who | What they touch |
 |---|---|
@@ -34,15 +34,21 @@ Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet acces
 
 **Status is a checklist.** `Open` or `Accomplished`, defined in Configuration, never hardcoded. Ticking is reversible for 60 seconds, then only Ethan can reopen an item. Nothing in the code keys on the label: everything reads a derived `Active` flag, so renaming a status, or going back to four of them, costs one Configuration edit.
 
-**No cap on items, ten slots per page.** A committee with eleven active items gets a second Canva page, so the carousel is 1 title page plus 9 committee pages plus one continuation page per overflowing committee. The worst case is 19 slides, which is under Instagram's manual limit of 20. Beyond 20 items one committee cannot be shown in full: the extra items live in the app, the emails and the Sunday brief, and the feed flags what was not published.
+**No cap on items, fifteen slots per slide, one slide per officer.** Ethan ruled on 2026-09-28. The carousel is 1 title slide plus 14 officer slides, always, at every possible input: fifteen is not a typical length, it is the only length. There are no continuation slides, so no week can make the carousel longer or shorter than the master design. An officer holding more than fifteen active items shows fifteen; the rest live in the app, the emails and the Sunday brief, and the feed reports the count under `Not published`. The tagline prints the count that FIT rather than the count held, so a reader who counts the lines on a slide gets the number in the headline.
+
+This replaces the earlier design of ten slots across up to two pages per committee. Two things drove the change. The per officer ceiling is now fifteen rather than the ten that dropping continuation slides alone would have left, which keeps truncation rare and keeps `Tasks with no slide`, the `Attention` column, column L and the Officer Tables card heading working as the exception reports they were designed to be. And a fixed length is a fixed master: fifteen pages drawn once, never a page created or deleted by a weekly run.
 
 **The week rolls over on Sunday.** Week start is the Monday of the week containing tomorrow. So Sunday's run always describes the week that starts the next morning, and Monday to Saturday describe the week in progress.
 
 **Overdue has two meanings, deliberately.** Everywhere a human reads it, overdue means the deadline has passed and the item is still active. In the Canva feed, the `OVERDUE` window means the deadline falls before the week start, exactly as v1 defined it. They agree on Sunday, which is the only day the feed is read.
 
-**Fourteen people, nine publish.** The President and the four EVPs have deliverables, private links, emails and a line in the Sunday brief like everyone else, but no Canva page. Only the nine committees publish, and only their flags can hold the carousel. The reason is arithmetic: Instagram caps a carousel at 20 slides, and publishing all 14 with continuation pages reaches 29 in the worst case, produced by ordinary use rather than by anything anyone did wrong.
+**Fourteen people, fourteen publish, in hierarchy order.** Ethan ruled on 2026-09-28. Every officer has a slide: he leads on slide 2, the four EVPs take 3 to 6, and the nine committees take 7 to 15. Carousel order and hierarchy order therefore hold the same fourteen values, and they remain two columns on purpose, because one is physical page arithmetic and the other is the order every list a person reads is sorted by, and a later administration may want them to differ.
 
-**Carousel pages are computed, not fixed.** A page is identified by its owner and part number, not by a page number that never moves. The master design holds 19 pages built once by hand, each committee's page followed by its continuation page, and the weekly run edits text and exports only the pages that week needs. Canva's connector can add a page but cannot duplicate one, and where an added page lands is undocumented, so nothing in the weekly run creates or deletes pages.
+The earlier design published only the nine committees, and its stated reason was Instagram's cap of 20 slides in one carousel. **That cap is withdrawn as a constraint, not merely satisfied:** Ethan ruled the same day that the carousel is not posted to Instagram. It is recorded here because a reason left lying in a spec outlives the decision it justified, and the next person to read it would rebuild the wrong thing. Nothing in the code has ever compared a slide count to 20, which was itself a gap: the only 20 in the workbook was a caption.
+
+Changing the publish set or a slide number is not a settings edit, it is a claim on a page somebody drew by hand. So `Checks > Switch the carousel to all fourteen` moves the two settings and the two columns together in one locked run, logs every before and after value, and the self test compares the live set to the shipping set row by row rather than only counting it, because a hand ticked office and a hand unticked committee give the same total and a different fourteen people.
+
+**Carousel pages are computed, not fixed.** A page is identified by its owner and part number, not by a page number that never moves. The master design holds 15 pages built once by hand, the title page then one page per officer in hierarchy order, and the weekly run edits text and exports the pages that week needs, which at one page per officer is all of them. Canva's connector can add a page but cannot duplicate one, and where an added page lands is undocumented, so nothing in the weekly run creates or deletes pages.
 
 **The sign-off is weekly, not a setting.** Prepared by and Checked by change every week, so Ethan sets them in the app each week, from a picker over the 14, and the Sheet keeps one row per week. `Ready for Canva` reads NO until this week's sign-off is set, because the alternative is quietly printing last week's names.
 
@@ -52,7 +58,9 @@ Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet acces
 
 **A tab is trimmed to its last built row, and nothing is painted past it.** Both computed views are trimmed as the last act of their own build rather than the first, and everything past the end is cleared before the trim. The order is what matters: a trim before the paint leaves a window in which any later step that grows the grid inherits the format of the last built row, because Sheets copies the row above into every row it inserts, and that is how the end band painted `03 | Statistics` dark green a thousand rows below its content.
 
-**Nothing personal reaches the repo.** No name, no address, no token, no URL that matters. The roster lives in the Sheet; the endpoint and app URLs live in Configuration and are read by every email. A pre-commit scan enforces it.
+**Nothing personal reaches the repo.** No name, no address, no token, no URL that matters. The roster lives in the Sheet; the endpoint and app URLs live in Configuration and are read by every email.
+
+A pre-commit scan enforces the part of it that has a shape. `tools/hooks/pre-commit`, wired up with `git config core.hooksPath tools/hooks`, refuses a commit carrying an email address, an Apps Script deployment id or `/macros/s/` URL, a Google file id or a token, and refuses an em dash in anything a person reads. It scans only what git tracks, so a gitignored `.clasp.json` does not cry wolf. **It cannot recognise a person's name**, which is stated here rather than left to be discovered: the roster stays out of the repo because that is the rule, not because a regular expression is watching. Until 2026-09-28 the scan this paragraph promised did not exist at all: `.git/hooks/` held only Git's own samples, and a name had been sitting in `tools/preview-week.js` since commit 5dff177.
 
 **The endpoint is public, so it is hostile until proven otherwise.** Every request is a POST with `Content-Type: text/plain` carrying JSON, because that is what works cross-origin (measured 2026-09-27: a JSON content type and any custom header both fail). No request does anything before its token is validated.
 
@@ -116,7 +124,7 @@ Ownership transfers inside the DLSU domain, so the next president inherits the S
 2. Term 1 runs `2026-09-07` to `2026-12-13`, 14 weeks. Terms 2 and 3 are filled when DLSU publishes them. A blank end date pauses every job mid-trimester.
 3. The repo name, which fixes the app URL.
 4. A ruling on each proposed contract change in Appendix A2.
-5. The Canva master design built out to 19 pages: the title page, then each committee page followed by its continuation page, in the order this spec lists. One session in Canva, once.
+5. The Canva master design built out to 15 pages: the title page, then one page per officer in hierarchy order, President on page 2 through Finance on page 15, each page carrying fifteen item frames. One session in Canva, once. Do not draw it before `Checks > Switch the carousel to all fourteen` has run and the self test is clean, because the slide numbers the export list uses come from the workbook and a page drawn against a different numbering is a page the run will skip.
 
 ## 10. Conventions
 

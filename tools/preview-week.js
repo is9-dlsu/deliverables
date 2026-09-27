@@ -12,6 +12,7 @@ const path = require('path');
 const vm = require('vm');
 
 const SRC = path.join(__dirname, '..', 'src', 'IS9WD_Core.js');
+const CFG = path.join(__dirname, '..', 'src', 'IS9WD_Config.js');
 const ctx = {
   Date: Date, Math: Math, JSON: JSON, String: String, Number: Number,
   Array: Array, Object: Object, RegExp: RegExp, Error: Error,
@@ -19,6 +20,26 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(SRC, 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(CFG, 'utf8'), ctx);
+
+// The shipping capacity and the roster, read rather than retyped. Partnerships is the
+// sample committee because its ten items below are the ones v1's strings were written
+// against; its slide number comes from the directory like everyone else's.
+function shipped(name, fallback) {
+  for (const holder of [ctx.IS9WD_CFG, ctx.IS9WD_ENG]) {
+    for (const key of Object.keys(holder)) {
+      const block = holder[key];
+      if (!block || !block.rows) continue;
+      for (const row of block.rows) {
+        if (row.name === name && row.value !== undefined) return row.value;
+      }
+    }
+  }
+  return fallback;
+}
+const SLOTS = shipped('IS9WD_SLOTS_PER_PAGE', 15);
+const PARTS = shipped('IS9WD_MAX_PARTS', 1);
+const SAMPLE = ctx.IS9WD_DEFAULTS.DIRECTORY.filter((r) => r[2] === 'Partnerships')[0];
 
 const TERM = [{ name: 'Term 1', start: '2026-09-07', end: '2026-12-13' }];
 const AY = 'A.Y. 2026 - 2027';
@@ -54,14 +75,15 @@ console.log('  ' + ctx.IS9WD_weekLine(weekNo, range, AY));
 ctx.IS9WD_legendLines(week.weekStart, week.weekEnd).forEach((l) => console.log('  ' + l));
 console.log('');
 
-console.log('PAGE 2, PARTNERSHIPS');
-console.log('  PARTNERSHIPS');
+console.log('PAGE ' + ctx.IS9WD_two_(ctx.IS9WD_masterPage(SAMPLE[1], 1, PARTS)) +
+  ', ' + ctx.IS9WD_upper_(SAMPLE[2]));
+console.log('  ' + ctx.IS9WD_upper_(SAMPLE[2]));
 console.log('  ' + ctx.IS9WD_vpLine('Juan Dela Cruz', 'VICE PRESIDENT'));
 console.log('  ' + ctx.IS9WD_tagline(weekNo, range, items.length));
 console.log('  next due: ' + ctx.IS9WD_nextDueText(items, week.weekStart));
 console.log('');
 
-const split = ctx.IS9WD_slotRows(items, week.weekStart, week.weekEnd, HEX, 10, 2);
+const split = ctx.IS9WD_slotRows(items, week.weekStart, week.weekEnd, HEX, SLOTS, PARTS);
 split.pages.forEach((page) => {
   console.log('  part ' + page.part);
   page.rows.forEach((r, i) => {

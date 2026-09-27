@@ -600,9 +600,9 @@ IS9WD_CFG.TERMS = {
 //  THE PEOPLE  (4.8, the seven columns a president fills)
 // ---------------------------------------------------------------------------
 
-// Fourteen rows: the nine committees that reach Canva, then the President and the four
-// EVPs, who have items, links and emails and no Canva page. The carousel order, the
-// hierarchy order and the two token columns are all machinery and live on `_Engine`,
+// Fourteen rows, and all fourteen reach the carousel: the nine committees, the President
+// and the four EVPs. Every officer has items, a link, emails and one slide. The carousel
+// order, the hierarchy order and the two token columns are all machinery and live on `_Engine`,
 // keyed on the same Key in the same row order, which is what keeps this tab to the seven
 // columns a person fills and reads.
 IS9WD_CFG.DIRECTORY = {
@@ -658,10 +658,10 @@ IS9WD_CFG.DIRECTORY = {
     {
       header: 'On the carousel', owner: IS9WD_OWN.ETHAN, align: IS9WD_ALIGN.CENTER,
       wrap: IS9WD_WRAP.WRAP, validate: { kind: IS9WD_V.CHECKBOX },
-      hint: 'Tick this for a row that gets its own Instagram slide. It is ticked for the ' +
-        'nine committees and left clear for the President and the four EVPs, who are ' +
-        'tracked and emailed exactly the same way and simply do not have a slide. ' +
-        'Ticking a tenth row needs a new Canva master, so ask before you do.'
+      hint: 'Tick this for a row that gets its own slide on the carousel. It is ticked for ' +
+        'all fourteen: you lead on slide 2, the four EVPs follow, then the nine ' +
+        'committees. Unticking a row takes that officer off the carousel, and ticking a ' +
+        'fifteenth row needs a new Canva master, so ask before you change it.'
     },
     {
       header: 'Check', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.LEFT,
@@ -1038,27 +1038,30 @@ IS9WD_ENG.CAPACITY = {
   rows: [
     {
       row: 35, name: 'IS9WD_SLOTS_PER_PAGE', label: 'Slots per Canva page',
-      owner: IS9WD_OWN.ETHAN, value: 10, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      owner: IS9WD_OWN.ETHAN, value: 15, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
       validate: { kind: IS9WD_V.INT, min: 1, max: 50, help: 'The item frames the master page physically carries.' },
-      hint: 'How many task frames one slide physically holds. Changing it without ' +
-        'rebuilding the Canva master publishes text into frames that are not there.'
+      hint: 'How many task frames one slide physically holds, and therefore the most ' +
+        'tasks one officer can show, because each officer has exactly one slide. ' +
+        'Changing it without rebuilding the Canva master publishes text into frames ' +
+        'that are not there.'
     },
     {
-      row: 36, name: 'IS9WD_MAX_PARTS', label: 'Maximum Canva pages per committee',
-      owner: IS9WD_OWN.ETHAN, value: 2, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      row: 36, name: 'IS9WD_MAX_PARTS', label: 'Maximum Canva pages per officer',
+      owner: IS9WD_OWN.ETHAN, value: 1, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
       validate: { kind: IS9WD_V.INT, min: 1, max: 4, help: 'Raising this needs a master rebuild before it can be used.' },
-      hint: 'How many slides one committee may take. Two means a committee with eleven ' +
-        'tasks gets a continuation slide.'
+      hint: 'How many slides one officer may take. One means every officer has exactly ' +
+        'one slide, so the carousel is always 1 title slide plus 14, and tasks past the ' +
+        'slot count are reported as not published rather than carried onto a second slide.'
     },
     {
-      row: 37, name: 'IS9WD_PUBLISH_MAX', label: 'Publishable items per committee (derived)',
+      row: 37, name: 'IS9WD_PUBLISH_MAX', label: 'Publishable items per officer (derived)',
       owner: IS9WD_OWN.SCRIPT, formula: '=IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS',
       format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
       note: '=IF(NOT(ISNUMBER(IS9WD_PUBLISH_MAX)),"Publishable maximum is not a number",IF(IS9WD_PUBLISH_MAX<>IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS,"Capacity numbers disagree: "&IS9WD_SLOTS_PER_PAGE&" times "&IS9WD_MAX_PARTS&" is "&IS9WD_SLOTS_PER_PAGE*IS9WD_MAX_PARTS,"OK"))'
     },
     {
       row: 38, name: 'IS9WD_PUBLISH_EMPTY_PAGES',
-      label: 'Publish a page for a committee with no items',
+      label: 'Publish a page for an officer with no items',
       owner: IS9WD_OWN.ETHAN, value: true, validate: { kind: IS9WD_V.CHECKBOX },
       align: IS9WD_ALIGN.CENTER,
       hint: 'Tick to give a committee with nothing entered a slide that says so. Clear ' +
@@ -1222,7 +1225,8 @@ IS9WD_ENG.THRESHOLDS = {
       owner: IS9WD_OWN.ETHAN, value: 21, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
       validate: { kind: IS9WD_V.INT, min: 3, max: 40, help: 'One row is the overflow notice, so 13 shows 12 items. 21 guarantees nothing is ever hidden.' },
       hint: 'How many rows each officer\'s table reserves. One of them is the notice ' +
-        'row, so 21 shows 20 tasks, which is the most any committee can publish.',
+        'row, so 21 shows 20 tasks. This table shows everything an officer holds, which ' +
+        'is not the same as what fits on their slide.',
       note: '=IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,"Run Build or repair workbook: the reserved rows do not match the tab","OK")'
     }
   ]
@@ -1444,25 +1448,28 @@ var IS9WD_DEFAULTS = {
   // and DLSU addresses and they live only in the Sheet (4.8).
   // The nine committee spellings are exactly what their Canva headline prints.
   DIRECTORY: [
-    ['K01', 1, 'Partnerships', 'VICE PRESIDENT', true, 6],
-    ['K02', 2, 'Publications', 'VICE PRESIDENT', true, 7],
-    ['K03', 3, 'Marketing and Advocacy', 'VICE PRESIDENT', true, 8],
-    ['K04', 4, 'Membership', 'VICE PRESIDENT', true, 9],
-    ['K05', 5, 'Team Management', 'VICE PRESIDENT', true, 10],
-    ['K06', 6, 'Investment Strategy & Education', 'VICE PRESIDENT', true, 11],
-    ['K07', 7, 'Investment Research', 'VICE PRESIDENT', true, 12],
-    ['K08', 8, 'Documentation', 'VICE PRESIDENT', true, 13],
-    ['K09', 9, 'Finance', 'VICE PRESIDENT', true, 14],
-    ['K10', '', 'President', 'PRESIDENT', false, 1],
-    ['K11', '', 'Executive Vice President for Externals', 'EXECUTIVE VICE PRESIDENT FOR EXTERNALS', false, 2],
-    ['K12', '', 'Executive Vice President for Internals', 'EXECUTIVE VICE PRESIDENT FOR INTERNALS', false, 3],
-    ['K13', '', 'Executive Vice President for Investments', 'EXECUTIVE VICE PRESIDENT FOR INVESTMENTS', false, 4],
-    ['K14', '', 'Executive Vice President for Operations', 'EXECUTIVE VICE PRESIDENT FOR OPERATIONS', false, 5]
+    ['K01', 6, 'Partnerships', 'VICE PRESIDENT', true, 6],
+    ['K02', 7, 'Publications', 'VICE PRESIDENT', true, 7],
+    ['K03', 8, 'Marketing and Advocacy', 'VICE PRESIDENT', true, 8],
+    ['K04', 9, 'Membership', 'VICE PRESIDENT', true, 9],
+    ['K05', 10, 'Team Management', 'VICE PRESIDENT', true, 10],
+    ['K06', 11, 'Investment Strategy & Education', 'VICE PRESIDENT', true, 11],
+    ['K07', 12, 'Investment Research', 'VICE PRESIDENT', true, 12],
+    ['K08', 13, 'Documentation', 'VICE PRESIDENT', true, 13],
+    ['K09', 14, 'Finance', 'VICE PRESIDENT', true, 14],
+    ['K10', 1, 'President', 'PRESIDENT', true, 1],
+    ['K11', 2, 'Executive Vice President for Externals', 'EXECUTIVE VICE PRESIDENT FOR EXTERNALS', true, 2],
+    ['K12', 3, 'Executive Vice President for Internals', 'EXECUTIVE VICE PRESIDENT FOR INTERNALS', true, 3],
+    ['K13', 4, 'Executive Vice President for Investments', 'EXECUTIVE VICE PRESIDENT FOR INVESTMENTS', true, 4],
+    ['K14', 5, 'Executive Vice President for Operations', 'EXECUTIVE VICE PRESIDENT FOR OPERATIONS', true, 5]
   ]
 };
 
-// Nine publishing rows out of fourteen, counted rather than asserted, because the
-// feed's whole size follows from this number (6.3).
+// Fourteen rows, all fourteen publishing, counted rather than asserted, because the
+// feed's whole size follows from this number (6.3). Carousel order and hierarchy order
+// now hold the same fourteen values, and they stay two columns on purpose: one is the
+// physical page arithmetic and one is the order every list a person reads is sorted by,
+// and a later administration may want them to differ.
 var IS9WD_DIR_ROWS = IS9WD_DEFAULTS.DIRECTORY.length;
 
 // ============================================================================
@@ -1553,9 +1560,10 @@ function IS9WD_itemsHelpText_(publishMax, slotsPerPage, maxParts) {
   if (max === null || per === null || parts === null) {
     return 'One row per deliverable. Enter as many as the week really holds: nothing is refused. Tick an item off rather than deleting it. Anything active with a past deadline shows as overdue.';
   }
+  var slides = parts === 1 ? 'on their one slide' : 'across ' + parts + ' slides';
   return 'One row per deliverable. Enter as many as the week really holds: nothing is refused. ' +
-    'A committee\'s first ' + max + ' active items reach the carousel, ' + per + ' to a page across ' +
-    parts + ' pages; the rest are tracked, emailed and reported, and the Sunday brief names them. ' +
+    'An officer\'s first ' + max + ' active items reach the carousel, ' + per + ' to a slide ' +
+    slides + '; the rest are tracked, emailed and reported, and the Sunday brief names them. ' +
     'Tick an item off rather than deleting it. Anything active with a past deadline shows as overdue.';
 }
 
@@ -1632,6 +1640,12 @@ var IS9WD_FEED_HELPER = { firstCol: 18, lastCol: 22 };
 // Block D is a budget rather than a bound: nothing caps the items Ethan enters, so
 // Flag list check compares the flag count against this block's row count and holds
 // readiness at NO when it is short (6.3).
+//
+// The budget is one slot count per officer plus slack, and it is deliberately NOT
+// multiplied by the page count. A flag is one flagged item, and how many slides that
+// officer takes has nothing to do with it. Multiplying by parts is what made this
+// budget halve the day continuation pages were dropped, which would have held the
+// carousel at 181 flagged rows on a workbook whose flag count had not moved.
 var IS9WD_FEED_FLAG_SLACK = 40;
 
 // Every row number on the tab, computed from the three capacity numbers and the
@@ -1654,7 +1668,7 @@ function IS9WD_feedLayout_(publishingRows, slotsPerPage, maxParts, directoryRows
     pageRows: pages,
     planRows: 1 + pages,
     slotRows: pages * per,
-    flagRows: dir * per * parts + IS9WD_FEED_FLAG_SLACK,
+    flagRows: dir * per + IS9WD_FEED_FLAG_SLACK,
     firstCol: 1,
     lastCol: 13,
     helperFirstCol: IS9WD_FEED_HELPER.firstCol,
@@ -1731,7 +1745,7 @@ var IS9WD_FEED_HELP = 'Live formulas only. Nothing here is typed, and nothing he
 
 var IS9WD_FEED_CACHE_ = null;
 
-// The shipping layout: nine publishing rows, ten slots, two parts, last row 579.
+// The shipping layout: fourteen publishing rows, fifteen slots, one part.
 // It is a function rather than a top level constant on purpose. Apps Script
 // evaluates each file in turn, and this file sorts before IS9WD_Core.js, so a
 // constant computed at load time would call a Core helper that does not exist yet
@@ -2793,6 +2807,10 @@ var IS9WD_PROP = {
   // Document Properties.
   NEXT_ID: 'IS9WD_NEXT_ID',
   SEED_RECORD: 'IS9WD_SEED_RECORD',
+  // The date Switch the carousel last ran. It exists so a second run has to be
+  // confirmed against the first: renumbering a slide once the Canva master is built
+  // sends two officers to one page (4.8).
+  CAROUSEL_SWITCHED: 'IS9WD_CAROUSEL_SWITCHED',
   DONE_PREFIX: 'IS9WD_DONE_',
   ALERT_PREFIX: 'IS9WD_ALERT_'
 };

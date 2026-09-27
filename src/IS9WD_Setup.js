@@ -99,7 +99,7 @@ var IS9WD_DIR_CHECK_FORMULA_ =
   'IF($C{row}="","No name yet",' +
   'IF($E{row}="","No email yet",' +
   'IF(AND($F{row}=TRUE,INDEX(IS9WD_DIR_CAROUSEL,{off})=""),' +
-  '"On the carousel with no slide number: untick it, or ask before adding a slide",' +
+  '"On the carousel with no slide number: run Build or repair workbook",' +
   'IF(AND(INDEX(IS9WD_DIR_CAROUSEL,{off})<>"",' +
   'COUNTIF(IS9WD_DIR_CAROUSEL,INDEX(IS9WD_DIR_CAROUSEL,{off}))>1),' +
   '"Two rows share one slide number",' +
@@ -360,7 +360,7 @@ function IS9WD_buildOrRepairLocked_() {
       report.tables.itemRows + ' items, last row ' + report.tables.lastRow);
   }
 
-  IS9WD_setupBackfillDirectory_(sheets.CONFIG, say);
+  IS9WD_setupBackfillDirectory_(sheets.CONFIG, sheets.ENGINE, say);
   // The high-water mark is raised before anything is minted from it: a stored next
   // ID of 1 beside a column already holding D0001 would hand a hand-typed row an
   // ID that another row already has, and two items under one ID is what the log and
@@ -1219,19 +1219,43 @@ function IS9WD_setupHeaderCol_(layout, header) {
 // ============================================================================
 
 // Key, Carousel order and Hierarchy order are written once and never rewritten: the
-// master design's pages are physical, so renumbering an ordinal would send two
-// committees to one page (4.8). The write-if-blank pass in the table writer already
-// does it; this reports what it found, so a blank ordinal is visible rather than
-// merely flagged by the Check column.
-function IS9WD_setupBackfillDirectory_(sheet, say) {
+// master design's pages are physical, so renumbering an ordinal would send two officers
+// to one page (4.8). The write-if-blank pass in the table writer already does it; this
+// reports what it found, so a blank or duplicated ordinal is visible in the build log
+// rather than only in the Check column, which is where a half migrated workbook hides.
+function IS9WD_setupBackfillDirectory_(sheet, engineSheet, say) {
   var d = IS9WD_CFG.DIRECTORY;
+  var e = IS9WD_ENG.DIRECTORY;
   var count = d.lastRow - d.firstRow + 1;
   var keys = sheet.getRange(d.firstRow, 1, count, 1).getValues();
-  var blanks = 0;
+  var keyed = 0;
   for (var i = 0; i < keys.length; i++) {
-    if (IS9WD_blank_(keys[i][0])) blanks++;
+    if (!IS9WD_blank_(keys[i][0])) keyed++;
   }
-  say('directory: ' + (count - blanks) + ' of ' + count + ' rows keyed');
+  say('directory: ' + keyed + ' of ' + count + ' rows keyed');
+
+  var pub = sheet.getRange(d.firstRow, 6, count, 1).getValues();
+  var ord = engineSheet.getRange(e.firstRow, 2, count, 1).getValues();
+  var publishing = 0;
+  var missing = [];
+  var seen = {};
+  var shared = {};
+  for (var r = 0; r < count; r++) {
+    if (!IS9WD_bool_(pub[r][0])) continue;
+    publishing++;
+    var num = IS9WD_int_(ord[r][0]);
+    var key = IS9WD_trim_(keys[r][0]).toUpperCase();
+    if (num === null) { missing.push(key); continue; }
+    if (seen[num]) { shared[num] = true; } else { seen[num] = key; }
+  }
+  var dupes = [];
+  for (var s in shared) {
+    if (Object.prototype.hasOwnProperty.call(shared, s)) dupes.push(s);
+  }
+  say('carousel: ' + publishing + ' of ' + count + ' rows publish, ' +
+    (missing.length ? missing.length + ' with no slide number (' + missing.join(', ') +
+      ')' : 'every one numbered') +
+    (dupes.length ? ', and slide ' + dupes.join(' and ') + ' is claimed twice' : ''));
 }
 
 // ============================================================================
@@ -1565,13 +1589,14 @@ function IS9WD_setupCellList_(cells) {
 // One appended block per run. IS9WD_Archive.js owns the general logger; this writer
 // exists so a build can record itself before that module lands, and it appends in
 // one call rather than a row at a time.
-function IS9WD_setupAppendLog_(sheet, lines, ok) {
+function IS9WD_setupAppendLog_(sheet, lines, ok, action) {
   if (!lines.length) return;
   var actor = IS9WD_setupActor_();
   var at = IS9WD_stampText_(IS9WD_nowManila_());
+  var what = IS9WD_trim_(action) === '' ? IS9WD_SETUP_ACTION_ : IS9WD_trim_(action);
   var rows = [];
   for (var i = 0; i < lines.length; i++) {
-    rows.push([at, actor, IS9WD_SETUP_SOURCE_, IS9WD_SETUP_ACTION_, '', '',
+    rows.push([at, actor, IS9WD_SETUP_SOURCE_, what, '', '',
       lines[i], ok ? 'OK' : 'FAIL']);
   }
   var first = Math.max(sheet.getLastRow() + 1, IS9WD_LOG.firstRow);
@@ -1595,4 +1620,169 @@ function IS9WD_setupAppendLog_(sheet, lines, ok) {
 function IS9WD_setupActor_() {
   var email = IS9WD_trim_(Session.getEffectiveUser().getEmail());
   return email === '' ? IS9WD_SETUP_SOURCE_ : email;
+}
+
+// ============================================================================
+//  THE CAROUSEL SWITCH  (build-out only, 4.8 as ruled on 2026-09-28)
+// ============================================================================
+
+// Ethan ruled on 2026-09-28 that all fourteen officers get a slide, one slide each,
+// fifteen slots to a slide, and that the carousel runs in hierarchy order so he leads on
+// slide 2. Three settings and two columns have to move together, and the ORDER MATTERS in
+// a way no instruction list survives:
+//
+//   · Tick the fourteen checkboxes while the page cap is still 2 and the master page count
+//     passes through 20, 22, 24, 26 and 28, so the Plan check blocks the build the whole
+//     way and the workbook looks broken when it is only half configured.
+//   · Carousel order is owner ONCE, so no build renumbers a filled cell. The nine
+//     committees hold 1 to 9 and the five offices would be seeded 1 to 5 underneath them.
+//     That is nine duplicated slide numbers, which is worse than an error because two
+//     officers would quietly export to one page.
+//
+// So this exists instead of seven hand steps in a fixed order. It moves everything inside
+// one locked execution, records every before and after value in the log, and then builds.
+// It refuses if the roster's keys no longer match the defaults, because renumbering a
+// roster somebody has reordered would hand an officer another officer's slide.
+//
+// It is build-out only. Once the Canva master exists, renumbering a slide sends two
+// officers to one page, so a second run demands a second confirmation naming the date of
+// the first.
+var IS9WD_CAROUSEL_ACTION_ = 'Switch the carousel';
+
+function IS9WD_carouselSwitchAll_() {
+  if (LockService.getDocumentLock().hasLock()) return IS9WD_carouselSwitchLocked_();
+  return IS9WD_withLock_(function () { return IS9WD_carouselSwitchLocked_(); });
+}
+
+function IS9WD_carouselSwitchLocked_() {
+  var lines = [];
+  var say = function (line) { lines.push(line); Logger.log(line); };
+
+  var cfgSheet = IS9WD_setupSheet_('CONFIG');
+  var engSheet = IS9WD_setupSheet_('ENGINE');
+  var d = IS9WD_CFG.DIRECTORY;
+  var e = IS9WD_ENG.DIRECTORY;
+  var count = d.lastRow - d.firstRow + 1;
+  var want = IS9WD_DEFAULTS.DIRECTORY;
+  if (want.length !== count) {
+    throw new Error('The directory defaults hold ' + want.length + ' rows and the tab ' +
+      'holds ' + count + '. Run Build or repair workbook first.');
+  }
+
+  // The roster has to be the roster this renumbering was computed for. A reordered or
+  // retyped Key column means the ordinals in the defaults belong to different people.
+  var keys = cfgSheet.getRange(d.firstRow, 1, count, 1).getValues();
+  var wrong = [];
+  for (var k = 0; k < count; k++) {
+    var mine = IS9WD_trim_(keys[k][0]).toUpperCase();
+    if (mine !== IS9WD_trim_(want[k][0]).toUpperCase()) {
+      wrong.push('row ' + (d.firstRow + k) + ' reads ' + (mine === '' ? 'blank' : mine) +
+        ' and should read ' + want[k][0]);
+    }
+  }
+  if (wrong.length) {
+    throw new Error('The roster keys do not match the defaults, so nothing was changed: ' +
+      wrong.join('; ') + '.');
+  }
+
+  // Two settings first, so the page count never passes through a blocked value.
+  var changedSettings = IS9WD_carouselSettings_(say);
+
+  // On the carousel, and the slide numbers, written together.
+  var pubRange = cfgSheet.getRange(d.firstRow, 6, count, 1);
+  var ordRange = engSheet.getRange(e.firstRow, 2, count, 1);
+  var pubNow = pubRange.getValues();
+  var ordNow = ordRange.getValues();
+  var pubOut = [];
+  var ordOut = [];
+  var pubTouched = false;
+  var ordTouched = false;
+  for (var r = 0; r < count; r++) {
+    var wantPub = want[r][4] === true;
+    var wantOrd = IS9WD_int_(want[r][1]);
+    var hadPub = IS9WD_bool_(pubNow[r][0]);
+    var hadOrd = IS9WD_int_(ordNow[r][0]);
+    pubOut.push([wantPub]);
+    ordOut.push([wantOrd === null ? '' : wantOrd]);
+    if (hadPub !== wantPub) {
+      pubTouched = true;
+      say(want[r][0] + ' on the carousel: ' + (hadPub ? 'yes' : 'no') + ' becomes ' +
+        (wantPub ? 'yes' : 'no'));
+    }
+    if (hadOrd !== wantOrd) {
+      ordTouched = true;
+      say(want[r][0] + ' slide number: ' + (hadOrd === null ? 'blank' : hadOrd) +
+        ' becomes ' + (wantOrd === null ? 'blank' : wantOrd) + ', so ' + want[r][2] +
+        ' is on Canva page ' + IS9WD_two_(IS9WD_masterPage(wantOrd, 1, 1)));
+    }
+  }
+  if (pubTouched) pubRange.setValues(pubOut);
+  if (ordTouched) ordRange.setValues(ordOut);
+  if (!pubTouched && !ordTouched && !changedSettings) {
+    say('nothing to change: the carousel already holds all fourteen in this order');
+  }
+
+  // Every block on the feed below the officer table moves when the publish count and the
+  // page cap change, so the build is part of the switch rather than a thing to remember.
+  SpreadsheetApp.flush();
+  IS9WD_configReset_();
+  var report = IS9WD_buildOrRepairLocked_();
+  report.lines = lines.concat(report.lines);
+  report.carouselSwitched = true;
+
+  var store = PropertiesService.getDocumentProperties();
+  store.setProperty(IS9WD_PROP.CAROUSEL_SWITCHED,
+    IS9WD_dateKey_(IS9WD_todayManila_()));
+  IS9WD_setupAppendLog_(IS9WD_setupSheet_('LOG'), lines, true,
+    IS9WD_CAROUSEL_ACTION_);
+  return report;
+}
+
+// The two capacity settings, read from the block descriptors rather than typed here, so
+// the shipping numbers live in exactly one place (section 10).
+function IS9WD_carouselSettings_(say) {
+  var touched = false;
+  var names = ['IS9WD_SLOTS_PER_PAGE', 'IS9WD_MAX_PARTS'];
+  for (var i = 0; i < names.length; i++) {
+    var wantValue = IS9WD_settingDefault_(names[i]);
+    if (wantValue === null) continue;
+    var range = IS9WD_namedOrNull_(names[i]);
+    if (!range) {
+      throw new Error('The named range ' + names[i] + ' is missing, so nothing was ' +
+        'changed. Run Build or repair workbook first.');
+    }
+    var had = range.getValue();
+    if (IS9WD_int_(had) === IS9WD_int_(wantValue)) continue;
+    range.setValue(wantValue);
+    touched = true;
+    say(names[i] + ': ' + (IS9WD_blank_(had) ? 'blank' : had) + ' becomes ' + wantValue);
+  }
+  return touched;
+}
+
+// The shipping value of any settings row, found by its named range rather than by its
+// address, so a block that moves takes its default with it.
+function IS9WD_settingDefault_(name) {
+  var want = IS9WD_trim_(name);
+  for (var t = 0; t < IS9WD_SETTINGS_TABS.length; t++) {
+    var holder = IS9WD_SETTINGS_TABS[t].holder;
+    for (var b = 0; b < holder.BLOCKS.length; b++) {
+      var block = holder[holder.BLOCKS[b]];
+      if (!block.rows) continue;
+      for (var r = 0; r < block.rows.length; r++) {
+        if (IS9WD_trim_(block.rows[r].name) !== want) continue;
+        var v = block.rows[r].value;
+        return v === undefined ? null : v;
+      }
+    }
+  }
+  return null;
+}
+
+// The date the switch last ran, or an empty string. The menu reads it so a second run
+// has to be confirmed against the first, because renumbering a slide once the Canva
+// master exists sends two officers to one page.
+function IS9WD_carouselSwitchedOn_() {
+  return IS9WD_trim_(
+    PropertiesService.getDocumentProperties().getProperty(IS9WD_PROP.CAROUSEL_SWITCHED));
 }

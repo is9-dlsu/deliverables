@@ -1022,6 +1022,110 @@ console.log('\n21. No em dash and no en dash in any source file (10, 13.3)');
   check('no source file carries an em dash or an en dash', hits, []);
 }
 
+// --- 22. the shipping configuration ---------------------------------------
+
+// EVERY TEST ABOVE PASSES ITS OWN CAPACITY NUMBERS, which is the right way to test a
+// formula and the wrong way to believe the workbook is configured. On 2026-09-28 the
+// shipping numbers moved from nine publishers, ten slots and two pages to fourteen
+// publishers, fifteen slots and one page, and not one assertion above changed or failed.
+// So this section reads the real defaults out of IS9WD_Config.js and checks the shape the
+// carousel actually ships with. It is the only section that would notice if somebody
+// edited the roster or the capacity settings by hand.
+console.log('\n22. The shipping configuration, read from IS9WD_Config.js (4.6, 4.8)');
+{
+  const CFG_FILE = path.join(ROOT, 'src', 'IS9WD_Config.js');
+  if (!fs.existsSync(CFG_FILE)) {
+    check('IS9WD_Config.js is present', false, true);
+  } else {
+    vm.runInContext(fs.readFileSync(CFG_FILE, 'utf8'), sandbox);
+    const DIR = sandbox.IS9WD_DEFAULTS.DIRECTORY;
+    const shipped = function (name) {
+      for (const holder of [sandbox.IS9WD_CFG, sandbox.IS9WD_ENG]) {
+        for (const key of Object.keys(holder)) {
+          const block = holder[key];
+          if (!block || !block.rows) continue;
+          for (const row of block.rows) {
+            if (row.name === name && row.value !== undefined) return row.value;
+          }
+        }
+      }
+      return null;
+    };
+    const SLOTS = num(shipped('IS9WD_SLOTS_PER_PAGE'));
+    const PARTS = num(shipped('IS9WD_MAX_PARTS'));
+    const publishing = DIR.filter(function (r) { return r[4] === true; });
+
+    check('the roster holds fourteen officers', DIR.length, 14);
+    check('all fourteen publish', publishing.length, 14);
+    check('fifteen slots to a slide', SLOTS, 15);
+    check('one slide an officer', PARTS, 1);
+
+    // The ceiling a reader of 02 | Deliverables is promised.
+    check('so the publishable maximum is fifteen', SLOTS * PARTS, 15);
+
+    const orders = DIR.map(function (r) { return num(r[1]); }).sort(function (a, b) {
+      return a - b;
+    });
+    const oneToFourteen = [];
+    for (let i = 1; i <= 14; i++) oneToFourteen.push(i);
+    check('the slide numbers are 1 to 14 with no gap and no duplicate',
+      orders, oneToFourteen);
+
+    // Hierarchy order and carousel order agree today, and the test says so out loud
+    // rather than assuming it: they are two columns and a later administration may
+    // want them to differ.
+    check('and they agree with the hierarchy order, so the President leads',
+      DIR.map(function (r) { return num(r[1]) - num(r[5]); }),
+      DIR.map(function () { return 0; }));
+    const president = DIR.filter(function (r) { return r[3] === 'PRESIDENT'; })[0];
+    check('the President is slide number one', num(president[1]), 1);
+
+    const masterPage = fn('IS9WD_masterPage');
+    const pages = DIR.map(function (r) { return num(masterPage(r[1], 1, PARTS)); })
+      .sort(function (a, b) { return a - b; });
+    const twoToFifteen = [];
+    for (let n = 2; n <= 15; n++) twoToFifteen.push(n);
+    check('the fourteen officers own Canva pages 2 to 15', pages, twoToFifteen);
+    check('page 1 is nobody, because it is the title page',
+      pages.indexOf(1) < 0, true);
+    check('and there is no second part for anyone, at any order',
+      DIR.map(function (r) { return masterPage(r[1], 2, PARTS); }),
+      DIR.map(function () { return null; }));
+
+    const publishSplit = fn('IS9WD_publishSplit');
+    const split = function (n) {
+      const r = publishSplit(n, SLOTS, PARTS);
+      return [num(r.parts), num(r.published), num(r.notPublished)];
+    };
+    check('fifteen items fit exactly', split(15), [1, 15, 0]);
+    check('sixteen shows fifteen and reports one', split(16), [1, 15, 1]);
+    check('a quiet officer still gets a slide', split(0), [1, 0, 0]);
+
+    // Ethan's ruling of 2026-09-28: the tagline prints the count that fit, so a reader
+    // who counts the lines on the slide gets the number in the headline.
+    const tagline = fn('IS9WD_tagline');
+    check('the tagline prints the count that fit, not the count held',
+      tagline(4, 'SEP 28 TO OCT 4', split(16)[1]),
+      'WEEKLY DELIVERABLES  |  WEEK 04  |  SEP 28 TO OCT 4  |  15 TASKS');
+
+    const pagePlan = fn('IS9WD_pagePlan');
+    const all14 = DIR.map(function (r) {
+      return {
+        carouselOrder: num(r[1]), committee: r[2], name: 'Person ' + pad2(num(r[1])),
+        position: r[3], publishes: true, count: 3,
+      };
+    });
+    const plan = pagePlan(all14, SLOTS, PARTS, true);
+    check('the plan is fifteen rows, one per physical page', plan.length, 15);
+    check('every page is used in an ordinary week',
+      plan.filter(function (p) { return p.used; }).length, 15);
+    check('and the export list is 1 to 15 ascending',
+      plan.filter(function (p) { return p.used; })
+        .map(function (p) { return num(p.page); }).join(','),
+      '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15');
+  }
+}
+
 // --- result ----------------------------------------------------------------
 
 console.log('\n' + pass + ' passed, 0 failed\n');

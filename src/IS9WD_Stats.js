@@ -548,7 +548,8 @@ function IS9WD_statsHealthSpec_() {
 
   spec['H.PAGES'] = {
     value: '=' + IS9WD_statsFeed_('IS9WD_FEED_PAGES'),
-    reading: '="slides the carousel holds this week, out of the 20 Instagram allows"',
+    reading: '="slides the carousel holds this week, out of the "&' +
+      IS9WD_statsFeed_('IS9WD_FEED_MASTER') + '&" the master design holds"',
     flag: '=FALSE',
     format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT
   };
@@ -1197,9 +1198,9 @@ function IS9WD_statsOfficers_(sheet, layout) {
       'IF(N(IS9WD_STATS_OFF_SILENT_N)>=IS9WD_STATS_SILENT_DAYS,' +
         'IF(N(IS9WD_STATS_OFF_LASTTICK)=0,"Never ticked","Silent "&' +
         'IS9WD_STATS_OFF_SILENT_N&" days"),' +
-      'IF(N(IS9WD_STATS_OFF_NOTPUB)>0,"No slide for "&IS9WD_STATS_OFF_NOTPUB,' +
       'IF((IS9WD_STATS_ELAPSED>0)*(N(IS9WD_STATS_OFF_RATE)<' +
-        'IS9WD_STATS_ELAPSED/7-IS9WD_STATS_PACE_SLACK),"Behind pace","OK"))))))))',
+        'IS9WD_STATS_ELAPSED/7-IS9WD_STATS_PACE_SLACK),"Behind pace",' +
+      'IF(N(IS9WD_STATS_OFF_NOTPUB)>0,"No slide for "&IS9WD_STATS_OFF_NOTPUB,"OK"))))))))',
     // C, Due this week.
     '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',' +
       'IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">="&IS9WD_WEEK_START,' +
@@ -1255,8 +1256,10 @@ function IS9WD_statsOfficers_(sheet, layout) {
       'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0"))' +
       '/COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,FALSE,' +
       'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0"),"")))',
-    // L, No slide. Read from the feed by carousel ordinal, never recomputed, and blank by
-    // contract on an officer who does not publish.
+    // L, No slide. Read from the feed by carousel ordinal and never recomputed. All
+    // fourteen officers publish since 2026-09-28, so the blank branch fires for nobody
+    // today. It stays because unticking a row on 01 | Configuration is a supported edit,
+    // and without it that officer's column would read an ordinal that is not there.
     '=ARRAYFORMULA(' + blank + 'IF(IS9WD_STATS_OFF_CAROUSEL="","",' +
       'IFERROR(SUMIF(IS9WD_OFFICER_ORDINAL,IS9WD_STATS_OFF_CAROUSEL,IS9WD_NOTPUB),' +
       IS9WD_statsErr_() + '))))'

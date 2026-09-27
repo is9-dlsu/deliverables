@@ -1,0 +1,10 @@
+# Accepted matches for test/leakscan.test.js, exact text, one per line.
+# Every line needs a comment above it saying why it is safe.
+
+# The attribution line Claude Code adds to a commit. Not a person in this org.
+noreply@anthropic.com
+
+# Deliberately fake tokens in test/core.test.js, used to prove the alphabet check
+# and the lookup. Neither is a token any link was ever issued with.
+zyxwvtsrqpnmkjhgfedcba9876
+zzzzzzzzzzzzzzzzzzzzzzzzzz

@@ -577,7 +577,8 @@ function IS9WD_stDirectory_(suite, ctx) {
     var problems = [];
     if (publishing.length !== expect) {
       problems.push(publishing.length + ' rows have Publishes TRUE, not ' + expect +
-        '. The carousel arithmetic in 6.1 holds at ' + expect + ' and not above it');
+        '. Every ticked row needs a slide in the Canva master, so the count and the ' +
+        'master have to agree. Checks > Switch the carousel to all fourteen sets it');
     }
     var seen = {};
     for (var j = 0; j < publishing.length; j++) {
@@ -603,15 +604,49 @@ function IS9WD_stDirectory_(suite, ctx) {
     if (nonPub.length) {
       problems.push('these do not publish yet hold a carousel order: ' + nonPub.join(', '));
     }
+    var drift = IS9WD_stPublishDrift_(rows);
+    if (drift.length) problems.push(IS9WD_stList_(drift));
     if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
-    return publishing.length + ' committees publish and hold the orders 1 to ' +
+    return publishing.length + ' officers publish and hold the slide numbers 1 to ' +
       publishing.length + ' with no duplicate and no gap.';
   });
 
-  // THE CHECK COLUMN OF THE PEOPLE, read as a person reads it. Every other directory check
+  // A ticked row and a slide number are physical claims on a Canva page somebody drew by
+// hand, so the set is compared to the shipping defaults row by row rather than only
+// counted. A count alone passes on a workbook where an office was ticked and a committee
+// unticked, which is the same total and a different fourteen people.
+function IS9WD_stPublishDrift_(rows) {
+  var want = {};
+  for (var d = 0; d < IS9WD_DEFAULTS.DIRECTORY.length; d++) {
+    var def = IS9WD_DEFAULTS.DIRECTORY[d];
+    want[IS9WD_trim_(def[0]).toUpperCase()] = {
+      publishes: def[4] === true,
+      order: IS9WD_int_(def[1])
+    };
+  }
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var expect = want[IS9WD_trim_(row.key).toUpperCase()];
+    if (!expect) continue;
+    if (row.publishes !== expect.publishes) {
+      out.push(row.key + ' is ' + (row.publishes ? 'ticked' : 'not ticked') +
+        ' on the carousel and the shipping set says ' +
+        (expect.publishes ? 'ticked' : 'not ticked'));
+    }
+    if (row.carouselOrder !== expect.order) {
+      out.push(row.key + ' holds slide number ' +
+        (row.carouselOrder === null ? 'blank' : row.carouselOrder) +
+        ' and the shipping set says ' + (expect.order === null ? 'blank' : expect.order));
+    }
+  }
+  return out;
+}
+
+// THE CHECK COLUMN OF THE PEOPLE, read as a person reads it. Every other directory check
   // here reads the values; this one reads what the sheet actually prints in the column Ethan
   // looks at, because the fault of 2026-09-27 was a column that printed "On the carousel
-  // with no slide number" on all nine publishing rows while every value behind it was right.
+  // with no slide number" on every publishing row while every value behind it was right.
   // Missing names and addresses are expected before Gate A and are not a failure; a
   // machinery message is.
   IS9WD_stRun_(suite, 'The People check column reads clean', ctx.settings.CONFIG,
@@ -1060,9 +1095,9 @@ function IS9WD_stFeedReadiness_(suite, ctx) {
   });
 }
 
-// The plan is 19 rows whether the week uses them or not, and the export list is
-// what the Canva run actually takes, so the two are checked against each other
-// rather than each on its own (6.4).
+// The plan holds one row per physical master page whether the week uses them or not, 15 of
+// them on the shipping setting, and the export list is what the Canva run actually takes,
+// so the two are checked against each other rather than each on its own (6.4).
 function IS9WD_stFeedPlan_(suite, ctx) {
   IS9WD_stRun_(suite, 'Plan check', ctx.feed, function () {
     var cell = IS9WD_stBlockA_(ctx, 'A.PLAN');
@@ -1077,7 +1112,7 @@ function IS9WD_stFeedPlan_(suite, ctx) {
     if (pageRange.getNumRows() !== want) {
       problems.push('the plan holds ' + pageRange.getNumRows() + ' rows and needs ' +
         want + ', which is 1 title page plus ' + ctx.cfg.directory.publishingRows +
-        ' committees times ' + ctx.cfg.switches.maxParts + ' pages');
+        ' officers times ' + ctx.cfg.switches.maxParts + ' pages');
     }
     var master = IS9WD_int_(IS9WD_stBlockA_(ctx, 'A.MASTER'));
     if (master !== null && master > pageRange.getNumRows()) {
@@ -1772,8 +1807,10 @@ function IS9WD_stStatsOfficers_(suite, ctx) {
       ' items past their deadline and carry a rate; the rest are blank by design.';
   });
 
-  // The nine publishing officers must agree with the feed about the one number both
-  // tabs print, or two tabs are telling Ethan different things about the same week.
+  // A publishing officer must agree with the feed about the one number both tabs print, or
+  // two tabs are telling Ethan different things about the same week. All fourteen publish
+  // since 2026-09-28, so the blank branch below guards a row somebody unticks rather than
+  // five standing rows, and it stays for exactly that reason.
   IS9WD_stRun_(suite, 'Not on carousel agrees with the feed', ctx.stats, function () {
     var carousel = IS9WD_named_('IS9WD_STATS_OFF_CAROUSEL').getValues();
     var notPub = IS9WD_named_('IS9WD_STATS_OFF_NOTPUB').getValues();
@@ -1808,8 +1845,9 @@ function IS9WD_stStatsOfficers_(suite, ctx) {
       }
     }
     if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
-    return 'All ' + checked + ' publishing officers agree with the feed, and the rest ' +
-      'are blank because they have no Canva page.';
+    return 'All ' + checked + ' publishing officers agree with the feed' +
+      (checked === carousel.length ? ', and every officer publishes.'
+        : ', and the rest are blank because they have no slide.');
   });
 }
 
