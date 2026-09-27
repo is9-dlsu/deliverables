@@ -634,7 +634,7 @@ IS9WD_CFG.SWITCHES = {
     {
       row: 75, name: 'IS9WD_STATS_OFFICER_ROWS',
       label: 'Rows reserved per officer on 04 | Officer Tables',
-      owner: IS9WD_OWN.ETHAN, value: 13, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      owner: IS9WD_OWN.ETHAN, value: 21, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
       validate: { kind: IS9WD_V.INT, min: 3, max: 40, help: 'One row is the overflow notice, so 13 shows 12 items. 21 guarantees nothing is ever hidden and costs 111 more rows of the connector read.' },
       note: '=IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,"Run Build or repair workbook: the reserved rows do not match the tab","OK")'
     }
@@ -823,8 +823,8 @@ var IS9WD_DEFAULTS = {
     ['MONDAY_ASSIGNMENTS', 'Weekly', 'Monday', 7, 6, true],
     ['DAILY_DIGEST', 'Daily', 'Any', 18, 4, true],
     ['SUNDAY_BRIEF', 'Weekly', 'Sunday', 19, 4, true],
-    ['ARCHIVE_WEEK', 'Weekly', 'Saturday', 22, 2, false],
-    ['RETIRE_ACCOMPLISHED', 'Weekly', 'Saturday', 23, 2, false]
+    ['ARCHIVE_WEEK', 'Weekly', 'Saturday', 22, 2, true],
+    ['RETIRE_ACCOMPLISHED', 'Weekly', 'Saturday', 23, 2, true]
   ],
 
   // Key, Carousel order, Committee or office, Position label, Publishes,
@@ -1342,7 +1342,7 @@ var IS9WD_OT_HEADERS = ['Title of Task', 'Deadline', 'Days left', 'Status', 'Fla
 function IS9WD_otLayout_(directoryRows, officerRows) {
   var dir = IS9WD_posInt_(directoryRows) || IS9WD_DIR_ROWS;
   var reserved = IS9WD_posInt_(officerRows) ||
-    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 13;
+    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 21;
   if (reserved < 3) reserved = 3;
   var out = {
     directoryRows: dir,
