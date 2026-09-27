@@ -202,6 +202,15 @@ Verified against the installed clasp **3.4.1** on 2026-09-27. Re-check `clasp <c
 - **Gridlines stay visible on every tab.** They are the cheapest alignment cue in a wide sheet, and the design below does not fight them: fills are used for headers and bands only, never to fake a grid.
 - **Every tab has a frozen header row**, so a header is always on screen no matter how far down the sheet runs. `02 | Deliverables` freezes four rather than three, because row 4 is the plain English hint row and a hint that scrolls away on row 40 helps nobody.
 - **Every cell a person is expected to type into carries the fill `#e9ebd4`, the plain English sentence beside it and the same sentence as its own note; every calculated cell carries none of the three and carries the sentence that says it is calculated.** Ethan's instruction of 2026-09-27, and it is an acceptance check (13.3) and a self test assertion (13.4) rather than a style note. It holds on `00 | Configuration`, on `_Engine` and, per column, on `02 | Deliverables`. The consequence is that **row banding is withdrawn from every block that holds an input column**, and existing bandings are removed rather than left: a banded row would put cream under half the calculated cells.
+- **A FLAG CARRIES NO FILL AT ALL.** `IS9WD_ROLE.FLAG_BG` is the paper white `#F8FBFD`, not `#e9ebd4`, and `IS9WD_ROLE.FLAG_FG` stays bold `#724485`. A `#724485` border is available as `IS9WD_ROLE.FLAG_BORDER` where a flag wants more weight. The withdrawn treatment, bold `#724485` on `#e9ebd4`, is the fault Ethan reported on 2026-09-27: it painted cream behind a **calculated** Check cell, which is the one cell a reader must never type into, so it broke the single rule the cream fill exists to carry. Two self test assertions guard it now (13.4): no cell on a tab nobody types into carries the cream fill, and the Node harness additionally asserts that no conditional format rule on any tab paints cream.
+- **The two computed views are a three across grid of cards.** Ethan's instruction of 2026-09-27, verbatim: "use the columns (width of the sheet), extend until Column AA and beyond. For both tabs i want three tables beside each other with one column separating them, have borders and backgrounds as well. So stack those tables as well with one row separating it from above". It is implemented once, in `IS9WD_GRID` and `IS9WD_gridGeometry_(cellCols)`, and both views take their geometry from it:
+  - Three cells across, each a fixed number of columns, **the same width for all three**, so a card in the second row of the grid lines up under the card above it.
+  - **Exactly one** empty column between neighbours, and **exactly one** empty row between stacked rows of three. A separator carries no value, no fill and no border, which is the only thing that makes three cards read as three cards rather than as one wide sheet of paint.
+  - Every card carries a heading band in `#5d4170` with `#F8FBFD` text (`IS9WD_ROLE.CARD_BAND_BG` and `CARD_BAND_FG`), a body on `#F8FBFD` (`CARD_BODY_BG`) and one border around the whole of it in `#58756a` (`CARD_BORDER`). The deep green band stays on the settings tabs, where a band is a section of one long document rather than the lid of a card.
+  - A card fills its whole cell even when its table is narrower, so a three column table sits in a twelve column card with air inside the border. The sentence columns overflow right across that air, which is the idiom the attention table already used and the reason the air is there.
+  - Column widths are set **explicitly for every column of the grid**, three sets plus the two separators, and the three sets total within a few per cent of each other.
+- **A tab is trimmed to its last built row, and nothing is painted past it.** Both computed views call their trim as the **last** act of their resize rather than the first, and `IS9WD_clearPastEnd_` clears value, fill, border, note and validation past the end before the grid is trimmed. The order is the fix: a trim before the paint leaves a window in which any later step that grows the grid inherits the format of the last built row, because Sheets copies the row above into every row `insertRowsAfter` adds. That is how the end band painted `03 | Statistics` dark green a thousand rows below its content, and clearing first means the worst case is a blank tail rather than a painted one.
+- **Every named range is dropped before it is created**, in `IS9WD_setNamed_`, which is the one place every one of the 195 names goes through. `Spreadsheet.setNamedRange` does not move a name that already exists: it adds a **second** definition, a formula resolves the **older** one, and a map keyed on the name sees the **newer** one. So on a workbook built by more than one layout, a name whose block has moved points where the earlier layout put it forever, while every check that asks where it points reads clean. `IS9WD_namedMap_` now keeps the **first** definition for the same reason, and `IS9WD_namedDuplicates_` exists so the self test can assert there are none.
 - **A section band carries only its title, and the plain English line rides in a hint row under it.** The earlier device of appending the help to the band cell in a lighter colour is withdrawn: it read as decoration on the band rather than as an instruction. A band is 38 px, a hint row 26, a header 30, a data row 26 and a spacer 18. The heights grew on 2026-09-27 for the reason Ethan gave: more air.
 - **No tab freezes a column.** Ethan's instruction of 2026-09-27, applied workbook-wide as given. It **supersedes** the earlier convention of freezing the key column on a wide tab, and `IS9WD_FREEZE` now reads `cols: 0` on all nine tabs, the two hidden ones included. The cost is named rather than skipped: `02 | Deliverables` shows 2,040 px of columns, `05 | Archive` 2,660 and `06 | Log` 1,930, so on all three, scrolling right loses the row's identity. Neither new view pays anything, because both are sized to fit the grid a 1366 px laptop shows without horizontal scroll: `03 | Statistics` totals 1,180 px of visible columns and `04 | Officer Tables` 1,095. See Appendix C for the ruling. **With no frozen column, column order is the load bearing design decision**, so on every block of both views the leftmost columns carry the identifier and the verdict and the detail runs right. That rule is why the officer block reads `Committee or office | Attention | Due | Done | ...` and not `... | Attention` last.
 - **Nothing in the workbook is merged.** `01 | Canva Feed` forbade it because the Drive connector renders a merged cell as a repeated `[merged]` value; every other tab is inside the same read, so the rule extends to all of them. A band of text running across a filled span is achieved with column width, type scale and overflow wrap, and **so is a KPI tile on `03 | Statistics`**: a big number in a wide column with overflow wrap, never a merge. The self test asserts it on both views (13.4).
@@ -1219,39 +1228,44 @@ Three rules from elsewhere apply here unchanged, and each one is load bearing. *
 
 ### 6A.1 The screen budget
 
-Twelve visible columns, A to L, and no hidden ones.
+**Three cards across, thirty-eight columns, A to AL.** `IS9WD_STATS_CELL_COLS` is 12, because `BY OFFICER` is twelve columns wide and it is the widest table on the tab, so the grid is three twelve column cells with one separator column between them: A to L, M, N to Y, Z, AA to AL.
 
-| Col | Width | Serves |
+| Columns | Serves | Total |
 |---|---|---|
-| A | 250 | officer names, measure labels, and the first tile of each tile row |
-| B | 230 | `Attention` strings, the numbers in the sentence table, and the rest of the first tile |
-| C to L | 80 each, except G 90 and L 110 | the ten numeric officer columns, and tiles two, three and four |
+| A to L | card column 1: the eight tiles, `BY OFFICER`, chart 1 | 1,265 px |
+| M | the separator, 30 px, no fill and no border | 30 px |
+| N to Y | card column 2: `WHAT NEEDS ATTENTION`, `TRACK RECORD, RANKED`, chart 2 | 1,254 px |
+| Z | the separator, 30 px | 30 px |
+| AA to AL | card column 3: `READINESS GATES`, `TREND`, chart 3 | 1,250 px |
 
-Total **1,180 px**. A 1366 px laptop shows roughly 1,284 px of grid after the row number gutter, so the widest block fits with room and nothing needs horizontal scroll. **That is the whole answer to reading this tab with no frozen column** (2.5).
+The three sets are within one per cent of each other, which is what keeps the three columns of cards reading as three columns. Each set is sized for the **widest** table that sits in it, and the narrower tables in the same cell carry the difference as air inside their own border, which their sentence columns overflow into.
 
-The first two columns are wide because they carry an officer name and an `Attention` sentence. The consequence for the tiles is deliberate rather than tolerated: **tile 1 of each row is wide (480 px) and tiles 2, 3 and 4 are even with each other (240 to 270 px)**, so the two longest strings on the tab, the week line and the readiness verdict, get the room they need and the six numeric tiles look like a set.
+**Horizontal scroll is now expected on this tab, and that is Ethan's decision rather than a regression.** The earlier 1,180 px budget existed to fit a 1366 px laptop with no scroll; the instruction of 2026-09-27 was to use the width of the sheet and run past column AA. The compensation is the grid itself: the tiles, the chase list and the gates, which are what a reader opens the tab for, all sit in the first row of cards and the first two card columns are the first 1,300 px.
+
+Tile columns are declared **relative to the tile card** in `IS9WD_STATS_TILE_COLS`, four across at three columns each, and `IS9WD_statsTileAt_` adds the card's own first column. The first tile is the widest in pixels because it carries the week line and the readiness verdict, the two longest strings on the tab.
 
 ### 6A.2 Row map, all of it computed
 
-| Rows | Contents | Height |
-|---|---|---|
-| 1 | Banner `03 \| STATISTICS` | 46 |
-| 2 | Help line | 34 |
-| 4 | Band `THIS WEEK AT A GLANCE` | 38 |
-| 5 | Hint row | 26 |
-| 6, 7, 8 | Tile row 1: value, label, note | 46, 22, 22 |
-| 10, 11, 12 | Tile row 2: value, label, note | 46, 22, 22 |
-| 14 to 22 | `WHAT NEEDS ATTENTION`: band, hint, header, 6 rows | 38, 26, 30, 26 |
-| 24 to 33 | `READINESS GATES`: band, hint, header, 7 gate rows | 38, 26, 30, 26 |
-| 35 to 51 | `BY OFFICER`: band, hint, header, 14 officer rows | 38, 26, 30, 26 |
-| 53 to 69 | Chart 1: band, hint, caption, 14 reserved rows | 38, 26, 26, 26 |
-| 71 to 87 | `TRACK RECORD, RANKED`: band, hint, header, 14 rows | 38, 26, 30, 26 |
-| 89 to 105 | Chart 2: band, hint, caption, 14 reserved rows | |
-| 107 to 117 | `TREND, LAST <n> WEEKS`: band, hint, header, 8 rows | |
-| 119 to 135 | Chart 3: band, hint, caption, 14 reserved rows | |
-| 136 | `IS9WD STATS END`, the tab's own error count in C, the gate agreement in E | 26 |
+**Nine cards, three rows of three.** Each row of three is as tall as the tallest card in it, so all three end on the same sheet row and the separator row under them is straight.
 
-**136 rows at the shipping settings, and not one of the counts is typed.** `IS9WD_statsLayout_` computes every row number from `IS9WD_DIR_ROWS`, `IS9WD_STATS_TREND_WEEKS`, the declared tile rows and the declared chart list. Every spacer is 18 px, up from 12: more air was Ethan's instruction.
+| Rows | Card column 1 | Card column 2 | Card column 3 |
+|---|---|---|---|
+| 1 | Banner `03 \| STATISTICS`, across card column 1 only | | |
+| 2 | Help line | | |
+| 3 | separator row, no fill, no border | | |
+| 4 to 13 | `THIS WEEK AT A GLANCE`: band, hint, tile row 1, blank, tile row 2 | `WHAT NEEDS ATTENTION`: band, hint, header, 6 rows | `READINESS GATES`: band, hint, header, 7 rows |
+| 14 | separator row | | |
+| 15 to 31 | `BY OFFICER`: band, hint, header, 14 officer rows | `TRACK RECORD, RANKED`: band, hint, header, 14 rows | `TREND, LAST <n> WEEKS`: band, hint, header, 8 rows |
+| 32 | separator row | | |
+| 33 to 49 | Chart 1: band, hint, caption, 14 reserved rows | Chart 2, the same shape | Chart 3, the same shape |
+| 50 | separator row | | |
+| 51 | `IS9WD STATS END`, the tab's own error count in C, the gate agreement in E | | |
+
+Heights are unchanged: banner 46, help 34, band 38, hint 26, header 30, a data row 26, a tile 46 then 22 and 22, a separator row 18.
+
+**51 rows at the shipping settings, down from 136, and not one of the counts is typed.** `IS9WD_statsLayout_` computes every row and every column from `IS9WD_DIR_ROWS`, `IS9WD_STATS_TREND_WEEKS`, the declared tile rows, the declared chart list and `IS9WD_gridGeometry_`. It also returns `cards`, the list of every card's four corners, which is what the painter outlines and what the harness asserts the border on.
+
+**Which blocks share a card column is a judgement and it is recorded here.** Card column 1 holds the two widest things, the tiles and `BY OFFICER`. Card column 2 pairs the chase list with the ranking, because both are a label, a number and a sentence. Card column 3 pairs the gates with the trend, because the gates are the narrowest table and the trend is the one whose columns are all short. A chart fills a whole card, because a chart is an overlay and squeezing it into part of a cell reads worse than letting it own one.
 
 ### 6A.3 Two windows, named once so nothing is ambiguous
 
@@ -1485,25 +1499,38 @@ Title first because it is the thing you read; the heading above already says who
 
 **Column H is the one hidden column left on a tab a person reads, and it is the one that cannot move to `_Views` with the others.** It is not a helper: it is the eighth column of the very `SORT` that produces the seven visible ones, so it has to sit beside them on the same rows of the same sheet. It is what makes the whole section one spilling formula, and it is what the muted rule reads. Recorded as a ruling in Appendix C.
 
-### 6B.3 Row map
+### 6B.3 Row and column map
+
+**Fourteen cards, three across, five stacked rows with the last holding two**, in rank order **across then down**: the President is card 1, the four EVPs are cards 2 to 5, then the nine committees. `IS9WD_OT_CELL_COLS` is 9, so the grid is A to I, J, K to S, T, U to AC.
+
+Inside a cell of nine columns: **seven columns a reader reads**, one narrow column of air inside the card's own border, and the hidden sort key column at the cell's right edge, **outside** the border. The key column cannot move to `_Views` with the other helpers, because it is the eighth column of this card's own `SORT`. The three key columns are `I`, `S` and `AC`, and `IS9WD_HIDE_COLS.TABLES` hides all three by position rather than by a remembered letter.
+
+| Columns | Widths | Total |
+|---|---|---|
+| A to H | 330, 110, 85, 110, 140, 290, 80, 40 | 1,185 px of card |
+| I | 60, hidden: the sort key | |
+| J | the separator, 30 px, no fill and no border | |
+| K to S, U to AC | the same two sets again, column for column | |
 
 ```
-1                  Banner  04 | OFFICER TABLES                         h 46
-2                  Help line                                           h 34
-3                  Summary: what is not shown below                     h 26
-4                  Spacer                                              h 18
-then 14 sections, each of R + 3 rows, R = IS9WD_STATS_OFFICER_ROWS:
-    heading row    the officer line, one formula, overflow wrap         h 38
-    header row     the seven labels                                    h 30
-    R - 1 rows     the items, one spilling formula in the first row     h 26
-    1 row          the overflow notice, or blank                       h 26
-    1 row          spacer                                              h 18
-last row           IS9WD OFFICER TABLES END, and the error count in C   h 26
+1                  Banner  04 | OFFICER TABLES, across card column 1     h 46
+2                  Help line                                            h 34
+3                  Summary: what is not shown below                      h 26
+4                  separator row, no fill, no border                     h 18
+then 5 rows of cards, each of R + 2 rows, R = IS9WD_STATS_OFFICER_ROWS:
+    band row       the officer line, one formula, overflow wrap          h 38
+    header row     the seven labels                                     h 30
+    R - 1 rows     the items, one spilling formula in the first row      h 26
+    1 row          the overflow notice, or blank                        h 26
+  then one separator row between this row of cards and the next          h 18
+last row           IS9WD OFFICER TABLES END, and the error count in C    h 26
 ```
 
 **Frozen rows 3**, so the banner, the help line and the summary stay on screen however far down the tab runs. That is the best available substitute for the banned frozen column and a better use of a frozen pane than column A would have been.
 
-At the shipping `R = 21`: `3 + 1 + 14 * 24 + 1 = 341` rows, showing **20 items per officer**, which is the most any committee can publish, so nothing is ever hidden at the shipping setting. `R = 13` costs 229 rows and shows 12, and it is the value to set the day the connector read gets tight: one edit on `_Engine` plus one `Build or repair workbook`, and setup resizes every section and re-points every range.
+At the shipping `R = 21`: `4 + 5 * (23 + 1) = 124`, so the end marker is row **125**, down from 341, and each card still shows **20 items**, which is the most any committee can publish, so nothing is ever hidden at the shipping setting. `R = 13` costs 5 * 16 = 80 rows and shows 12, and it is the value to set the day the connector read gets tight: one edit on `_Engine` plus one `Build or repair workbook`, and setup resizes every card and re-points every range.
+
+**Every column reference in the writers, the painters, the rules and the names is a card's own first column plus an offset**, never a literal column, because a card sits in one cell of the grid and the cell decides where column one of that card is. `IS9WD_otLayout_` gives each block its `firstCol`, `lastCol` and `keyCol` for exactly that reason.
 
 **Variable-height sections were rejected.** Sizing each one to its officer's current count would mean setup rewriting the tab's layout whenever a count changed, and every section below moving when one officer gained an item. Fixed sections plus an explicit notice is the design that stays idempotent.
 
@@ -2478,7 +2505,11 @@ Every readiness expectation below assumes **the current week's sign-off is set**
   - **`_Engine`, `_Views` and `06 | Log` are hidden and `01 | Canva Feed` is not**, the last in a sentence of its own, because whether the Drive connector reads a hidden tab is unmeasured and the Sunday run depends on that one tab;
   - **the cream rule, on both settings tabs, cell by cell**: every Ethan owned or append owned cell carries the fill `#e9ebd4` and a note, every calculated cell carries neither and carries the calculated note instead, every input row carries visible hint text in column C, and every block carries its plain English line in the row under its band. A workbook that passes every other check and fails this one is correct and unreadable, which is the failure the 2026-09-27 revision was about;
   - **the two halves of the directory hold the same fourteen keys in the same order**, because they are joined by row position and a mismatch would give an officer somebody else's slide number;
-  - **`03 | Statistics` holds exactly as many charts as `IS9WD_STATS_CHARTS` declares**, no two on one anchor row, every one inside its own reserved band, and every caption row non-blank. This is the assertion for the failure that compounds silently: `insertChart` appends, so a build run five times would leave fifteen;
+  - **`03 | Statistics` holds exactly as many charts as `IS9WD_STATS_CHARTS` declares**, no two on one anchor **row and column**, every one inside its own reserved band, and every caption non-blank in its own card's first column. This is the assertion for the failure that compounds silently: `insertChart` appends, so a build run five times would leave fifteen. The three charts sit side by side in one row of the grid now, so identity is the anchor row **and** the anchor column: keying on the row alone would read three charts in three cards as three stacked on one anchor, which is the very fault the check exists to catch;
+  - **no named range on the workbook carries two definitions.** `Spreadsheet.setNamedRange` adds a second definition rather than moving an existing name; the older one is what every formula resolves and a reader keyed on the name sees the newer one, so a name whose block moved between layouts points at an empty band forever while every check that asks where it points reads clean. This is the assertion that would have caught the directory's Check column reporting a missing slide number on all nine publishing rows while `_Engine` held 1 to 9 correctly (2.5);
+  - **the Check column of `THE PEOPLE` reads clean on a freshly built workbook.** Read as a person reads it, from the display values rather than from the values behind it: every one of the fourteen rows must read `OK`, `No name yet`, `No email yet`, `Your own admin link` or `No private link yet`. A missing or duplicate slide number, or a Check cell holding no formula at all, is a failure. Missing names and addresses are expected before Gate A and are not;
+  - **the three across grid, one check per computed view**: three cards across, each cell exactly `cellCols` wide and exactly one column after the one before it, the grid reaching past column AA, every row of cards full except the last, exactly one empty row between stacked rows, **every separator column and every separator row carrying no fill at all**, and the tab holding exactly as many rows and columns as its layout's last built row and column. The **border** around each card is the one thing this cannot assert: Apps Script has no API that reads a cell's border, so the Node harness asserts it against its own fake and says so (13.3);
+  - **no cell on `03 | Statistics`, `04 | Officer Tables` or `_Views` carries the cream fill.** Cream means one thing, "you type here", and nobody types on any of the three. It is the assertion that stops a flag style reaching for cream again, which is what painted cream behind a calculated Check cell on 2026-09-27 (2.5);
   - **no column on `03 | Statistics` is hidden**, because the helper band is on `_Views` now and a hidden column there would be hiding a KPI tile or a chart caption;
   - **`_Views` reaches its end row and its last column, names itself in `A1`, ends on `IS9WD VIEWS END`, and its own error count reads 0**, with `Checks > Rebuild the views` named as the fix, because a broken helper band reads as a blank dashboard rather than as an error;
   - **no tab freezes a column**, `IS9WD_FREEZE` asks no tab to, and every tab freezes exactly the header rows it names, the four on `02 | Deliverables` included. Ethan's instruction of 2026-09-27 made testable;
@@ -2498,6 +2529,12 @@ Every readiness expectation below assumes **the current week's sign-off is set**
   - warning only: every trend row reading `Not archived`, which is what an empty Archive looks like and is expected until an archive job is switched on; and `Weeks of row room left` below `IS9WD_STATS_ROOM_WEEKS_WARN`.
 
   **A throwaway Node harness stands behind all of this, and it is worth knowing it exists.** It loads every pushed source file into one `vm` context against a fake of the spreadsheet surface, runs `Build or repair workbook` **twice**, and then asserts over the captured cells what no test in a real sheet can assert cheaply: that the build raises no exception, that `user cells changed` is 0 on both runs, that every declared named range resolves and spans what the layout says, that the cream rule holds cell by cell on both settings tabs and column by column on the data tab, that exactly three charts exist after two builds, that every tab freezes the rows it should and no column, that the hidden tabs are hidden, and that no cell anywhere is painted `#1C2120`. Its fake **refuses a conditional format rule whose formula names another sheet**, which is the class of bug that left `04 | Officer Tables` empty, so that bug cannot come back silently. What it cannot do is evaluate a formula: it evaluates exactly one, the derived publishable maximum, because the build branches on it. Every check that needs a computed value is therefore still a 13.3 eye check or a live `IS9WD_selfTest()` run.
+
+**Three things the fake was taught on 2026-09-27, and each one exists because a real bug hid behind the difference.**
+
+1. **`setNamedRange` does not move an existing name.** The fake used to overwrite a map entry keyed on the name, which is what a reader sees; real Sheets appends a second definition and a formula resolves the **older** one. The fake now keeps the list and lets the first win, which reproduces the directory Check column fault exactly and proves the fix.
+2. **`insertRowsAfter` inherits the format of the row above.** The fake used to append blank rows, so a build that grew a grid under a painted end band looked clean in the harness and painted a thousand green rows in the sheet.
+3. **Borders exist.** The fake records `setBorder` per cell and per edge, because Apps Script offers no way to read a border back and the card outline on both computed views can therefore be asserted **nowhere else**. The harness checks all four corners of all 23 cards for the right edges in `#58756a`, checks every separator column and separator row for no fill, no border and no value, checks that each tab holds exactly as many rows and columns as its layout's end, checks that the three card column sets total within a tenth of each other and that every column of the grid has an explicit width, and checks that no conditional format rule anywhere paints cream.
 
   Two assertions in the design were left to 13.3 rather than written here. **Readiness not moving when a view breaks** needs a forced break, so it is an acceptance check. **Every fill and font colour on both views being in `IS9WD_PALETTE`** is not assertable cheaply: a conditional format rule's colours are not readable back in a form worth comparing, so the palette is enforced where it is written, in `IS9WD_ROLE`, and no module outside `IS9WD_Config.js` names a hex.
 

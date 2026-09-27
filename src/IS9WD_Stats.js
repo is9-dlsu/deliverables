@@ -980,7 +980,6 @@ function IS9WD_statsResize_(cfg) {
   var sheet = IS9WD_sheet_('STATS');
 
   IS9WD_ensureGrid_(sheet, layout.endRow, layout.lastCol);
-  IS9WD_statsTrim_(sheet, layout);
   IS9WD_statsWipe_(sheet, layout);
   var removed = IS9WD_statsRemoveCharts_(sheet);
 
@@ -993,6 +992,16 @@ function IS9WD_statsResize_(cfg) {
   report.namesPointed = names;
   report.chartsRemoved = removed;
   report.charts = IS9WD_statsInsertCharts_(sheet, layout);
+  // TRIMMED LAST, AFTER EVERYTHING ELSE HAS RUN, and this is the order the tab's dark green
+  // tail taught. Trimming first leaves a window in which any later step that grows the grid
+  // inherits the format of the last built row, and in Sheets an inserted row copies the row
+  // above it. Trimming last means the grid ends where the content ends whatever happened in
+  // between, and the clear before it means an unrunnable delete leaves blank rows rather than
+  // painted ones.
+  IS9WD_statsTrim_(sheet, layout);
+  report.lastRow = layout.endRow;
+  report.maxRows = sheet.getMaxRows();
+  report.maxCols = sheet.getMaxColumns();
   return report;
 }
 
@@ -1005,10 +1014,14 @@ function IS9WD_statsPointNames_(sheet, layout) {
 }
 
 function IS9WD_statsWipe_(sheet, layout) {
-  var rows = Math.max(layout.endRow, sheet.getLastRow());
-  var cols = Math.max(layout.lastCol, sheet.getLastColumn());
+  var rows = Math.min(Math.max(layout.endRow, sheet.getLastRow()), sheet.getMaxRows());
+  var cols = Math.min(Math.max(layout.lastCol, sheet.getLastColumn()),
+    sheet.getMaxColumns());
   var all = sheet.getRange(1, 1, rows, cols);
   all.clear();
+  // A border is not cleared by clear(), so a card drawn by a previous layout would leave its
+  // outline behind on a tab whose cards have moved.
+  all.setBorder(false, false, false, false, false, false);
   all.clearDataValidations();
   all.clearNote();
 }
@@ -1017,6 +1030,7 @@ function IS9WD_statsWipe_(sheet, layout) {
 // the Drive connector read the Sunday run depends on, and an empty row still costs a row of
 // markdown in it.
 function IS9WD_statsTrim_(sheet, layout) {
+  IS9WD_clearPastEnd_(sheet, layout.endRow, layout.lastCol);
   var extraRows = sheet.getMaxRows() - layout.endRow;
   if (extraRows > 0) sheet.deleteRows(layout.endRow + 1, extraRows);
   var extraCols = sheet.getMaxColumns() - layout.lastCol;
@@ -1114,15 +1128,17 @@ function IS9WD_statsAttention_(sheet, layout) {
     if (entry.accent) accents.push(layout.attentionFirst + i);
   }
   var count = labels.length;
-  sheet.getRange(layout.attentionFirst, 1, count, 1).setValues(labels);
-  var value = sheet.getRange(layout.attentionFirst, 2, count, 1);
+  var at = layout.attentionCol;
+  sheet.getRange(layout.attentionFirst, at, count, 1).setValues(labels);
+  var value = sheet.getRange(layout.attentionFirst, at + 1, count, 1);
   value.setNumberFormats(formats);
   value.setValues(values);
-  sheet.getRange(layout.attentionFirst, 3, count, 1).setValues(readings);
+  sheet.getRange(layout.attentionFirst, at + 2, count, 1).setValues(readings);
   // A number worth the eye that is not a fault takes the accent, which is the treatment
   // the feed already gives the same number.
   for (var a = 0; a < accents.length; a++) {
-    sheet.getRange(accents[a], 2).setFontColor(IS9WD_ROLE.ACCENT_FG).setFontWeight('bold');
+    sheet.getRange(accents[a], at + 1)
+      .setFontColor(IS9WD_ROLE.ACCENT_FG).setFontWeight('bold');
   }
 }
 
@@ -1147,9 +1163,10 @@ function IS9WD_statsGates_(sheet, layout) {
     todos.push([entry.todo]);
   }
   var rows = labels.length;
-  sheet.getRange(layout.gateFirst, 1, rows, 1).setValues(labels);
-  sheet.getRange(layout.gateFirst, 2, rows, 1).setValues(states);
-  sheet.getRange(layout.gateFirst, 3, rows, 1).setValues(todos);
+  var at = layout.gateCol;
+  sheet.getRange(layout.gateFirst, at, rows, 1).setValues(labels);
+  sheet.getRange(layout.gateFirst, at + 1, rows, 1).setValues(states);
+  sheet.getRange(layout.gateFirst, at + 2, rows, 1).setValues(todos);
 }
 
 // ---------------------------------------------------------------------------
@@ -1246,7 +1263,7 @@ function IS9WD_statsOfficers_(sheet, layout) {
   ];
 
   for (var v = 0; v < visible.length; v++) {
-    sheet.getRange(f.officerFirst, v + 1).setFormula(visible[v]);
+    sheet.getRange(f.officerFirst, f.officerCol + v).setFormula(visible[v]);
   }
 }
 
@@ -1273,7 +1290,7 @@ function IS9WD_statsRanked_(sheet, layout) {
       'IS9WD_STATS_MIN_JUDGED&" of this officer\'s tasks have passed their deadline","")))'
   ];
   for (var i = 0; i < body.length; i++) {
-    sheet.getRange(f.rankFirst, i + 1).setFormula(body[i]);
+    sheet.getRange(f.rankFirst, f.rankCol + i).setFormula(body[i]);
   }
 }
 
@@ -1312,7 +1329,7 @@ function IS9WD_statsTrend_(sheet, layout) {
   ];
   for (var i = 0; i < body.length; i++) {
     if (body[i] === '') continue;
-    sheet.getRange(f.trendFirst, i + 1).setFormula(body[i]);
+    sheet.getRange(f.trendFirst, f.trendCol + i).setFormula(body[i]);
   }
 
   // Column E is the one per-row block on this tab. SUMPRODUCT compares two ranges row by
@@ -1321,8 +1338,8 @@ function IS9WD_statsTrend_(sheet, layout) {
   var onTime = [];
   for (var r = 0; r < rows; r++) {
     var row = f.trendFirst + r;
-    var start = IS9WD_statsRef_(2, row);
-    var done = IS9WD_statsRef_(4, row);
+    var start = IS9WD_statsRef_(f.trendCol + 1, row);
+    var done = IS9WD_statsRef_(f.trendCol + 3, row);
     onTime.push(['=IF(' + start + '="","",IFERROR(SUMPRODUCT(' +
       '(IS9WD_ARC_SOURCE=' + retired + ')' +
       '*(INT(N(IS9WD_ARC_DEADLINE))>=' + start + ')' +
@@ -1330,7 +1347,7 @@ function IS9WD_statsTrend_(sheet, layout) {
       '*(N(IS9WD_ARC_STATUS_AT)>0)' +
       '*(N(IS9WD_ARC_STATUS_AT)<INT(N(IS9WD_ARC_DEADLINE))+1))/' + done + ',""))']);
   }
-  sheet.getRange(f.trendFirst, 5, rows, 1).setValues(onTime);
+  sheet.getRange(f.trendFirst, f.trendCol + 4, rows, 1).setValues(onTime);
 }
 
 // ---------------------------------------------------------------------------
@@ -1366,7 +1383,8 @@ function IS9WD_statsCaptions_(sheet, layout) {
       'retired, so it reads low until retirement runs.")'
   ];
   for (var i = 0; i < layout.charts.length && i < captions.length; i++) {
-    sheet.getRange(layout.charts[i].captionRow, 1).setFormula(captions[i]);
+    sheet.getRange(layout.charts[i].captionRow, layout.charts[i].firstCol)
+      .setFormula(captions[i]);
   }
 }
 
@@ -1423,8 +1441,8 @@ function IS9WD_statsChartOptions_(builder, title) {
       position: 'top', alignment: 'start',
       textStyle: { color: IS9WD_ROLE.HINT_FG, fontName: IS9WD_FONT, fontSize: 10 }
     })
-    .setOption('chartArea', { left: 160, top: 56, width: '72%', height: '66%' })
-    .setOption('width', 1120)
+    .setOption('chartArea', { left: 150, top: 56, width: '70%', height: '66%' })
+    .setOption('width', IS9WD_STATS_CHART_WIDTH)
     .setOption('height', IS9WD_STATS_CHART_HEIGHT);
 }
 
@@ -1447,17 +1465,22 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
   var anchor = function (index) {
     return f.charts[index] ? f.charts[index].firstRow : f.endRow;
   };
+  // A chart is anchored inside its own card, so the anchor column is the card's first
+  // column rather than column A.
+  var anchorCol = function (index) {
+    return f.charts[index] ? f.charts[index].firstCol : 1;
+  };
 
   // 1. Due against done per committee, this week. A column chart, because the comparison is
   // between two bars for one officer and a reader has to see the pair.
   var officerRows = f.officerLast - f.officerHeader + 1;
   var one = sheet.newChart()
     .setChartType(Charts.ChartType.COLUMN)
-    .addRange(sheet.getRange(f.officerHeader, 1, officerRows, 1))
-    .addRange(sheet.getRange(f.officerHeader, 3, officerRows, 1))
-    .addRange(sheet.getRange(f.officerHeader, 4, officerRows, 1))
+    .addRange(sheet.getRange(f.officerHeader, f.officerCol, officerRows, 1))
+    .addRange(sheet.getRange(f.officerHeader, f.officerCol + 2, officerRows, 1))
+    .addRange(sheet.getRange(f.officerHeader, f.officerCol + 3, officerRows, 1))
     .setNumHeaders(1)
-    .setPosition(anchor(0), 1, 4, 4);
+    .setPosition(anchor(0), anchorCol(0), 4, 4);
   IS9WD_statsChartOptions_(one, IS9WD_STATS_CHARTS[0].title);
   one.setOption('hAxis', {
     textStyle: axis.textStyle, slantedText: true, slantedTextAngle: 40
@@ -1474,10 +1497,10 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
   var rankRows = f.rankLast - f.rankHeader + 1;
   var two = sheet.newChart()
     .setChartType(Charts.ChartType.BAR)
-    .addRange(sheet.getRange(f.rankHeader, 2, rankRows, 1))
-    .addRange(sheet.getRange(f.rankHeader, 3, rankRows, 1))
+    .addRange(sheet.getRange(f.rankHeader, f.rankCol + 1, rankRows, 1))
+    .addRange(sheet.getRange(f.rankHeader, f.rankCol + 2, rankRows, 1))
     .setNumHeaders(1)
-    .setPosition(anchor(1), 1, 4, 4);
+    .setPosition(anchor(1), anchorCol(1), 4, 4);
   IS9WD_statsChartOptions_(two, IS9WD_STATS_CHARTS[1].title);
   two.setOption('colors', [IS9WD_CLR.PURPLE_DEEP]);
   two.setOption('legend', { position: 'none' });
@@ -1495,11 +1518,11 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
   var trendRows = f.trendLast - f.trendHeader + 1;
   var three = sheet.newChart()
     .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(f.trendHeader, 2, trendRows, 1))
-    .addRange(sheet.getRange(f.trendHeader, 3, trendRows, 1))
-    .addRange(sheet.getRange(f.trendHeader, 4, trendRows, 1))
+    .addRange(sheet.getRange(f.trendHeader, f.trendCol + 1, trendRows, 1))
+    .addRange(sheet.getRange(f.trendHeader, f.trendCol + 2, trendRows, 1))
+    .addRange(sheet.getRange(f.trendHeader, f.trendCol + 3, trendRows, 1))
     .setNumHeaders(1)
-    .setPosition(anchor(2), 1, 4, 4);
+    .setPosition(anchor(2), anchorCol(2), 4, 4);
   IS9WD_statsChartOptions_(three, IS9WD_STATS_CHARTS[2].title);
   three.setOption('pointSize', 5);
   three.setOption('curveType', 'none');
@@ -1525,68 +1548,96 @@ function IS9WD_statsFormats_(sheet, layout) {
   var f = layout;
   var cols = IS9WD_statsCols_();
   var tables = [
-    [f.attentionFirst, f.attentionLast, cols.ATTENTION],
-    [f.gateFirst, f.gateLast, cols.GATES],
-    [f.officerFirst, f.officerLast, cols.OFFICER],
-    [f.rankFirst, f.rankLast, cols.RANKED],
-    [f.trendFirst, f.trendLast, cols.TREND]
+    [f.attentionFirst, f.attentionLast, cols.ATTENTION, f.attentionCol],
+    [f.gateFirst, f.gateLast, cols.GATES, f.gateCol],
+    [f.officerFirst, f.officerLast, cols.OFFICER, f.officerCol],
+    [f.rankFirst, f.rankLast, cols.RANKED, f.rankCol],
+    [f.trendFirst, f.trendLast, cols.TREND, f.trendCol]
   ];
   for (var t = 0; t < tables.length; t++) {
     var first = tables[t][0];
     var rows = tables[t][1] - first + 1;
     var spec = tables[t][2];
+    var at = tables[t][3];
     if (rows < 1) continue;
     for (var i = 0; i < spec.length; i++) {
-      sheet.getRange(first, 1 + i, rows, 1)
+      sheet.getRange(first, at + i, rows, 1)
         .setNumberFormat(spec[i].format || IS9WD_FMT.TEXT);
     }
   }
-  // The tile label and note rows, and every caption and marker row, are text: a caption
-  // that starts with a number must not be read as one.
+  // The tile label and note rows, and every caption row, are text: a caption that starts
+  // with a number must not be read as one. Each one is scoped to its own card.
   for (var g = 0; g < f.tileGroups.length; g++) {
-    sheet.getRange(f.tileGroups[g].labelRow, 1, 1, f.lastCol)
+    sheet.getRange(f.tileGroups[g].labelRow, f.tileCol, 1, f.cellCols)
       .setNumberFormat(IS9WD_FMT.TEXT);
-    sheet.getRange(f.tileGroups[g].noteRow, 1, 1, f.lastCol)
+    sheet.getRange(f.tileGroups[g].noteRow, f.tileCol, 1, f.cellCols)
       .setNumberFormat(IS9WD_FMT.TEXT);
   }
   for (var c = 0; c < f.charts.length; c++) {
-    sheet.getRange(f.charts[c].captionRow, 1, 1, f.lastCol)
+    sheet.getRange(f.charts[c].captionRow, f.charts[c].firstCol, 1, f.cellCols)
       .setNumberFormat(IS9WD_FMT.TEXT);
   }
   sheet.getRange(f.endRow, 1, 1, f.lastCol).setNumberFormat(IS9WD_FMT.TEXT);
   sheet.getRange(f.errorsCell.row, f.errorsCell.col).setNumberFormat(IS9WD_FMT.INT);
 }
 
+// THREE CARDS ACROSS, ONE EMPTY COLUMN BETWEEN THEM, ONE EMPTY ROW BETWEEN THE ROWS OF
+// THREE. Every card gets its background and its border first, from the layout's own card
+// list, so the band, the header row and the body paint over a card that is already outlined.
+// Then every separator column and every separator row is cleared of fill and border, which
+// is what makes the cards read as cards rather than as one wide sheet of paint.
 function IS9WD_statsPaintAll_(sheet, layout) {
   var f = layout;
   var cols = IS9WD_statsCols_();
   var help = IS9WD_statsBandHelp_();
 
   sheet.getRange(1, 1, f.endRow, f.lastCol).setFontFamily(IS9WD_FONT);
-  IS9WD_paintBanner_(sheet, f.bannerRow, f.firstCol, f.lastCol, IS9WD_STATS.BANNER);
-  IS9WD_paintHelp_(sheet, f.helpRow, f.firstCol, f.lastCol, IS9WD_STATS.HELP);
+  var headLast = f.firstCol + f.cellCols - 1;
+  IS9WD_paintBanner_(sheet, f.bannerRow, f.firstCol, headLast, IS9WD_STATS.BANNER);
+  IS9WD_paintHelp_(sheet, f.helpRow, f.firstCol, headLast, IS9WD_STATS.HELP);
 
-  // The tiles: one band, one hint row, then two groups of three rows.
-  IS9WD_paintBand_(sheet, f.tileBand, f.firstCol, f.lastCol, 'THIS WEEK AT A GLANCE', '');
-  IS9WD_paintHint_(sheet, f.tileHint, f.firstCol, f.lastCol, help.tile);
+  for (var k = 0; k < f.cards.length; k++) {
+    var card = f.cards[k];
+    IS9WD_paintCard_(sheet, card.firstRow, card.lastRow, card.firstCol, card.lastCol);
+  }
+
+  // The tiles: one band, one hint row, then two groups of three rows, all inside card one.
+  IS9WD_paintCardBand_(sheet, f.tileBand, f.tileCol, f.tileCol + f.cellCols - 1,
+    'THIS WEEK AT A GLANCE');
+  IS9WD_paintHint_(sheet, f.tileHint, f.tileCol, f.tileCol + f.cellCols - 1, help.tile);
   IS9WD_statsPaintTiles_(sheet, f);
 
   IS9WD_statsBlock_(sheet, f, f.attentionBand, 'WHAT NEEDS ATTENTION', help.attention,
-    IS9WD_STATS_HEADERS.ATTENTION, f.attentionFirst, f.attentionLast, cols.ATTENTION);
+    IS9WD_STATS_HEADERS.ATTENTION, f.attentionFirst, f.attentionLast, cols.ATTENTION,
+    f.attentionCol);
   IS9WD_statsBlock_(sheet, f, f.gateBand, 'READINESS GATES', help.gate,
-    IS9WD_STATS_HEADERS.GATES, f.gateFirst, f.gateLast, cols.GATES);
+    IS9WD_STATS_HEADERS.GATES, f.gateFirst, f.gateLast, cols.GATES, f.gateCol);
   IS9WD_statsBlock_(sheet, f, f.officerBand, 'BY OFFICER', help.officer,
-    IS9WD_STATS_HEADERS.OFFICER, f.officerFirst, f.officerLast, cols.OFFICER);
+    IS9WD_STATS_HEADERS.OFFICER, f.officerFirst, f.officerLast, cols.OFFICER, f.officerCol);
   IS9WD_statsBlock_(sheet, f, f.rankBand, 'TRACK RECORD, RANKED', help.rank,
-    IS9WD_STATS_HEADERS.RANKED, f.rankFirst, f.rankLast, cols.RANKED);
+    IS9WD_STATS_HEADERS.RANKED, f.rankFirst, f.rankLast, cols.RANKED, f.rankCol);
   IS9WD_statsBlock_(sheet, f, f.trendBand,
     'TREND, LAST ' + f.trendWeeks + ' WEEKS', help.trend,
-    IS9WD_STATS_HEADERS.TREND, f.trendFirst, f.trendLast, cols.TREND);
+    IS9WD_STATS_HEADERS.TREND, f.trendFirst, f.trendLast, cols.TREND, f.trendCol);
 
   IS9WD_statsPaintCharts_(sheet, f);
-  IS9WD_statsSpacers_(sheet, f.spacerRows, f.lastCol);
-  IS9WD_statsEndBand_(sheet, f.endRow, f.lastCol);
+  IS9WD_statsGaps_(sheet, f);
+  IS9WD_statsEndBand_(sheet, f.endRow, headLast);
   IS9WD_statsChrome_(sheet, f);
+}
+
+// Every separator: the one empty column between two cards, top to bottom, and the one empty
+// row between two stacked rows of cards, left to right. A gap that carries a fill or a
+// border is not a gap, so both lose both.
+function IS9WD_statsGaps_(sheet, layout) {
+  var f = layout;
+  for (var c = 0; c < f.gapCols.length; c++) {
+    IS9WD_clearGap_(sheet, 1, f.endRow, f.gapCols[c], f.gapCols[c]);
+  }
+  for (var r = 0; r < f.spacerRows.length; r++) {
+    IS9WD_clearGap_(sheet, f.spacerRows[r], f.spacerRows[r], 1, f.lastCol);
+    sheet.setRowHeight(f.spacerRows[r], IS9WD_ROW_H.SPACER);
+  }
 }
 
 // A tile is three cells in one column, and the look is entirely type and space: the number
@@ -1596,16 +1647,17 @@ function IS9WD_statsPaintAll_(sheet, layout) {
 // tile columns are declared with a span at all.
 function IS9WD_statsPaintTiles_(sheet, layout) {
   var f = layout;
+  var width = f.cellCols;
   for (var g = 0; g < f.tileGroups.length; g++) {
     var group = f.tileGroups[g];
-    var value = sheet.getRange(group.valueRow, 1, 1, f.lastCol);
+    var value = sheet.getRange(group.valueRow, f.tileCol, 1, width);
     IS9WD_style_(value, {
       size: IS9WD_SIZE.TILE, fg: IS9WD_ROLE.BODY_FG, bold: true,
       bg: IS9WD_ROLE.BODY_BG, align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER
     });
     sheet.setRowHeight(group.valueRow, IS9WD_ROW_H.TILE);
 
-    var label = sheet.getRange(group.labelRow, 1, 1, f.lastCol);
+    var label = sheet.getRange(group.labelRow, f.tileCol, 1, width);
     IS9WD_style_(label, {
       size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bold: true,
       bg: IS9WD_ROLE.BODY_BG, align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER,
@@ -1618,7 +1670,7 @@ function IS9WD_statsPaintTiles_(sheet, layout) {
     // tiles two, three and four, and overflow is what lets it use the whole 240 to 350 px
     // of the tile. It stops at the next tile's own note cell, which is always filled, so
     // one tile's line can never run into the next tile's.
-    var note = sheet.getRange(group.noteRow, 1, 1, f.lastCol);
+    var note = sheet.getRange(group.noteRow, f.tileCol, 1, width);
     IS9WD_style_(note, {
       size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
       align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
@@ -1636,18 +1688,18 @@ function IS9WD_statsPaintCharts_(sheet, layout) {
   for (var i = 0; i < f.charts.length; i++) {
     var chart = f.charts[i];
     var spec = IS9WD_STATS_CHARTS[chart.index];
-    IS9WD_paintBand_(sheet, chart.bandRow, f.firstCol, f.lastCol, spec.title, '');
-    IS9WD_paintHint_(sheet, chart.hintRow, f.firstCol, f.lastCol, spec.help);
-    var caption = sheet.getRange(chart.captionRow, 1, 1, f.lastCol);
+    IS9WD_paintCardBand_(sheet, chart.bandRow, chart.firstCol, chart.lastCol, spec.title);
+    IS9WD_paintHint_(sheet, chart.hintRow, chart.firstCol, chart.lastCol, spec.help);
+    var caption = sheet.getRange(chart.captionRow, chart.firstCol, 1, f.cellCols);
     IS9WD_style_(caption, {
       size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
       align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
     });
     sheet.setRowHeight(chart.captionRow, IS9WD_ROW_H.HINT);
-    var band = sheet.getRange(chart.firstRow, 1,
-      chart.lastRow - chart.firstRow + 1, f.lastCol);
+    var band = sheet.getRange(chart.firstRow, chart.firstCol,
+      chart.lastRow - chart.firstRow + 1, f.cellCols);
     IS9WD_clearBanding_(band);
-    band.setBackground(IS9WD_ROLE.BODY_BG);
+    band.setBackground(IS9WD_ROLE.CARD_BODY_BG);
     IS9WD_setDataHeights_(sheet, chart.firstRow, chart.lastRow - chart.firstRow + 1);
   }
 }
@@ -1656,31 +1708,38 @@ function IS9WD_statsPaintCharts_(sheet, layout) {
 // 26, the header 30 and a data row 26, which is what makes a block read as a block. A block
 // with no header row passes null, which is the marker block on `_Views`.
 function IS9WD_statsBlock_(sheet, layout, bandRow, title, help, headers, firstRow,
-  lastRow, cols) {
-  IS9WD_paintBand_(sheet, bandRow, layout.firstCol, layout.lastCol, title, '');
-  IS9WD_paintHint_(sheet, bandRow + 1, layout.firstCol, layout.lastCol, help);
-  if (headers) IS9WD_paintHeader_(sheet, bandRow + 2, layout.firstCol, headers);
+  lastRow, cols, firstCol) {
+  var at = IS9WD_posInt_(firstCol) || 1;
+  // The band, the hint row and the header row run the whole width of the card, so a narrow
+  // table still reads as a card rather than as a table floating inside one. _Views has no
+  // grid and therefore no cellCols, so the width falls back to the table's own columns.
+  var width = IS9WD_posInt_(layout.cellCols) ||
+    (headers ? headers.length : (cols ? cols.length : 1));
+  var cardLast = at + width - 1;
+  IS9WD_paintCardBand_(sheet, bandRow, at, cardLast, title);
+  IS9WD_paintHint_(sheet, bandRow + 1, at, cardLast, help);
+  if (headers) IS9WD_paintHeader_(sheet, bandRow + 2, at, headers);
   var rows = lastRow - firstRow + 1;
   if (rows < 1) return;
-  var width = headers ? headers.length : cols.length;
-  var body = sheet.getRange(firstRow, 1, rows, width);
+  var body = sheet.getRange(firstRow, at, rows, width);
   IS9WD_style_(body, {
-    size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, bg: IS9WD_ROLE.BODY_BG,
+    size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, bg: IS9WD_ROLE.CARD_BODY_BG,
     align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP
   });
-  IS9WD_applyColumnStyles_(sheet, firstRow, rows, 1, cols);
-  IS9WD_statsTints_(sheet, firstRow, rows, cols);
+  IS9WD_applyColumnStyles_(sheet, firstRow, rows, at, cols);
+  IS9WD_statsTints_(sheet, firstRow, rows, cols, at);
   IS9WD_setDataHeights_(sheet, firstRow, rows);
   IS9WD_clearBanding_(body);
 }
 
 // Font colour and weight per column, which IS9WD_applyColumnStyles_ deliberately does
 // not touch.
-function IS9WD_statsTints_(sheet, firstRow, rows, cols) {
+function IS9WD_statsTints_(sheet, firstRow, rows, cols, firstCol) {
   if (rows < 1) return;
+  var at = IS9WD_posInt_(firstCol) || 1;
   for (var i = 0; i < cols.length; i++) {
     if (!cols[i].fg && !cols[i].bold) continue;
-    var range = sheet.getRange(firstRow, i + 1, rows, 1);
+    var range = sheet.getRange(firstRow, at + i, rows, 1);
     if (cols[i].fg) range.setFontColor(cols[i].fg);
     if (cols[i].bold) range.setFontWeight('bold');
   }
@@ -1766,63 +1825,75 @@ function IS9WD_statsRules_(sheet, layout) {
 
   // The attention table, one rule per row, because there is no hidden flag column on this
   // tab any more and a per-row rule is the honest replacement for one.
+  //
+  // EVERY COLUMN BELOW IS ITS BLOCK'S OWN FIRST COLUMN PLUS AN OFFSET. A block sits in one
+  // cell of the three across grid, so a literal column number here would decorate whichever
+  // card happens to be sitting at that column.
+  var aCol = f.attentionCol;
   for (var a = 0; a < IS9WD_STATS_ATTENTION_ROWS.length; a++) {
     var aKey = IS9WD_STATS_ATTENTION_ROWS[a][0];
     var aEntry = attention[aKey];
     if (!aEntry || aEntry.flag === '=FALSE') continue;
     rules.push(IS9WD_ruleFormula_(
-      [sheet.getRange(f.attentionFirst + a, 2, 1, 2)], aEntry.flag, flag));
+      [sheet.getRange(f.attentionFirst + a, aCol + 1, 1, 2)], aEntry.flag, flag));
   }
 
   // The gates.
   var gRows = f.gateLast - f.gateFirst + 1;
+  var g0 = f.gateCol;
   rules.push(IS9WD_ruleFormula_(
-    [sheet.getRange(f.gateFirst, 1, gRows, IS9WD_STATS_HEADERS.GATES.length)],
-    '=' + IS9WD_statsRef_(2, f.gateFirst) + '="HOLD"', flag));
+    [sheet.getRange(f.gateFirst, g0, gRows, IS9WD_STATS_HEADERS.GATES.length)],
+    '=' + IS9WD_statsRef_(g0 + 1, f.gateFirst) + '="HOLD"', flag));
 
   // BY OFFICER. Attention is the column Ethan scans, so it is the one that shouts.
   var oRows = f.officerLast - f.officerFirst + 1;
   var o = f.officerFirst;
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 2, oRows, 1)],
-    '=AND(' + IS9WD_statsRef_(2, o) + '<>"",' + IS9WD_statsRef_(2, o) + '<>"OK")', flag));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 6, oRows, 1)],
-    '=N(' + IS9WD_statsRef_(6, o) + ')>0', flag));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 7, oRows, 1)],
-    '=N(' + IS9WD_statsRef_(7, o) + ')>=' +
+  var oc = function (offset) { return f.officerCol + offset - 1; };
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(2), oRows, 1)],
+    '=AND(' + IS9WD_statsRef_(oc(2), o) + '<>"",' +
+    IS9WD_statsRef_(oc(2), o) + '<>"OK")', flag));
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(6), oRows, 1)],
+    '=N(' + IS9WD_statsRef_(oc(6), o) + ')>0', flag));
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(7), oRows, 1)],
+    '=N(' + IS9WD_statsRef_(oc(7), o) + ')>=' +
     IS9WD_statsRuleName_('IS9WD_STATS_LATE_DAYS'), flag));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 8, oRows, 1)],
-    '=OR(' + IS9WD_statsRef_(8, o) + '="never",N(' + IS9WD_statsRef_(8, o) + ')>=' +
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(8), oRows, 1)],
+    '=OR(' + IS9WD_statsRef_(oc(8), o) + '="never",N(' +
+    IS9WD_statsRef_(oc(8), o) + ')>=' +
     IS9WD_statsRuleName_('IS9WD_STATS_SILENT_DAYS') + ')', flag));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 5, oRows, 1)],
-    '=AND(' + IS9WD_statsRef_(3, o) + '+' + IS9WD_statsRef_(4, o) + '>0,' +
-    IS9WD_statsRuleName_('IS9WD_STATS_ELAPSED') + '>0,' + IS9WD_statsRef_(5, o) + '<' +
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(5), oRows, 1)],
+    '=AND(' + IS9WD_statsRef_(oc(3), o) + '+' + IS9WD_statsRef_(oc(4), o) + '>0,' +
+    IS9WD_statsRuleName_('IS9WD_STATS_ELAPSED') + '>0,' +
+    IS9WD_statsRef_(oc(5), o) + '<' +
     IS9WD_statsRuleName_('IS9WD_STATS_ELAPSED') + '/7-' +
     IS9WD_statsRuleName_('IS9WD_STATS_PACE_SLACK') + ')', flag));
   // A committee that finished its whole week is the one good state this tab decorates, and
   // it takes the accent rather than a flag colour, because it is not a fault.
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 5, oRows, 1)],
-    '=AND(' + IS9WD_statsRef_(3, o) + '+' + IS9WD_statsRef_(4, o) + '>0,' +
-    IS9WD_statsRef_(5, o) + '=1)', accent));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 9, oRows, 1)],
-    '=AND(' + IS9WD_statsRef_(9, o) + '<>"",' + IS9WD_statsRef_(9, o) + '<' +
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(5), oRows, 1)],
+    '=AND(' + IS9WD_statsRef_(oc(3), o) + '+' + IS9WD_statsRef_(oc(4), o) + '>0,' +
+    IS9WD_statsRef_(oc(5), o) + '=1)', accent));
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(9), oRows, 1)],
+    '=AND(' + IS9WD_statsRef_(oc(9), o) + '<>"",' + IS9WD_statsRef_(oc(9), o) + '<' +
     IS9WD_statsRuleName_('IS9WD_STATS_ONTIME_TARGET') + ')', flag));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, 12, oRows, 1)],
-    '=N(' + IS9WD_statsRef_(12, o) + ')>0', accent));
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(o, oc(12), oRows, 1)],
+    '=N(' + IS9WD_statsRef_(oc(12), o) + ')>0', accent));
 
   // The ranked block's unscored tail reads as not applicable rather than as last place.
   var rRows = f.rankLast - f.rankFirst + 1;
+  var r0 = f.rankCol;
   rules.push(IS9WD_ruleFormula_(
-    [sheet.getRange(f.rankFirst, 1, rRows, IS9WD_STATS_HEADERS.RANKED.length)],
-    '=' + IS9WD_statsRef_(5, f.rankFirst) + '<>""', muted));
+    [sheet.getRange(f.rankFirst, r0, rRows, IS9WD_STATS_HEADERS.RANKED.length)],
+    '=' + IS9WD_statsRef_(r0 + 4, f.rankFirst) + '<>""', muted));
 
   // The trend block. A week nothing ever archived is muted, because it is missing rather
   // than empty; a week with a snapshot and no retirement takes the accent.
   var tRows = f.trendLast - f.trendFirst + 1;
+  var t0 = f.trendCol;
   rules.push(IS9WD_ruleFormula_(
-    [sheet.getRange(f.trendFirst, 1, tRows, IS9WD_STATS_HEADERS.TREND.length)],
-    '=' + IS9WD_statsRef_(6, f.trendFirst) + '="Not archived"', muted));
-  rules.push(IS9WD_ruleFormula_([sheet.getRange(f.trendFirst, 6, tRows, 1)],
-    '=' + IS9WD_statsRef_(6, f.trendFirst) + '="Snapshot only"', accent));
+    [sheet.getRange(f.trendFirst, t0, tRows, IS9WD_STATS_HEADERS.TREND.length)],
+    '=' + IS9WD_statsRef_(t0 + 5, f.trendFirst) + '="Not archived"', muted));
+  rules.push(IS9WD_ruleFormula_([sheet.getRange(f.trendFirst, t0 + 5, tRows, 1)],
+    '=' + IS9WD_statsRef_(t0 + 5, f.trendFirst) + '="Snapshot only"', accent));
 
   // The two footer cells. Either one is a self test failure and nothing else.
   rules.push(IS9WD_ruleFormula_([sheet.getRange(f.errorsCell.row, f.errorsCell.col)],
@@ -1852,12 +1923,17 @@ function IS9WD_officerTablesResize_(cfg) {
   var sheet = IS9WD_sheet_('TABLES');
 
   IS9WD_ensureGrid_(sheet, layout.endRow, layout.lastCol);
-  IS9WD_otTrim_(sheet, layout);
   IS9WD_otWipe_(sheet, layout);
   var names = IS9WD_otPointNames_(sheet, layout);
   IS9WD_otPaintAll_(sheet, layout);
   var report = IS9WD_otWriteAll_(sheet, layout);
   report.namesPointed = names;
+  // Trimmed last, for the reason 03 | Statistics is trimmed last: a trim before the paint
+  // leaves a window in which anything that grows the grid inherits the last built row's
+  // format, and in Sheets an inserted row copies the row above it.
+  IS9WD_otTrim_(sheet, layout);
+  report.maxRows = sheet.getMaxRows();
+  report.maxCols = sheet.getMaxColumns();
   return report;
 }
 
@@ -1870,15 +1946,18 @@ function IS9WD_otPointNames_(sheet, layout) {
 }
 
 function IS9WD_otWipe_(sheet, layout) {
-  var rows = Math.max(layout.endRow, sheet.getLastRow());
-  var cols = Math.max(layout.lastCol, sheet.getLastColumn());
+  var rows = Math.min(Math.max(layout.endRow, sheet.getLastRow()), sheet.getMaxRows());
+  var cols = Math.min(Math.max(layout.lastCol, sheet.getLastColumn()),
+    sheet.getMaxColumns());
   var all = sheet.getRange(1, 1, rows, cols);
   all.clear();
+  all.setBorder(false, false, false, false, false, false);
   all.clearDataValidations();
   all.clearNote();
 }
 
 function IS9WD_otTrim_(sheet, layout) {
+  IS9WD_clearPastEnd_(sheet, layout.endRow, layout.lastCol);
   var extraRows = sheet.getMaxRows() - layout.endRow;
   if (extraRows > 0) sheet.deleteRows(layout.endRow + 1, extraRows);
   var extraCols = sheet.getMaxColumns() - layout.lastCol;
@@ -1908,7 +1987,7 @@ function IS9WD_otWriteAll_(sheet, layout) {
 // of the tab to find out that something was left out.
 function IS9WD_otSummaryRow_(sheet, layout) {
   var shown = '(IS9WD_OT_ROWS_BUILT-1)';
-  sheet.getRange(layout.summaryRow, 1).setFormula(
+  sheet.getRange(layout.summaryRow, layout.firstCol).setFormula(
     '=IF(SUMPRODUCT(--(N(IS9WD_STATS_OFF_TOTAL)>' + shown + '))=0,' +
     '"Every officer\'s full list fits below.",' +
     '"Not shown below: "&TEXTJOIN(", ",TRUE,ARRAYFORMULA(IF(' +
@@ -1920,14 +1999,14 @@ function IS9WD_otSummaryRow_(sheet, layout) {
 // One section: the numbered heading, the hierarchy ordinal it joins on, one spilling item
 // formula and one overflow notice.
 function IS9WD_otBlockValues_(sheet, layout, block) {
-  var ord = IS9WD_statsRef_(layout.keyCol, block.bandRow);
+  var ord = IS9WD_statsRef_(block.keyCol, block.bandRow);
   var shown = '(IS9WD_OT_ROWS_BUILT-1)';
   var sep = IS9WD_statsSep_();
 
   // The ordinal is a literal, written once by setup, and it is what lets fourteen
   // structurally identical sections share one formula shape. It is the feed's own device
   // for the same job.
-  sheet.getRange(block.bandRow, layout.keyCol)
+  sheet.getRange(block.bandRow, block.keyCol)
     .setNumberFormat(IS9WD_FMT.INT)
     .setValue(block.ordinal);
 
@@ -1936,7 +2015,7 @@ function IS9WD_otBlockValues_(sheet, layout, block) {
   // always knows where they are and how far there is to go. Every count in it is an INDEX
   // into a named range on `_Views` rather than a second COUNTIFS, so the tabs cannot
   // disagree, and the counts are the all-tasks window, which the tab's help line says.
-  sheet.getRange(block.bandRow, 1).setFormula(
+  sheet.getRange(block.bandRow, block.firstCol).setFormula(
     '=IF(' + ord + '="",' + IS9WD_statsErr_() + ',' +
     'TEXT(' + ord + ',"00")&" of "&TEXT(ROWS(IS9WD_STATS_OFF_NAME),"00")&' + sep + '&' +
     'UPPER(INDEX(IS9WD_STATS_OFF_NAME,' + ord + '))&' + sep + '&' +
@@ -1975,7 +2054,7 @@ function IS9WD_otBlockValues_(sheet, layout, block) {
   // And the IF on the total means one cell returns either a sentence or an array, so an
   // officer with nothing does not need a second cell and does not read as twenty blank
   // banded rows.
-  sheet.getRange(block.itemFirst, 1).setFormula(
+  sheet.getRange(block.itemFirst, block.firstCol).setFormula(
     '=IF(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))=0,' +
     '"Nothing entered for this officer yet.",' +
     'IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({IS9WD_DEL_TITLE,IS9WD_DEL_DEADLINE,' +
@@ -1988,7 +2067,7 @@ function IS9WD_otBlockValues_(sheet, layout, block) {
 
   // The notice row. ARRAY_CONSTRAIN alone would have dropped the rest without a word,
   // which is the one thing this tab is not allowed to do.
-  sheet.getRange(block.noticeRow, 1).setFormula(
+  sheet.getRange(block.noticeRow, block.firstCol).setFormula(
     '=IF(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))<=' + shown + ',"",' +
     '"+ "&(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))-' + shown + ')&' +
     '" more not shown here. Raise Rows reserved per officer on _Engine, ' +
@@ -2009,11 +2088,16 @@ function IS9WD_otEndRow_(sheet, layout) {
 //  PAINTERS FOR 04 | OFFICER TABLES
 // ============================================================================
 
+// Fourteen cards, three across and five deep with the last row holding two, each one
+// outlined and backed before anything is painted into it, and every separator column and
+// separator row cleared of both afterwards.
 function IS9WD_otPaintAll_(sheet, layout) {
   var o = layout;
   var cols = IS9WD_statsCols_().OT;
 
   sheet.getRange(1, 1, o.endRow, o.lastCol).setFontFamily(IS9WD_FONT);
+  // The banner, the help line and the summary row read across the first card's own width, so
+  // the tab still opens with one line of type rather than with a 29 column bar.
   IS9WD_paintBanner_(sheet, o.bannerRow, o.firstCol, o.visibleLastCol, IS9WD_OT.BANNER);
   IS9WD_paintHelp_(sheet, o.helpRow, o.firstCol, o.visibleLastCol, IS9WD_OT.HELP);
 
@@ -2025,18 +2109,28 @@ function IS9WD_otPaintAll_(sheet, layout) {
   });
   sheet.setRowHeight(o.summaryRow, IS9WD_ROW_H.HINT);
 
+  for (var k = 0; k < o.cards.length; k++) {
+    var card = o.cards[k];
+    IS9WD_paintCard_(sheet, card.firstRow, card.lastRow, card.firstCol, card.lastCol);
+  }
+
   for (var i = 0; i < o.blocks.length; i++) {
     IS9WD_otPaintBlock_(sheet, o, o.blocks[i], cols);
   }
 
-  IS9WD_statsSpacers_(sheet, o.spacerRows, o.lastCol);
-  IS9WD_statsEndBand_(sheet, o.endRow, o.visibleLastCol);
+  // The hidden sort key column of each card, over that card's own rows only, so a separator
+  // row carries no fill anywhere across its width.
+  for (var b = 0; b < o.cards.length; b++) {
+    var side = o.cards[b];
+    IS9WD_style_(sheet.getRange(side.firstRow, side.lastCol + 1,
+      side.lastRow - side.firstRow + 1, 1), {
+      size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.CARD_BODY_BG,
+      align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
+    });
+  }
 
-  // The hidden sort key column, top to bottom.
-  IS9WD_style_(sheet.getRange(1, o.keyCol, o.endRow, 1), {
-    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
-    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
-  });
+  IS9WD_otGaps_(sheet, o);
+  IS9WD_statsEndBand_(sheet, o.endRow, o.visibleLastCol);
 
   IS9WD_setWidths_(sheet, 'TABLES');
   sheet.showColumns(1, o.lastCol);
@@ -2045,28 +2139,41 @@ function IS9WD_otPaintAll_(sheet, layout) {
   sheet.setTabColor(IS9WD_TAB_COLOR.TABLES);
 }
 
+function IS9WD_otGaps_(sheet, layout) {
+  var o = layout;
+  for (var c = 0; c < o.gapCols.length; c++) {
+    IS9WD_clearGap_(sheet, 1, o.endRow, o.gapCols[c], o.gapCols[c]);
+  }
+  for (var r = 0; r < o.spacerRows.length; r++) {
+    IS9WD_clearGap_(sheet, o.spacerRows[r], o.spacerRows[r], 1, o.lastCol);
+    sheet.setRowHeight(o.spacerRows[r], IS9WD_ROW_H.SPACER);
+  }
+}
+
 // One officer's section. The heading is one cell of text running across a filled span,
 // which is how the bar look is achieved without the connector printing `[merged]` repeats.
 // Banding covers the task rows only, so the notice row and the spacer stay plain and the
 // section reads as a table under a heading rather than as a stripe that never ends.
 function IS9WD_otPaintBlock_(sheet, layout, block, cols) {
-  IS9WD_paintBand_(sheet, block.bandRow, layout.firstCol, layout.visibleLastCol, '', '');
-  IS9WD_paintHeader_(sheet, block.headerRow, layout.firstCol, IS9WD_OT_HEADERS);
+  var at = block.firstCol;
+  var width = block.lastCol - at + 1;
+  IS9WD_paintCardBand_(sheet, block.bandRow, at, block.lastCol, '');
+  IS9WD_paintHeader_(sheet, block.headerRow, at, IS9WD_OT_HEADERS);
 
   var rows = layout.itemRows;
-  var body = sheet.getRange(block.itemFirst, 1, rows, layout.visibleLastCol);
+  var body = sheet.getRange(block.itemFirst, at, rows, width);
   IS9WD_style_(body, {
-    size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, bg: IS9WD_ROLE.BODY_BG,
+    size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, bg: IS9WD_ROLE.CARD_BODY_BG,
     align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP
   });
-  IS9WD_applyColumnStyles_(sheet, block.itemFirst, rows, 1, cols);
-  IS9WD_statsTints_(sheet, block.itemFirst, rows, cols);
+  IS9WD_applyColumnStyles_(sheet, block.itemFirst, rows, at, cols);
+  IS9WD_statsTints_(sheet, block.itemFirst, rows, cols, at);
   IS9WD_setDataHeights_(sheet, block.itemFirst, rows);
   IS9WD_clearBanding_(body);
 
-  var notice = sheet.getRange(block.noticeRow, 1, 1, layout.visibleLastCol);
+  var notice = sheet.getRange(block.noticeRow, at, 1, width);
   IS9WD_style_(notice, {
-    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.BODY_BG,
+    size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.CARD_BODY_BG,
     align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
   });
   sheet.setRowHeight(block.noticeRow, IS9WD_ROW_H.DATA);
@@ -2093,26 +2200,28 @@ function IS9WD_otRules_(sheet, layout) {
   for (var i = 0; i < layout.blocks.length; i++) {
     var b = layout.blocks[i];
     var rows = layout.itemRows;
-    var whole = [sheet.getRange(b.itemFirst, 1, rows, layout.visibleLastCol)];
-    var flagCol = [sheet.getRange(b.itemFirst, 5, rows, 1)];
-    var flagRef = IS9WD_statsRef_(5, b.itemFirst);
-    var daysRef = IS9WD_statsRef_(3, b.itemFirst);
-    var keyRef = IS9WD_statsRef_(layout.keyCol, b.itemFirst);
+    var at = b.firstCol;
+    var width = b.lastCol - at + 1;
+    var whole = [sheet.getRange(b.itemFirst, at, rows, width)];
+    var flagCol = [sheet.getRange(b.itemFirst, at + 4, rows, 1)];
+    var flagRef = IS9WD_statsRef_(at + 4, b.itemFirst);
+    var daysRef = IS9WD_statsRef_(at + 2, b.itemFirst);
+    var keyRef = IS9WD_statsRef_(b.keyCol, b.itemFirst);
 
     // A blocking flag first, then Overdue, so a row that is both reads as blocked.
     rules.push(IS9WD_ruleFormula_(flagCol,
       '=AND(' + flagRef + '<>"",' + flagRef + '<>' + overdue + ')', flag));
     rules.push(IS9WD_ruleFormula_(flagCol, '=' + flagRef + '=' + overdue, flag));
     // Scoped to Days left so it cannot collide with the flag rule beside it.
-    rules.push(IS9WD_ruleFormula_([sheet.getRange(b.itemFirst, 3, rows, 1)],
+    rules.push(IS9WD_ruleFormula_([sheet.getRange(b.itemFirst, at + 2, rows, 1)],
       '=AND(' + daysRef + '<>"",N(' + daysRef + ')<0)', accent));
     // A finished row reads muted across all seven columns, and the rule reads the FIRST
     // CHARACTER OF THE SORT KEY, which derives from the Active flag. Nothing here keys on
     // the word Accomplished: the Status column carries the label as display and never as a
     // key, so renaming the status in the status list changes nothing.
     rules.push(IS9WD_ruleFormula_(whole, '=LEFT(' + keyRef + ',1)="1"', muted));
-    rules.push(IS9WD_ruleFormula_([sheet.getRange(b.noticeRow, 1, 1, layout.visibleLastCol)],
-      '=' + IS9WD_statsCell_(1, b.noticeRow) + '<>""', flag));
+    rules.push(IS9WD_ruleFormula_([sheet.getRange(b.noticeRow, at, 1, width)],
+      '=' + IS9WD_statsCell_(at, b.noticeRow) + '<>""', flag));
   }
   return rules;
 }

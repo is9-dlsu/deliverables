@@ -90,6 +90,8 @@ function IS9WD_selfTest_() {
   IS9WD_stStatsOfficers_(suite, ctx);
   IS9WD_stStatsTrend_(suite, ctx);
   IS9WD_stOfficerTables_(suite, ctx);
+  IS9WD_stGrid_(suite, ctx);
+  IS9WD_stCream_(suite, ctx);
   IS9WD_stEndpoint_(suite, ctx);
   IS9WD_stQuota_(suite);
 
@@ -262,7 +264,10 @@ function IS9WD_stGather_(suite) {
         sheet: sheet, holder: holder, rows: lastRow, cols: lastCol,
         backgrounds: range.getBackgrounds(),
         notes: range.getNotes(),
-        disp: range.getDisplayValues()
+        disp: range.getDisplayValues(),
+        // The formulas as well, so a cell that holds a formula and shows nothing is read as
+        // a sheet that has not recalculated rather than as a missing formula.
+        formulas: range.getFormulas()
       };
     } catch (err) {
       IS9WD_stAdd_(suite, IS9WD_TAB[tabKey] + ' reads', IS9WD_ST.FAIL, IS9WD_stErr_(err));
@@ -280,17 +285,27 @@ function IS9WD_stView_(suite, label, tabKey, layout, wantCols) {
     var sheet = IS9WD_sheet_(tabKey);
     var haveRows = Math.min(sheet.getMaxRows(), layout.endRow);
     var haveCols = Math.min(sheet.getMaxColumns(), wantCols);
+    // The fills come back as well as the values, because three of the checks below are
+    // about paint: cream may not appear on a tab nobody types into, a separator column and
+    // a separator row must carry no fill at all, and nothing may be painted past the last
+    // built row. Borders cannot be read at all through Apps Script, so the border around
+    // each card is asserted by the Node harness and not here.
     return {
       sheet: sheet,
       lastRow: sheet.getLastRow(),
       name: sheet.getName(),
       cols: wantCols,
+      maxRows: sheet.getMaxRows(),
+      maxCols: sheet.getMaxColumns(),
       frozenRows: sheet.getFrozenRows(),
       frozenCols: sheet.getFrozenColumns(),
       shortRows: layout.endRow - haveRows,
       shortCols: wantCols - haveCols,
       disp: IS9WD_stPad_(
         sheet.getRange(1, 1, haveRows, haveCols).getDisplayValues(),
+        layout.endRow, wantCols),
+      backgrounds: IS9WD_stPad_(
+        sheet.getRange(1, 1, haveRows, haveCols).getBackgrounds(),
         layout.endRow, wantCols)
     };
   } catch (err) {
@@ -393,6 +408,23 @@ function IS9WD_stNames_(suite, ctx) {
     }
     return 'All ' + want.length + ' named ranges span what the layout says, with ' +
       said.join(' and ') + '.';
+  });
+
+  // ONE DEFINITION PER NAME, and this is the assertion the directory's Check column bought.
+  // `Spreadsheet.setNamedRange` does not move a name that already exists: it adds a second
+  // definition, the older one is what a formula resolves, and a reader that builds a map
+  // keyed on the name sees the newer one. So a name whose block moved between layouts points
+  // at an empty band forever while every check that asks where it points reads clean. The
+  // build drops each name before it creates it; this says so.
+  IS9WD_stRun_(suite, 'No named range is defined twice', true, function () {
+    var dupes = IS9WD_namedDuplicates_();
+    if (dupes.length) {
+      return IS9WD_stFail_(dupes.length + ' name(s) carry more than one definition: ' +
+        IS9WD_stList_(dupes) + '. The older definition is the one every formula resolves, ' +
+        'so these point wherever an earlier layout put them. Run Build or repair workbook.');
+    }
+    return 'Every named range on the workbook carries exactly one definition, so no ' +
+      'formula can be reading an earlier layout.';
   });
 
   IS9WD_stRun_(suite, 'Retired names absent', ctx.audit, function () {
@@ -575,6 +607,45 @@ function IS9WD_stDirectory_(suite, ctx) {
     return publishing.length + ' committees publish and hold the orders 1 to ' +
       publishing.length + ' with no duplicate and no gap.';
   });
+
+  // THE CHECK COLUMN OF THE PEOPLE, read as a person reads it. Every other directory check
+  // here reads the values; this one reads what the sheet actually prints in the column Ethan
+  // looks at, because the fault of 2026-09-27 was a column that printed "On the carousel
+  // with no slide number" on all nine publishing rows while every value behind it was right.
+  // Missing names and addresses are expected before Gate A and are not a failure; a
+  // machinery message is.
+  IS9WD_stRun_(suite, 'The People check column reads clean', ctx.settings.CONFIG,
+    function () {
+      var d = IS9WD_CFG.DIRECTORY;
+      var read = ctx.settings.CONFIG;
+      var expected = ['No name yet', 'No email yet', 'Your own admin link',
+        'No private link yet: run Build or repair workbook', 'OK'];
+      var problems = [];
+      var clean = 0;
+      for (var r = d.firstRow; r <= d.lastRow; r++) {
+        if (r > read.rows || d.checkCol > read.cols) break;
+        var key = IS9WD_trim_(read.disp[r - 1][0]);
+        if (key === '') continue;
+        var text = IS9WD_trim_(read.disp[r - 1][d.checkCol - 1]);
+        if (text === '') {
+          var held = IS9WD_trim_(read.formulas[r - 1][d.checkCol - 1]);
+          if (held === '') {
+            problems.push(key + ' on row ' + r + ' has no Check formula at all');
+          }
+          continue;
+        }
+        if (IS9WD_ST_HAS_(expected, text)) { clean++; continue; }
+        problems.push(key + ' on row ' + r + ' reads "' + text + '"');
+      }
+      if (problems.length) {
+        return IS9WD_stFail_(IS9WD_stList_(problems) +
+          '. A slide number or a link message here on a freshly built workbook means a ' +
+          'named range the column reads points at the wrong place, not that anything in ' +
+          IS9WD_TAB.ENGINE + ' is wrong. Run Build or repair workbook.');
+      }
+      return clean + ' of the 14 rows read clean, and not one reports a missing slide ' +
+        'number, a duplicate slide number or a missing link.';
+    });
 
   IS9WD_stRun_(suite, 'Hierarchy orders', ctx.cfg, function () {
     var rows = ctx.cfg.directory.rows;
@@ -1362,28 +1433,39 @@ function IS9WD_stStatsCharts_(suite, ctx) {
         'declares ' + want + '. More than ' + want + ' means a build appended instead of ' +
         'replacing, which doubles on every run. Run Build or repair workbook.');
     }
+    // THE THREE CHARTS NOW SIT SIDE BY SIDE IN ONE ROW OF THE GRID, so a chart is identified
+    // by its anchor row AND its anchor column. Keying on the row alone would read three
+    // charts in three cards as three charts stacked on one anchor, which is the very fault
+    // this check exists to catch.
     var problems = [];
     var anchors = {};
     for (var i = 0; i < charts.length; i++) {
       var info = charts[i].getContainerInfo();
       var row = info.getAnchorRow();
-      if (anchors[row]) problems.push('two charts are anchored on row ' + row);
-      anchors[row] = true;
+      var col = info.getAnchorColumn();
+      var at = row + ',' + col;
+      if (anchors[at]) {
+        problems.push('two charts are anchored on row ' + row + ' column ' +
+          IS9WD_colLetter_(col));
+      }
+      anchors[at] = true;
       var inside = false;
       for (var c = 0; c < s.charts.length; c++) {
-        if (row >= s.charts[c].firstRow && row <= s.charts[c].lastRow) inside = true;
+        if (row >= s.charts[c].firstRow && row <= s.charts[c].lastRow &&
+          col >= s.charts[c].firstCol && col <= s.charts[c].lastCol) inside = true;
       }
       if (!inside) {
-        problems.push('a chart is anchored on row ' + row +
+        problems.push('a chart is anchored at ' + IS9WD_colLetter_(col) + row +
           ', which is not inside any reserved chart band');
       }
     }
     // Every caption has to say something, because a caption is the whole of what an empty
-    // chart can tell a reader.
+    // chart can tell a reader. It sits in its own card's first column.
     for (var k = 0; k < s.charts.length; k++) {
-      var caption = IS9WD_trim_(ctx.stats.disp[s.charts[k].captionRow - 1][0]);
+      var spot = s.charts[k];
+      var caption = IS9WD_trim_(ctx.stats.disp[spot.captionRow - 1][spot.firstCol - 1]);
       if (caption === '') {
-        problems.push('the caption above the chart on row ' + s.charts[k].firstRow +
+        problems.push('the caption above the chart in card ' + (k + 1) +
           ' is blank, so an empty chart would say nothing');
       }
     }
@@ -1858,9 +1940,10 @@ function IS9WD_stOfficerTables_(suite, ctx) {
     var seen = {};
     for (var i = 0; i < o.blocks.length; i++) {
       var block = o.blocks[i];
-      var ord = IS9WD_int_(ctx.tables.disp[block.bandRow - 1][o.keyCol - 1]);
+      var ord = IS9WD_int_(ctx.tables.disp[block.bandRow - 1][block.keyCol - 1]);
       if (ord === null) {
-        problems.push('the band on row ' + block.bandRow + ' carries no hierarchy ordinal');
+        problems.push('the band on row ' + block.bandRow + ' in column ' +
+          IS9WD_colLetter_(block.firstCol) + ' carries no hierarchy ordinal');
         continue;
       }
       if (seen[ord]) problems.push('ordinal ' + ord + ' is on two bands');
@@ -1871,7 +1954,7 @@ function IS9WD_stOfficerTables_(suite, ctx) {
         continue;
       }
       var want = IS9WD_upper_(IS9WD_txt_(names[ord - 1][0]));
-      var band = IS9WD_txt_(ctx.tables.disp[block.bandRow - 1][0]);
+      var band = IS9WD_txt_(ctx.tables.disp[block.bandRow - 1][block.firstCol - 1]);
       if (want !== '' && band.indexOf(want) !== 0) {
         problems.push('the band on row ' + block.bandRow + ' reads "' +
           band.substring(0, 40) + '" and ordinal ' + ord + ' is "' + want + '"');
@@ -1896,7 +1979,7 @@ function IS9WD_stOfficerTables_(suite, ctx) {
     var hidden = 0;
     for (var i = 0; i < o.blocks.length; i++) {
       var block = o.blocks[i];
-      var ord = IS9WD_int_(ctx.tables.disp[block.bandRow - 1][o.keyCol - 1]);
+      var ord = IS9WD_int_(ctx.tables.disp[block.bandRow - 1][block.keyCol - 1]);
       if (ord === null || ord < 1 || ord > totals.length) continue;
       var total = IS9WD_int_(totals[ord - 1][0]);
       if (total === null) continue;
@@ -1943,7 +2026,7 @@ function IS9WD_stOfficerTables_(suite, ctx) {
     for (var i = 0; i < o.blocks.length; i++) {
       var block = o.blocks[i];
       for (var r = block.itemFirst; r <= block.itemLast; r++) {
-        var key = IS9WD_trim_(ctx.tables.disp[r - 1][o.keyCol - 1]);
+        var key = IS9WD_trim_(ctx.tables.disp[r - 1][block.keyCol - 1]);
         if (key === '') continue;
         count++;
         var lead = key.substring(0, 1);
@@ -1974,6 +2057,194 @@ function IS9WD_stMerged_(sheet, label) {
   return [merged.length + ' merged range(s) on ' + label + ' at ' + where.join(', ') +
     ', which the Drive connector renders as repeated [merged] values'];
 }
+
+// ============================================================================
+//  THE GRID, THE TRIM AND THE CREAM RULE  (2.5, and the three faults of 2026-09-27)
+// ============================================================================
+
+// Ethan's three across grid, asserted from the layout and from what a sheet can actually be
+// asked: three cards to a row, exactly one empty column between neighbours, exactly one empty
+// row between stacked rows of three, the grid running past column AA, and nothing painted
+// past the last built row.
+//
+// THE BORDER AROUND EACH CARD IS NOT ASSERTED HERE, and the reason is a limit of Apps Script
+// rather than a choice: there is no API that reads a cell's border. The Node harness reads
+// the border off its own fake and asserts it there, which is the only place it can be
+// asserted at all.
+function IS9WD_stGrid_(suite, ctx) {
+  var views = [
+    { key: 'STATS', label: IS9WD_TAB.STATS, layout: ctx.statsLayout, read: ctx.stats,
+      wantCards: 9, wantRows: 3 },
+    { key: 'TABLES', label: IS9WD_TAB.TABLES, layout: ctx.otLayout, read: ctx.tables,
+      wantCards: null, wantRows: null }
+  ];
+
+  for (var v = 0; v < views.length; v++) {
+    var view = views[v];
+    IS9WD_stRun_(suite, view.label + ': three across grid', view.read, function () {
+      var L = view.layout;
+      var read = view.read;
+      var problems = [];
+
+      if (!L.cells || L.cells.length !== IS9WD_GRID.ACROSS) {
+        return IS9WD_stFail_('the layout declares ' +
+          (L.cells ? L.cells.length : 0) + ' cards across, not ' + IS9WD_GRID.ACROSS);
+      }
+      // Three cells, each the same width, each exactly one column after the one before it.
+      for (var i = 0; i < L.cells.length; i++) {
+        var cell = L.cells[i];
+        if (cell.lastCol - cell.firstCol + 1 !== L.cellCols) {
+          problems.push('card column ' + (i + 1) + ' spans ' +
+            (cell.lastCol - cell.firstCol + 1) + ' columns, not ' + L.cellCols);
+        }
+        if (i > 0 && cell.firstCol !== L.cells[i - 1].lastCol + 1 + IS9WD_GRID.GAP) {
+          problems.push('card column ' + (i + 1) + ' starts at ' +
+            IS9WD_colLetter_(cell.firstCol) + ', which is not exactly ' + IS9WD_GRID.GAP +
+            ' column after ' + IS9WD_colLetter_(L.cells[i - 1].lastCol));
+        }
+      }
+      if (L.gapCols.length !== IS9WD_GRID.ACROSS - 1) {
+        problems.push(L.gapCols.length + ' separator columns, not ' +
+          (IS9WD_GRID.ACROSS - 1));
+      }
+      if (L.lastCol < 27) {
+        problems.push('the grid stops at column ' + IS9WD_colLetter_(L.lastCol) +
+          ', short of AA, so it is not using the width of the sheet');
+      }
+
+      // Every row of cards is a full row of three except the last, which may be short.
+      for (var g = 0; g < L.gridRows.length; g++) {
+        var row = L.gridRows[g];
+        var full = g < L.gridRows.length - 1;
+        if (full && row.cards !== IS9WD_GRID.ACROSS) {
+          problems.push('row of cards ' + (g + 1) + ' holds ' + row.cards + ', not ' +
+            IS9WD_GRID.ACROSS);
+        }
+        if (row.cards < 1 || row.cards > IS9WD_GRID.ACROSS) {
+          problems.push('row of cards ' + (g + 1) + ' holds ' + row.cards);
+        }
+        // Exactly one empty row between this row of cards and the next.
+        if (g > 0) {
+          var gapRow = row.firstRow - 1;
+          if (gapRow !== L.gridRows[g - 1].lastRow + 1) {
+            problems.push('there are ' + (row.firstRow - L.gridRows[g - 1].lastRow - 1) +
+              ' rows between rows of cards ' + g + ' and ' + (g + 1) + ', not 1');
+          }
+          if (IS9WD_stIndexOf_(L.spacerRows, gapRow) < 0) {
+            problems.push('row ' + gapRow + ' separates two rows of cards and is not in ' +
+              'the layout\'s own separator list');
+          }
+        }
+      }
+
+      // A separator carries no fill: the one thing about the paint a sheet can be asked.
+      var cols = Math.min(read.cols, L.lastCol);
+      for (var gc = 0; gc < L.gapCols.length; gc++) {
+        var at = L.gapCols[gc];
+        if (at > cols) continue;
+        for (var r = 1; r <= L.endRow; r++) {
+          if (IS9WD_stPainted_(read.backgrounds[r - 1][at - 1])) {
+            problems.push('the separator column ' + IS9WD_colLetter_(at) + ' is painted ' +
+              read.backgrounds[r - 1][at - 1] + ' on row ' + r);
+            break;
+          }
+        }
+      }
+      for (var gr = 0; gr < L.spacerRows.length; gr++) {
+        var rowAt = L.spacerRows[gr];
+        if (rowAt > L.endRow) continue;
+        for (var c = 1; c <= cols; c++) {
+          if (IS9WD_stPainted_(read.backgrounds[rowAt - 1][c - 1])) {
+            problems.push('the separator row ' + rowAt + ' is painted ' +
+              read.backgrounds[rowAt - 1][c - 1] + ' in column ' + IS9WD_colLetter_(c));
+            break;
+          }
+        }
+      }
+
+      // NOTHING PAST THE LAST BUILT ROW OR COLUMN, and the grid ends exactly there. A tab
+      // trimmed to its own end row cannot carry paint below it, which is the whole fix.
+      if (read.maxRows !== L.endRow) {
+        problems.push('the tab holds ' + read.maxRows + ' rows and its last built row is ' +
+          L.endRow + ', so ' + (read.maxRows - L.endRow) + ' rows sit past the end marker');
+      }
+      if (read.maxCols !== L.lastCol) {
+        problems.push('the tab holds ' + read.maxCols + ' columns and its last built one ' +
+          'is ' + IS9WD_colLetter_(L.lastCol));
+      }
+
+      if (problems.length) {
+        return IS9WD_stFail_(IS9WD_stList_(problems) + '. Run Build or repair workbook.');
+      }
+      return L.cards.length + ' cards, ' + IS9WD_GRID.ACROSS + ' across in ' +
+        L.gridRows.length + ' stacked rows, one empty column between neighbours and one ' +
+        'empty row between rows, the grid reaching ' + IS9WD_colLetter_(L.lastCol) +
+        L.endRow + ' and nothing past it.';
+    });
+  }
+}
+
+// CREAM MEANS ONE THING: YOU TYPE HERE. Ethan's instruction of 2026-09-27, and the reason
+// the blocking-flag style lost its fill. A tab nobody types into must carry no cream fill at
+// all, so a flag style that reaches for cream again fails here rather than in his face.
+//
+// The two settings tabs are covered by their own check, which asserts cream on every input
+// cell AND on nothing else. This one covers the tabs where cream is never right.
+function IS9WD_stCream_(suite, ctx) {
+  IS9WD_stRun_(suite, 'Cream is only on cells you type into', ctx.stats, function () {
+    var reads = [
+      [IS9WD_TAB.STATS, ctx.stats], [IS9WD_TAB.TABLES, ctx.tables],
+      [IS9WD_TAB.VIEWS, ctx.views]
+    ];
+    var problems = [];
+    var scanned = 0;
+    for (var i = 0; i < reads.length; i++) {
+      var label = reads[i][0];
+      var read = reads[i][1];
+      if (!read || !read.backgrounds) continue;
+      for (var r = 0; r < read.backgrounds.length; r++) {
+        for (var c = 0; c < read.backgrounds[r].length; c++) {
+          scanned++;
+          if (IS9WD_stSameHex_(read.backgrounds[r][c], IS9WD_INPUT_BG)) {
+            problems.push(label + ' ' + IS9WD_a1_(r + 1, c + 1, 1, 1) + ' is cream');
+            if (problems.length > 8) break;
+          }
+        }
+        if (problems.length > 8) break;
+      }
+    }
+    // The feed is read only too, and its own read carries no fills, so the one cell that
+    // could go wrong there is asserted through the rule list instead.
+    if (problems.length) {
+      return IS9WD_stFail_(IS9WD_stList_(problems) +
+        '. Cream is reserved for a cell you type into, so a calculated cell must never ' +
+        'carry it. A flag is bold ' + IS9WD_ROLE.FLAG_FG + ' text on ' +
+        IS9WD_ROLE.FLAG_BG + ' and no fill of its own.');
+    }
+    return scanned + ' cells across the three computed tabs, not one of them cream. A flag ' +
+      'reads as bold ' + IS9WD_ROLE.FLAG_FG + ' text with no fill.';
+  });
+}
+
+// A hex compared without case or the shorthand a sheet sometimes hands back.
+function IS9WD_stSameHex_(a, b) {
+  return IS9WD_trim_(a).toLowerCase() === IS9WD_trim_(b).toLowerCase();
+}
+
+// A cell a sheet reports as unpainted. Sheets answers `#ffffff` for a cell with no fill of
+// its own, and `null` or blank on some reads, so all three count as clean.
+function IS9WD_stPainted_(hex) {
+  var want = IS9WD_trim_(hex).toLowerCase();
+  return want !== '' && want !== '#ffffff' && want !== '#fff';
+}
+
+function IS9WD_stIndexOf_(list, value) {
+  for (var i = 0; i < (list || []).length; i++) {
+    if (list[i] === value) return i;
+  }
+  return -1;
+}
+
 
 // The one check this build cannot perform. 2.4 forbids UrlFetchApp outright, and
 // widening a scope means re-authorizing from the editor and repointing the

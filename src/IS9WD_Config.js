@@ -134,9 +134,24 @@ var IS9WD_ROLE = {
   BODY_FG: IS9WD_CLR.GREEN_DEEP,
   HINT_FG: IS9WD_CLR.SAGE,
   ACCENT_FG: IS9WD_CLR.PURPLE_BRIGHT,
+  // A FLAG CARRIES NO FILL AT ALL. Ethan's instruction of 2026-09-27: cream means exactly
+  // one thing in this workbook, "you type here", and the old flag style painted cream
+  // behind bold #724485 on calculated Check cells, which is the one place a reader must
+  // never type. So a flag is bold #724485 on the paper white, with a #724485 border where
+  // a border is available to draw. Nothing outside the input set is ever cream again.
   FLAG_FG: IS9WD_CLR.PURPLE_STRONG,
-  FLAG_BG: IS9WD_CLR.CREAM,
+  FLAG_BG: IS9WD_CLR.PAPER,
+  FLAG_BORDER: IS9WD_CLR.PURPLE_STRONG,
   MUTED_FG: IS9WD_CLR.LILAC,
+  // A CARD on a computed view: the heading band, its text, the body behind the table and
+  // the border around the whole of it. Ethan's instruction of 2026-09-27 named all four:
+  // "a header band in #5d4170 with #F8FBFD text, a body on #F8FBFD, and a border around the
+  // whole table in #58756a or #5d4170". The deep green band belongs to the settings tabs,
+  // where a band is a section of one long document rather than the lid of a card.
+  CARD_BAND_BG: IS9WD_CLR.PURPLE_DEEP,
+  CARD_BAND_FG: IS9WD_CLR.PAPER,
+  CARD_BODY_BG: IS9WD_CLR.PAPER,
+  CARD_BORDER: IS9WD_CLR.SAGE,
   BAND_ROW_A: IS9WD_CLR.PAPER,
   BAND_ROW_B: IS9WD_CLR.CREAM
 };
@@ -267,16 +282,33 @@ var IS9WD_WIDTH = {
     80, 80, 80, 80, 150, 150, 130, 130, 220],
   ITEMS: [90, 260, 380, 150, 300, 150, 160, 200, 160, 190, 90, 110, 80, 80,
     110, 120, 110],
-  // 03 | Statistics is a dashboard: twelve visible columns and no hidden ones. The
-  // first two are wide because they carry an officer name and an Attention sentence,
-  // and because the first KPI tile of each row sits across them. The other ten are
-  // even, so tiles two, three and four are the same size as each other. Total 1,180 px,
-  // inside the grid a 1366 px laptop shows, which is the whole answer to reading this
-  // tab with no frozen column.
-  STATS: [250, 230, 80, 80, 80, 80, 90, 80, 80, 80, 80, 110],
-  // 04 | Officer Tables is 1,095 px of visible columns. Title first because it is the
-  // thing you read; the band above already says whose table it is.
-  TABLES: [360, 110, 85, 110, 150, 200, 80],
+  // 03 | Statistics is a dashboard laid out three cards across, so its widths are three
+  // twelve column sets with a narrow separator column between them. Each set is sized for
+  // the WIDEST table that sits in that column of cards, and every set totals about the same
+  // so the three columns of cards line up as three columns:
+  //
+  //   set 1, columns A to L   · the tiles and BY OFFICER   · 1,220 px
+  //   set 2, columns N to Y   · WHAT NEEDS ATTENTION and TRACK RECORD, RANKED · 1,200 px
+  //   set 3, columns AA to AL · READINESS GATES and TREND  · 1,190 px
+  //
+  // The separator columns M and Z are 30 px: wide enough to read as a gap, narrow enough
+  // not to waste the width. A sentence column is narrow on purpose and overflows right
+  // across the air columns inside its own card, which is the idiom the attention table
+  // already used and the reason those air columns exist.
+  STATS: [230, 210, 80, 80, 80, 80, 85, 80, 80, 80, 80, 100,
+    30,
+    200, 120, 130, 90, 210, 72, 72, 72, 72, 72, 72, 72,
+    30,
+    200, 110, 130, 120, 90, 150, 75, 75, 75, 75, 75, 75],
+  // 04 | Officer Tables is three nine column cards across. Seven columns a reader reads,
+  // one narrow column of air inside the card's border, then the hidden sort key at the
+  // cell's right edge. Title first because it is the thing you read; the band above already
+  // says whose table it is. Each set is 1,145 px of card plus the hidden key.
+  TABLES: [330, 110, 85, 110, 140, 290, 80, 40, 60,
+    30,
+    330, 110, 85, 110, 140, 290, 80, 40, 60,
+    30,
+    330, 110, 85, 110, 140, 290, 80, 40, 60],
   ARCHIVE: [90, 150, 260, 380, 150, 300, 160, 90, 150, 160, 200, 190, 220, 220],
   LOG: [160, 220, 110, 190, 240, 90, 460, 150],
   // _Engine: nine columns, because the schedule block is the widest thing on it.
@@ -294,10 +326,12 @@ var IS9WD_WIDTH = {
 // _Views, so there is no hidden column on the tab Ethan reads. 04 | Officer Tables keeps
 // exactly one, column H, and it is not a helper: it is the eighth column of one spilling
 // SORT, so it cannot live on another sheet at all (6B.6).
+// 04 | Officer Tables hides one column per grid cell, the sort key at each cell's right
+// edge, so the spans follow the grid rather than a remembered letter.
 var IS9WD_HIDE_COLS = {
   ITEMS: [{ first: 11, last: 17 }],
   FEED: [{ first: 18, last: 22 }],
-  TABLES: [{ first: 8, last: 8 }]
+  TABLES: [{ first: 9, last: 9 }, { first: 19, last: 19 }, { first: 29, last: 29 }]
 };
 
 // ============================================================================
@@ -1767,11 +1801,13 @@ var IS9WD_STATS = {
 // The key is the machine key, so IS9WD_Stats.js throws on an unknown one rather than
 // writing eight formulas one tile out of place.
 //
-// Tile 1 of each row starts in column A and is two columns wide; tiles 2, 3 and 4 are
-// three columns wide each, which is 10 of the 12 columns after the wide pair. The widths
-// in IS9WD_WIDTH.STATS are chosen so those three are the same size.
+// The four columns are RELATIVE TO THE TILE CARD, not to the sheet, because the card is
+// one cell of the three across grid and its first column moves with the grid. Four tiles
+// across a twelve column card is three columns each, and the first is the widest in pixels
+// because it carries the week line and the readiness verdict, which are the two longest
+// strings. Overflow wrap lets each one use its own three columns and no more.
 var IS9WD_STATS_TILE_COLS = [
-  { col: 1, span: 2 }, { col: 3, span: 3 }, { col: 6, span: 3 }, { col: 9, span: 4 }
+  { col: 1, span: 3 }, { col: 4, span: 3 }, { col: 7, span: 3 }, { col: 10, span: 3 }
 ];
 
 var IS9WD_STATS_TILE_ROW_A = ['T.WEEK', 'T.ACTIVE', 'T.DONE', 'T.PACE'];
@@ -1915,6 +1951,10 @@ var IS9WD_STATS_TREND_COL_NAMES = {
 // formula rather than a literal precisely so an empty chart says what will fill it.
 var IS9WD_STATS_CHART_ROWS = 14;
 var IS9WD_STATS_CHART_HEIGHT = 330;
+// A chart is drawn over its own card now rather than over the whole width of the tab, so its
+// pixel width is the card's: twelve columns of the widths in IS9WD_WIDTH.STATS, about
+// 1,200 px, less a little so the border stays visible around it.
+var IS9WD_STATS_CHART_WIDTH = 1160;
 
 var IS9WD_STATS_CHARTS = [
   {
@@ -1941,76 +1981,173 @@ var IS9WD_STATS_CHARTS = [
 // Every row number on the tab, computed from the directory's own row count and the trend
 // weeks setting, so no module hardcodes the last row. Build or repair rewrites every
 // block, every chart and the error scan together or none of them.
+// ---------------------------------------------------------------------------
+//  THE THREE ACROSS GRID  (2.5, and it governs both computed views)
+// ---------------------------------------------------------------------------
+
+// Ethan's instruction of 2026-09-27, verbatim: "use the columns (width of the sheet),
+// extend until Column AA and beyond. For both tabs i want three tables beside each other
+// with one column separating them, have borders and backgrounds as well. So stack those
+// tables as well with one row separating it from above".
+//
+// So: three cards across, EXACTLY ONE empty column between neighbours, EXACTLY ONE empty
+// row between stacked rows of three, and every card carrying its own heading band, its own
+// body background and a border around the whole of it. The separator column and the
+// separator row carry no fill and no border at all, because that is the only thing making
+// three cards read as three cards rather than as one wide table with headings in it.
+//
+// A grid cell is a fixed number of columns, the same for all three, so a card in the second
+// row lines up under the card above it and the column widths are set once per cell and
+// repeated. That is also why the grid runs past column AA rather than being packed to the
+// widest table: a twelve column card three times over is 38 columns, and a nine column card
+// three times over is 29.
+var IS9WD_GRID = { ACROSS: 3, GAP: 1 };
+
+function IS9WD_gridGeometry_(cellCols) {
+  var width = IS9WD_posInt_(cellCols) || 1;
+  var cells = [];
+  var gaps = [];
+  for (var i = 0; i < IS9WD_GRID.ACROSS; i++) {
+    var first = 1 + i * (width + IS9WD_GRID.GAP);
+    cells.push({ index: i, firstCol: first, lastCol: first + width - 1 });
+    if (i < IS9WD_GRID.ACROSS - 1) gaps.push(first + width);
+  }
+  return {
+    cellCols: width, cells: cells, gapCols: gaps,
+    lastCol: cells[cells.length - 1].lastCol
+  };
+}
+
+// Twelve, because BY OFFICER is twelve columns wide and it is the widest thing on the tab.
+// Every other card on 03 | Statistics is narrower and carries air inside its own border
+// rather than a card of its own width, so the three columns of cards stay aligned.
+var IS9WD_STATS_CELL_COLS = 12;
+
 function IS9WD_statsLayout_(directoryRows, trendWeeks) {
   var dir = IS9WD_posInt_(directoryRows) || IS9WD_DIR_ROWS;
   var trend = IS9WD_posInt_(trendWeeks) ||
     IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_TREND_WEEKS')) || 8;
+  var grid = IS9WD_gridGeometry_(IS9WD_STATS_CELL_COLS);
   var out = {
     directoryRows: dir, trendWeeks: trend,
     tileRows: 2, tilesPerRow: IS9WD_STATS_TILE_COLS.length,
     attentionRows: IS9WD_STATS_ATTENTION_ROWS.length,
     gateRows: IS9WD_STATS_GATE_ROWS.length,
-    firstCol: 1, lastCol: 12,
+    firstCol: 1, lastCol: grid.lastCol,
+    cellCols: grid.cellCols, cells: grid.cells, gapCols: grid.gapCols,
     bannerRow: 1, helpRow: 2,
     chartRows: IS9WD_STATS_CHART_ROWS,
     chartHeight: IS9WD_STATS_CHART_HEIGHT,
     BANNER: IS9WD_STATS.BANNER, HELP: IS9WD_STATS.HELP
   };
 
-  out.spacerRows = [];
-  var r = out.helpRow;
-  var spacer = function () { r++; out.spacerRows.push(r); };
-  // A block is a spacer, a band, a hint row under the band, then a header row and the
-  // rows themselves. The hint row under the heading rather than crammed beside it is
-  // Ethan's instruction of 2026-09-27.
-  var block = function (prefix, rows, header) {
-    spacer();
-    r++; out[prefix + 'Band'] = r;
-    r++; out[prefix + 'Hint'] = r;
-    if (header) { r++; out[prefix + 'Header'] = r; }
-    out[prefix + 'First'] = r + 1;
-    r += rows;
-    out[prefix + 'Last'] = r;
-  };
-
-  // The tiles. One band and one hint row cover both rows of four, with a spacer between
-  // them so the two rows read as two rows.
-  spacer();
-  r++; out.tileBand = r;
-  r++; out.tileHint = r;
-  out.tileGroups = [];
-  for (var g = 0; g < out.tileRows; g++) {
-    if (g > 0) spacer();
-    out.tileGroups.push({ valueRow: r + 1, labelRow: r + 2, noteRow: r + 3 });
-    r += 3;
-  }
-
-  block('attention', out.attentionRows, true);
-  block('gate', out.gateRows, true);
-  block('officer', dir, true);
-
+  out.cards = [];
   out.charts = [];
-  var chart = function (index) {
-    spacer();
-    r++; var band = r;
-    r++; var hint = r;
-    r++; var caption = r;
-    var first = r + 1;
-    r += out.chartRows;
-    out.charts.push({
-      index: index, key: IS9WD_STATS_CHARTS[index].key,
-      bandRow: band, hintRow: hint, captionRow: caption,
-      firstRow: first, lastRow: r
-    });
+  out.gridRows = [];
+  // `spacerRows` is the name the painter already uses for a row that carries no fill, and a
+  // grid separator row is exactly that, so the separator rows are that list.
+  out.spacerRows = [];
+
+  var top = out.helpRow + 2;
+  out.spacerRows.push(out.helpRow + 1);
+
+  // The height of a card: a band, a hint row under the band, an optional header row, then
+  // its own rows. A tile card is a band, a hint row, three rows, a blank row and three more.
+  // A chart card is a band, a hint row, a caption row and the reserved band the chart is
+  // drawn over. The row of three takes the tallest of them, so all three cards end on the
+  // same sheet row and the separator row under them is straight.
+  var heightOf = function (spec) {
+    if (spec.chart !== undefined) return 3 + out.chartRows;
+    if (spec.tiles) return 2 + out.tileRows * 3 + (out.tileRows - 1);
+    return (spec.header ? 3 : 2) + spec.rows;
   };
 
-  chart(0);
-  block('rank', dir, true);
-  chart(1);
-  block('trend', trend, true);
-  chart(2);
+  var rowOfThree = function (specs) {
+    var height = 0;
+    var i;
+    for (i = 0; i < specs.length; i++) height = Math.max(height, heightOf(specs[i]));
+    var firstRow = top;
+    var lastRow = top + height - 1;
+    for (i = 0; i < specs.length; i++) {
+      var spec = specs[i];
+      var cell = out.cells[i];
+      var band = firstRow;
+      var hint = firstRow + 1;
+      var key;
+      if (spec.chart !== undefined) {
+        key = IS9WD_STATS_CHARTS[spec.chart].key;
+        out.charts.push({
+          index: spec.chart, key: key,
+          bandRow: band, hintRow: hint, captionRow: hint + 1,
+          firstRow: hint + 2, lastRow: hint + 1 + out.chartRows,
+          firstCol: cell.firstCol, lastCol: cell.lastCol
+        });
+      } else if (spec.tiles) {
+        key = 'tiles';
+        out.tileBand = band;
+        out.tileHint = hint;
+        out.tileCol = cell.firstCol;
+        out.tileGroups = [];
+        out.tileGapRows = [];
+        var at = hint + 1;
+        for (var g = 0; g < out.tileRows; g++) {
+          // The blank row between the two rows of tiles belongs to the tile card, not
+          // to the grid: the grid separator list is used to wipe fill, border and note
+          // across the whole width, which would strip the card it sits inside.
+          if (g > 0) { out.tileGapRows.push(at); at++; }
+          out.tileGroups.push({ valueRow: at, labelRow: at + 1, noteRow: at + 2 });
+          at += 3;
+        }
+      } else {
+        key = spec.prefix;
+        out[spec.prefix + 'Band'] = band;
+        out[spec.prefix + 'Hint'] = hint;
+        var bodyFirst = hint + 1;
+        if (spec.header) { out[spec.prefix + 'Header'] = hint + 1; bodyFirst = hint + 2; }
+        out[spec.prefix + 'First'] = bodyFirst;
+        out[spec.prefix + 'Last'] = bodyFirst + spec.rows - 1;
+        out[spec.prefix + 'Col'] = cell.firstCol;
+        out[spec.prefix + 'Width'] = spec.cols;
+      }
+      out.cards.push({
+        key: key, firstRow: firstRow, lastRow: lastRow,
+        firstCol: cell.firstCol, lastCol: cell.lastCol
+      });
+    }
+    out.gridRows.push({ firstRow: firstRow, lastRow: lastRow, cards: specs.length });
+    top = lastRow + 1;
+    out.spacerRows.push(top);
+    top++;
+  };
 
-  r++; out.endRow = r;
+  // Row one: the eight tiles, then the chase list and the gates beside them. The tiles stay
+  // at the top left, which is where a reader starts, and they stay readable because four
+  // tiles across a twelve column card is three columns each.
+  rowOfThree([
+    { tiles: true },
+    { prefix: 'attention', rows: out.attentionRows, header: true,
+      cols: IS9WD_STATS_HEADERS.ATTENTION.length },
+    { prefix: 'gate', rows: out.gateRows, header: true,
+      cols: IS9WD_STATS_HEADERS.GATES.length }
+  ]);
+
+  // Row two: the three tables worth reading, widest first so BY OFFICER owns the twelve
+  // column cell it needs and the other two sit beside it rather than under it.
+  rowOfThree([
+    { prefix: 'officer', rows: dir, header: true,
+      cols: IS9WD_STATS_HEADERS.OFFICER.length },
+    { prefix: 'rank', rows: dir, header: true,
+      cols: IS9WD_STATS_HEADERS.RANKED.length },
+    { prefix: 'trend', rows: trend, header: true,
+      cols: IS9WD_STATS_HEADERS.TREND.length }
+  ]);
+
+  // Row three: the three charts, one to a cell, each drawn over its own reserved band. A
+  // chart is an overlay, so its card is the widest thing it can be without crossing the
+  // separator column, which is the whole grid cell.
+  rowOfThree([{ chart: 0 }, { chart: 1 }, { chart: 2 }]);
+
+  out.endRow = top;
 
   out.bandRows = [out.tileBand, out.attentionBand, out.gateBand, out.officerBand,
     out.rankBand, out.trendBand];
@@ -2032,8 +2169,12 @@ function IS9WD_statsTileAt_(layout, key) {
     for (var i = 0; i < groups[g].length; i++) {
       if (groups[g][i] !== key) continue;
       var spec = IS9WD_STATS_TILE_COLS[i];
+      // The declared column is relative to the tile card, so the card's own first column
+      // is added here and nowhere else. A tile follows the grid without the tile list
+      // knowing the grid exists.
+      var base = IS9WD_posInt_(layout.tileCol) || 1;
       return {
-        group: g, position: i, col: spec.col, span: spec.span,
+        group: g, position: i, col: base + spec.col - 1, span: spec.span,
         valueRow: layout.tileGroups[g].valueRow,
         labelRow: layout.tileGroups[g].labelRow,
         noteRow: layout.tileGroups[g].noteRow
@@ -2129,38 +2270,88 @@ var IS9WD_OT = {
 var IS9WD_OT_HEADERS = ['Title of Task', 'Deadline', 'Days left', 'Status', 'Flag',
   'Remark', 'ID'];
 
-// Fourteen structurally identical sections, each of a numbered heading, a column header,
-// R-1 task rows, one overflow notice and one spacer. Fixed sections plus an explicit
-// notice is what keeps this idempotent: sizing each one to its officer's current count
-// would mean setup rewriting the tab whenever a count changed, and every section below
-// moving when one officer gained a task.
+// Fourteen structurally identical cards, each of a numbered heading, a column header,
+// R-1 task rows and one overflow notice, laid three across in the grid: five stacked rows of
+// three with the last holding two, in rank order across then down, so the President is the
+// first card, the four EVPs follow, then the nine committees. Fixed cards plus an explicit
+// notice is what keeps this idempotent: sizing each one to its officer's current count would
+// mean setup rewriting the tab whenever a count changed, and every card after it moving when
+// one officer gained a task.
+//
+// Nine columns to a cell: seven the reader reads, one narrow column of air inside the card's
+// own border, and the hidden sort key column at the cell's right edge, outside the border.
+// The key column cannot move to `_Views` with the other helpers, because it is the eighth
+// column of this card's own SORT.
+var IS9WD_OT_CELL_COLS = 9;
+
 function IS9WD_otLayout_(directoryRows, officerRows) {
   var dir = IS9WD_posInt_(directoryRows) || IS9WD_DIR_ROWS;
   var reserved = IS9WD_posInt_(officerRows) ||
     IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 21;
   if (reserved < 3) reserved = 3;
+  var grid = IS9WD_gridGeometry_(IS9WD_OT_CELL_COLS);
   var out = {
     directoryRows: dir,
     officerRows: reserved,
     itemRows: reserved - 1,
-    stride: reserved + 3,
-    firstCol: 1, lastCol: 8, visibleLastCol: 7, keyCol: 8,
+    // A card is a band, a header, its task rows and one notice row.
+    stride: reserved + 2,
+    firstCol: 1, lastCol: grid.lastCol,
+    cellCols: grid.cellCols, cells: grid.cells, gapCols: grid.gapCols,
+    // Relative to the card: seven visible columns, then one of air, then the key.
+    visibleCols: IS9WD_OT_HEADERS.length, keyOffset: IS9WD_OT_CELL_COLS - 1,
     bannerRow: 1, helpRow: 2, summaryRow: 3,
     BANNER: IS9WD_OT.BANNER, HELP: IS9WD_OT.HELP
   };
+  // The tab's own header span, which is the first card's visible width: the banner, the help
+  // line and the summary row read across it rather than across all 29 columns.
+  out.visibleLastCol = out.visibleCols;
+  // Every key column, one per grid cell, so they are hidden by position rather than by a
+  // hardcoded letter.
+  out.keyCols = [];
+  for (var k = 0; k < out.cells.length; k++) {
+    out.keyCols.push(out.cells[k].firstCol + out.keyOffset);
+  }
+  // Kept for any reader that still asks for "the" key column: it is the first card's.
+  out.keyCol = out.keyCols[0];
+
   out.spacerRows = [4];
   out.blocks = [];
-  for (var i = 0; i < dir; i++) {
-    var band = 5 + i * out.stride;
-    var first = band + 2;
-    var last = first + out.itemRows - 1;
-    out.blocks.push({
-      ordinal: i + 1, bandRow: band, headerRow: band + 1,
-      itemFirst: first, itemLast: last, noticeRow: last + 1, spacerRow: last + 2
-    });
-    out.spacerRows.push(last + 2);
+  out.cards = [];
+  out.gridRows = [];
+  var rows = Math.ceil(dir / IS9WD_GRID.ACROSS);
+  var top = 5;
+  for (var g = 0; g < rows; g++) {
+    var firstRow = top;
+    var lastRow = top + out.stride - 1;
+    for (var c = 0; c < IS9WD_GRID.ACROSS; c++) {
+      var index = g * IS9WD_GRID.ACROSS + c;
+      if (index >= dir) break;
+      var cell = out.cells[c];
+      var itemFirst = firstRow + 2;
+      var itemLast = itemFirst + out.itemRows - 1;
+      // The card's own last column is the one before the key, so the border and the
+      // background stop at the air column and the hidden key sits outside them.
+      var cardLast = cell.firstCol + out.keyOffset - 1;
+      out.blocks.push({
+        ordinal: index + 1, gridRow: g, gridCell: c,
+        firstCol: cell.firstCol, lastCol: cardLast,
+        keyCol: cell.firstCol + out.keyOffset,
+        bandRow: firstRow, headerRow: firstRow + 1,
+        itemFirst: itemFirst, itemLast: itemLast, noticeRow: itemLast + 1
+      });
+      out.cards.push({
+        key: 'officer' + (index + 1), firstRow: firstRow, lastRow: lastRow,
+        firstCol: cell.firstCol, lastCol: cardLast
+      });
+    }
+    out.gridRows.push({ firstRow: firstRow, lastRow: lastRow,
+      cards: Math.min(IS9WD_GRID.ACROSS, dir - g * IS9WD_GRID.ACROSS) });
+    top = lastRow + 1;
+    out.spacerRows.push(top);
+    top++;
   }
-  out.endRow = 5 + dir * out.stride;
+  out.endRow = top;
   out.errorsCell = { row: out.endRow, col: 3 };
   out.scanLastRow = out.endRow - 1;
   return out;
@@ -2501,26 +2692,32 @@ function IS9WD_statsNames_(layout) {
 
   // The three sentence rows that carry a measure of their own. The other three point at a
   // tile, which is why they carry no name: a measure is named exactly once on the tab.
+  //
+  // EVERY COLUMN NUMBER FROM HERE DOWN IS THE BLOCK'S OWN FIRST COLUMN PLUS AN OFFSET, never
+  // a literal column, because each block sits in one cell of the three across grid and the
+  // cell decides where column one of that block is.
   for (var a = 0; a < IS9WD_STATS_ATTENTION_ROWS.length; a++) {
     var aName = IS9WD_STATS_VALUE_NAMES[IS9WD_STATS_ATTENTION_ROWS[a][0]];
-    if (aName) add(aName, s.attentionFirst + a, 2, 1, 1);
+    if (aName) add(aName, s.attentionFirst + a, s.attentionCol + 1, 1, 1);
   }
 
-  add('IS9WD_STATS_OFFICER', s.officerFirst, 1, dir, s.lastCol);
+  add('IS9WD_STATS_OFFICER', s.officerFirst, s.officerCol, dir,
+    IS9WD_STATS_HEADERS.OFFICER.length);
   for (var c = 0; c < IS9WD_STATS_OFF_COL_NAMES.length; c++) {
-    add(IS9WD_STATS_OFF_COL_NAMES[c], s.officerFirst, c + 1, dir, 1);
+    add(IS9WD_STATS_OFF_COL_NAMES[c], s.officerFirst, s.officerCol + c, dir, 1);
   }
 
-  add('IS9WD_STATS_RANKED', s.rankFirst, 1, s.rankLast - s.rankFirst + 1,
+  add('IS9WD_STATS_RANKED', s.rankFirst, s.rankCol, s.rankLast - s.rankFirst + 1,
     IS9WD_STATS_HEADERS.RANKED.length);
 
   for (var tc in IS9WD_STATS_TREND_COL_NAMES) {
     if (!Object.prototype.hasOwnProperty.call(IS9WD_STATS_TREND_COL_NAMES, tc)) continue;
-    add(IS9WD_STATS_TREND_COL_NAMES[tc], s.trendFirst, Number(tc), trend, 1);
+    add(IS9WD_STATS_TREND_COL_NAMES[tc], s.trendFirst,
+      s.trendCol + Number(tc) - 1, trend, 1);
   }
 
-  add('IS9WD_STATS_GATE_LABEL', s.gateFirst, 1, s.gateLast - s.gateFirst + 1, 1);
-  add('IS9WD_STATS_GATE_STATE', s.gateFirst, 2, s.gateLast - s.gateFirst + 1, 1);
+  add('IS9WD_STATS_GATE_LABEL', s.gateFirst, s.gateCol, s.gateLast - s.gateFirst + 1, 1);
+  add('IS9WD_STATS_GATE_STATE', s.gateFirst, s.gateCol + 1, s.gateLast - s.gateFirst + 1, 1);
   return out;
 }
 
@@ -2695,17 +2892,59 @@ function IS9WD_named_(name) {
 
 // Re-points on the same name rather than creating a second one, which is the whole
 // of idempotency for named ranges (2.5).
+// One fetch of every named range per execution, so dropping before setting costs one call
+// rather than one per name. It is an index of name to the live NamedRange objects, because
+// removing a stale definition needs the object and not the range.
+var IS9WD_NAMED_INDEX_ = null;
+var IS9WD_NAMED_MADE_ = {};
+
+function IS9WD_namedIndex_() {
+  if (IS9WD_NAMED_INDEX_) return IS9WD_NAMED_INDEX_;
+  var all = IS9WD_ss_().getNamedRanges();
+  var index = {};
+  for (var i = 0; i < all.length; i++) {
+    var key = all[i].getName();
+    if (!index[key]) index[key] = [];
+    index[key].push(all[i]);
+  }
+  IS9WD_NAMED_INDEX_ = index;
+  return index;
+}
+
+function IS9WD_namedIndexReset_() {
+  IS9WD_NAMED_INDEX_ = null;
+  IS9WD_NAMED_MADE_ = {};
+}
+
+// EVERY DEFINITION OF THE NAME GOES BEFORE THE NEW ONE IS MADE, and this is the whole of
+// idempotency for names. `Spreadsheet.setNamedRange` does not move a name that already
+// exists: it adds a SECOND definition carrying the same name, and the older definition is
+// the one a formula resolves, while a reader that builds a map keyed on the name sees the
+// newer one. So on a workbook built by more than one layout, a name whose block has moved
+// keeps pointing where the earlier layout put it, which under the current layout is a band
+// that is empty, and every formula reading it through INDEX reads "" forever, while the
+// self test that checks where the names point reads clean. That is what made the
+// directory's Check column say "On the carousel with no slide number" on all nine
+// publishing rows while `_Engine` held 1 to 9 perfectly well. Dropping first also stops a
+// build accumulating one more definition per name on every run.
+// `setNamedRange` hands nothing back, so a definition this execution made is not in the
+// index. Setting the same name twice in one execution is therefore the one case that has to
+// pay for a re-read, and it is rare: nothing in a build sets a name twice, and the re-read
+// only happens when something does.
 function IS9WD_setNamed_(name, range) {
-  IS9WD_ss_().setNamedRange(IS9WD_trim_(name), range);
+  var want = IS9WD_trim_(name);
+  if (IS9WD_NAMED_MADE_[want]) IS9WD_NAMED_INDEX_ = null;
+  IS9WD_dropNamed_(want);
+  IS9WD_ss_().setNamedRange(want, range);
+  IS9WD_NAMED_MADE_[want] = true;
 }
 
 function IS9WD_dropNamed_(name) {
-  var ss = IS9WD_ss_();
-  var all = ss.getNamedRanges();
   var want = IS9WD_trim_(name);
-  for (var i = 0; i < all.length; i++) {
-    if (all[i].getName() === want) all[i].remove();
-  }
+  var index = IS9WD_namedIndex_();
+  var list = index[want] || [];
+  for (var i = 0; i < list.length; i++) list[i].remove();
+  index[want] = [];
 }
 
 // ---- lock and clock ------------------------------------------------------
@@ -2781,26 +3020,93 @@ function IS9WD_textStyle_(size, fg, bold) {
 // of the same cell, lighter and smaller. It rides there rather than in a row of its
 // own because section 4 fixes every Configuration row, and a help row would push a
 // block off its addresses.
-function IS9WD_paintBand_(sheet, row, firstCol, lastCol, title, help) {
+function IS9WD_paintBand_(sheet, row, firstCol, lastCol, title, help, theme) {
+  var t = theme || {};
+  var bg = t.bg || IS9WD_ROLE.BAND_BG;
+  var fg = t.fg || IS9WD_ROLE.BAND_FG;
+  var helpFg = t.helpFg || IS9WD_ROLE.BAND_HELP_FG;
   var band = sheet.getRange(row, firstCol, 1, lastCol - firstCol + 1);
-  band.setBackground(IS9WD_ROLE.BAND_BG);
+  band.setBackground(bg);
   IS9WD_style_(band, {
-    size: IS9WD_SIZE.BAND, fg: IS9WD_ROLE.BAND_FG, bold: true,
-    align: IS9WD_ALIGN.LEFT, bg: IS9WD_ROLE.BAND_BG, wrap: IS9WD_WRAP.OVER
+    size: IS9WD_SIZE.BAND, fg: fg, bold: true,
+    align: IS9WD_ALIGN.LEFT, bg: bg, wrap: IS9WD_WRAP.OVER
   });
   var cell = sheet.getRange(row, firstCol);
   var text = IS9WD_txt_(title);
   if (!IS9WD_blank_(help)) {
     var full = text + IS9WD_SEP + IS9WD_txt_(help);
     cell.setRichTextValue(SpreadsheetApp.newRichTextValue().setText(full)
-      .setTextStyle(0, text.length, IS9WD_textStyle_(IS9WD_SIZE.BAND, IS9WD_ROLE.BAND_FG, true))
-      .setTextStyle(text.length, full.length, IS9WD_textStyle_(IS9WD_SIZE.HINT, IS9WD_ROLE.BAND_HELP_FG, false))
+      .setTextStyle(0, text.length, IS9WD_textStyle_(IS9WD_SIZE.BAND, fg, true))
+      .setTextStyle(text.length, full.length, IS9WD_textStyle_(IS9WD_SIZE.HINT, helpFg, false))
       .build());
   } else {
     cell.setValue(text);
   }
   sheet.setRowHeight(row, IS9WD_ROW_H.BAND);
   return band;
+}
+
+// The band at the top of a card, in the card's own colours rather than the settings tabs'
+// deep green.
+function IS9WD_paintCardBand_(sheet, row, firstCol, lastCol, title) {
+  return IS9WD_paintBand_(sheet, row, firstCol, lastCol, title, '', {
+    bg: IS9WD_ROLE.CARD_BAND_BG, fg: IS9WD_ROLE.CARD_BAND_FG
+  });
+}
+
+// A CARD: the body background behind the whole of it and one border around the whole of it,
+// and nothing outside it touched. It is called before the band, the header and the body are
+// painted, so those paint over it.
+function IS9WD_paintCard_(sheet, firstRow, lastRow, firstCol, lastCol) {
+  var rows = lastRow - firstRow + 1;
+  var cols = lastCol - firstCol + 1;
+  if (rows < 1 || cols < 1) return null;
+  var card = sheet.getRange(firstRow, firstCol, rows, cols);
+  card.setBackground(IS9WD_ROLE.CARD_BODY_BG);
+  card.setBorder(true, true, true, true, false, false, IS9WD_ROLE.CARD_BORDER,
+    SpreadsheetApp.BorderStyle.SOLID);
+  return card;
+}
+
+// A GAP CARRIES NOTHING. The one empty column between two cards and the one empty row
+// between two stacked rows of cards get no value, no fill, no border and no note, because
+// that is the only thing that makes three cards read as three cards.
+function IS9WD_clearGap_(sheet, firstRow, lastRow, firstCol, lastCol) {
+  var rows = lastRow - firstRow + 1;
+  var cols = lastCol - firstCol + 1;
+  if (rows < 1 || cols < 1) return null;
+  var gap = sheet.getRange(firstRow, firstCol, rows, cols);
+  gap.setBackground(null);
+  gap.setBorder(false, false, false, false, false, false);
+  gap.clearNote();
+  gap.setDataValidation(null);
+  return gap;
+}
+
+// EVERYTHING PAST A TAB'S LAST BUILT ROW OR COLUMN LOSES ITS FORMAT BEFORE THE GRID IS
+// TRIMMED. Trimming alone is not enough on a workbook that has been built before: a
+// `deleteRows` that cannot run, or a grid a later step grows again, leaves the paint of the
+// end band running down the tab, which is what painted 03 | Statistics dark green a thousand
+// rows below its content. Clearing first means the worst case is a blank tail rather than a
+// painted one.
+function IS9WD_clearPastEnd_(sheet, lastRow, lastCol) {
+  var maxRows = sheet.getMaxRows();
+  var maxCols = sheet.getMaxColumns();
+  if (maxRows > lastRow) {
+    var below = sheet.getRange(lastRow + 1, 1, maxRows - lastRow, maxCols);
+    below.clear();
+    below.setBorder(false, false, false, false, false, false);
+    below.clearDataValidations();
+    below.clearNote();
+  }
+  if (maxCols > lastCol) {
+    var right = sheet.getRange(1, lastCol + 1, Math.min(maxRows, lastRow),
+      maxCols - lastCol);
+    right.clear();
+    right.setBorder(false, false, false, false, false, false);
+    right.clearDataValidations();
+    right.clearNote();
+  }
 }
 
 function IS9WD_paintHeader_(sheet, row, firstCol, labels) {
@@ -3085,16 +3391,40 @@ var IS9WD_CONFIG_CACHE_ = null;
 // answers from before the write.
 function IS9WD_configReset_() {
   IS9WD_CONFIG_CACHE_ = null;
+  IS9WD_namedIndexReset_();
 }
 
 // One bulk fetch of every named range, so resolving sixty names costs one call.
+//
+// THE FIRST DEFINITION WINS HERE, because that is the one a formula resolves. Keying the
+// map on the name and letting the last write win is how a stale definition hid for a whole
+// layout change: the reader and the self test saw the new range while every formula on the
+// sheet read the old one.
 function IS9WD_namedMap_() {
   var all = IS9WD_ss_().getNamedRanges();
   var map = {};
   for (var i = 0; i < all.length; i++) {
-    map[all[i].getName()] = all[i].getRange();
+    var key = all[i].getName();
+    if (!Object.prototype.hasOwnProperty.call(map, key)) map[key] = all[i].getRange();
   }
   return map;
+}
+
+// Every name carrying more than one definition, which is a stale range still winning over
+// the one this build set. It must be empty on a built workbook (13.3).
+function IS9WD_namedDuplicates_() {
+  var all = IS9WD_ss_().getNamedRanges();
+  var counts = {};
+  for (var i = 0; i < all.length; i++) {
+    var key = all[i].getName();
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  var out = [];
+  for (var name in counts) {
+    if (!Object.prototype.hasOwnProperty.call(counts, name)) continue;
+    if (counts[name] > 1) out.push(name + ' x' + counts[name]);
+  }
+  return out;
 }
 
 // TWO SHEETS IN ONE SNAPSHOT. Settings live on `00 | Configuration` and `_Engine`, so one
