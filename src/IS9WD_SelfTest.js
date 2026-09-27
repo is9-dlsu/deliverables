@@ -1955,7 +1955,10 @@ function IS9WD_stOfficerTables_(suite, ctx) {
       }
       var want = IS9WD_upper_(IS9WD_txt_(names[ord - 1][0]));
       var band = IS9WD_txt_(ctx.tables.disp[block.bandRow - 1][block.firstCol - 1]);
-      if (want !== '' && band.indexOf(want) !== 0) {
+      // The band opens with its ordinal, "01 of 14", and names the officer after it, so
+      // the name is contained rather than leading. Requiring position 0 failed all
+      // fourteen cards on a workbook that was in fact correct.
+      if (want !== '' && band.indexOf(want) < 0) {
         problems.push('the band on row ' + block.bandRow + ' reads "' +
           band.substring(0, 40) + '" and ordinal ' + ord + ' is "' + want + '"');
       }
