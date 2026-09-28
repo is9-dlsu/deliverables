@@ -972,8 +972,12 @@ function IS9WD_feedBlockD_(sheet, layout) {
   // The spill area has to be empty or the array formula refuses to expand.
   sheet.getRange(f.flagFirst, 1, f.flagRows, cols).clearContent();
 
+  // A row with no ID yet is exactly the kind of row this list exists to show (its Check reads
+  // Missing ID and it holds Ready for Canva at NO), so it is keyed on its row number, D.R<n>,
+  // rather than left with a blank key that reads as an empty line and that the self test
+  // could not count.
   sheet.getRange(f.flagFirst, 1).setFormula(
-    '=IFNA(SORT(FILTER({ARRAYFORMULA(IF(IS9WD_DEL_ID="","","D."&IS9WD_DEL_ID)),' +
+    '=IFNA(SORT(FILTER({ARRAYFORMULA(IF(IS9WD_DEL_ID="","D.R"&ROW(IS9WD_DEL_ID),"D."&IS9WD_DEL_ID)),' +
     'IS9WD_DEL_PAGE,IS9WD_DEL_COMMITTEE,IS9WD_DEL_SLOTONPAGE,' +
     'IS9WD_DEL_CHECK,IS9WD_DEL_ID,IS9WD_DEL_TITLE},' +
     'IS9WD_DEL_CHECK<>""),2,TRUE,4,TRUE),"")');

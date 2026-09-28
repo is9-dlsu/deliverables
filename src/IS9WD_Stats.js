@@ -799,9 +799,13 @@ function IS9WD_viewsMarkers_(sheet, layout) {
   }
 }
 
-// ONE SPILLING SORT plus eight broadcast formulas. COUNTIFS, SUMIFS, MINIFS, MAXIFS and
-// SUMIF all take an array criterion under ARRAYFORMULA, which is what makes a fourteen row
-// block cost one formula per column instead of fourteen lookups per column.
+// ONE SPILLING SORT plus six broadcast formulas and two columns of single cells. COUNTIFS,
+// SUMIFS and SUMIF take an array criterion under ARRAYFORMULA, which is what makes a fourteen
+// row block cost one formula per column. MINIFS and MAXIFS DO NOT: measured on the live sheet
+// on 2026-09-28, each returned one scalar for all fourteen rows (the self test's broadcast
+// check caught it the first day the sheet held an item), so those two columns are written as
+// fourteen single cells each, the fallback reference 6A.13 names. Each cell reads its own
+// officer through INDEX into the name column, so nothing here is a cell address.
 //
 // The five offices are ordinary rows here, exactly as 5.4 says they are everywhere except
 // Canva. Hierarchy order rather than carousel order, because hierarchy order is the order
@@ -830,10 +834,8 @@ function IS9WD_viewsOfficers_(sheet, layout) {
   // ninth flag is added.
   var helpers = [
     '=ARRAYFORMULA(' + blank + 'IS9WD_STATS_OFF_DUE+IS9WD_STATS_OFF_DONE))',
-    '=ARRAYFORMULA(' + blank + 'MINIFS(IS9WD_DEL_DEADLINE,IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0")))',
-    '=ARRAYFORMULA(' + blank + 'MAXIFS(IS9WD_DEL_STATUS_AT,IS9WD_DEL_COMMITTEE,' + name +
-      ',IS9WD_DEL_STATUS_AT,">0")))',
+    null,
+    null,
     '=ARRAYFORMULA(' + blank + 'IF(N(IS9WD_STATS_OFF_LASTTICK)=0,9999,' +
       today + '-INT(IS9WD_STATS_OFF_LASTTICK))))',
     '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name +
@@ -846,8 +848,24 @@ function IS9WD_viewsOfficers_(sheet, layout) {
     '=ARRAYFORMULA(' + blank + 'IS9WD_STATS_OFF_ACTIVE_ALL+IS9WD_STATS_OFF_DONE_ALL))'
   ];
   for (var x = 0; x < helpers.length; x++) {
+    if (helpers[x] === null) continue;
     sheet.getRange(v.officerFirst, 6 + x).setFormula(helpers[x]);
   }
+
+  // The two that do not broadcast: one cell per officer, each keyed on its own row of the
+  // name column. 0 when nothing matches, exactly what the broadcast form returned, so the
+  // silence helper's N()=0 test and the self test's empty answer are unchanged.
+  var firstDue = [];
+  var lastTick = [];
+  for (var k = 1; k <= rows; k++) {
+    var me = 'INDEX(' + name + ',' + k + ')';
+    firstDue.push(['=IF(' + me + '="","",MINIFS(IS9WD_DEL_DEADLINE,IS9WD_DEL_COMMITTEE,' + me +
+      ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0"))']);
+    lastTick.push(['=IF(' + me + '="","",MAXIFS(IS9WD_DEL_STATUS_AT,IS9WD_DEL_COMMITTEE,' + me +
+      ',IS9WD_DEL_STATUS_AT,">0"))']);
+  }
+  sheet.getRange(v.officerFirst, 7, rows, 1).setFormulas(firstDue);
+  sheet.getRange(v.officerFirst, 8, rows, 1).setFormulas(lastTick);
 }
 
 // The `-1` substitution is what puts an unscored officer at the bottom of a descending

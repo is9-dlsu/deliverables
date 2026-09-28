@@ -886,7 +886,7 @@ function IS9WD_aboutLines_() {
     'and ticks items off. Nothing here keys on a status label: the derived ' +
     'Active flag is what the code reads, so a status can be renamed in the status ' +
     'list on _Engine.');
-  out.push('00 | Configuration holds only what a president sets, and every cell you ' +
+  out.push(IS9WD_TAB.CONFIG + ' holds only what a president sets, and every cell you ' +
     'type into on it is cream with the reason beside it. Everything the code needs is ' +
     'on the hidden _Engine tab, and the working out behind the dashboard is on the ' +
     'hidden _Views tab.');

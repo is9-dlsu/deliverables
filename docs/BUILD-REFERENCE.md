@@ -1638,7 +1638,7 @@ A13 =IFERROR(ARRAY_CONSTRAIN(SORT(FILTER(
 
 `_SILENT_N` uses `9999` rather than blank so silence can be compared numerically without a text guard. `_BLOCKING` counts per officer **without restating the eight flag names**: `"?*"` counts every non-blank `Check` and `Overdue` is subtracted, so it stays correct the day a ninth flag is added.
 
-**`MINIFS` and `MAXIFS` are the only two spreadsheet functions this workbook asks to broadcast under `ARRAYFORMULA` whose array-criterion behaviour is not documented.** If either returns a scalar instead, all fourteen rows quietly take the first officer's answer and nothing else notices, so the self test recomputes `_FIRSTDUE` from the items and compares (13.4).
+**`MINIFS` and `MAXIFS` are the only two spreadsheet functions this workbook asks to broadcast under `ARRAYFORMULA` whose array-criterion behaviour is not documented.** If either returns a scalar instead, all fourteen rows quietly take the first officer's answer and nothing else notices, so the self test recomputes `_FIRSTDUE` from the items and compares (13.4). **Measured 2026-09-28: neither broadcasts.** The self test caught it on the first day the sheet held an item, and `_FIRSTDUE` and `_LASTTICK` are now fourteen single cells per column, each reading its own officer through `INDEX` into the name column. The other six helpers still broadcast.
 
 ### 6C.4 `RANKED SORT` and `TREND HELPERS`
 

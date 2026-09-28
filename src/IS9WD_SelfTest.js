@@ -1972,9 +1972,8 @@ function IS9WD_stStatsTrend_(suite, ctx) {
       // Expected until an archive job is switched on, and the block says so on screen
       // rather than printing a wall of zeros, so this is a warning and not a defect.
       return { state: IS9WD_ST.WARN, detail: 'No week in the trend block was ever ' +
-        'archived, so the whole block reads Not archived. Switch ARCHIVE_WEEK on in ' +
-        '00 | Configuration, or run Archive this week from the menu. Both archive ' +
-        'jobs ship OFF.' };
+        'archived, so the whole block reads Not archived. It fills once the archive ' +
+        'job runs, which is not built yet, or once Archive this week is run from the menu.' };
     }
     if (missing) {
       return { state: IS9WD_ST.WARN, detail: missing + ' of ' + recorded.length +

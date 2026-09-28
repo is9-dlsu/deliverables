@@ -54,7 +54,7 @@ function IS9WD_itemColIndex_(header) {
   for (var i = 0; i < IS9WD_ITEMS.columns.length; i++) {
     if (IS9WD_ITEMS.columns[i].header === want) return IS9WD_ITEMS.firstCol + i;
   }
-  throw new Error('The 02 | Deliverables column "' + want +
+  throw new Error('The ' + IS9WD_TAB.ITEMS + ' column "' + want +
     '" is not in the layout. IS9WD_ITEMS.columns and IS9WD_Items.js disagree.');
 }
 
@@ -501,7 +501,7 @@ function IS9WD_itemObject_(line, row) {
   for (var i = 0; i < IS9WD_ITEMS.columns.length; i++) {
     var field = IS9WD_ITEM_FIELD[IS9WD_ITEMS.columns[i].header];
     if (!field) {
-      throw new Error('The 02 | Deliverables column "' + IS9WD_ITEMS.columns[i].header +
+      throw new Error('The ' + IS9WD_TAB.ITEMS + ' column "' + IS9WD_ITEMS.columns[i].header +
         '" has no field name in IS9WD_ITEM_FIELD.');
     }
     item[field] = line[i];
@@ -971,8 +971,8 @@ function IS9WD_seedSample_(overflow) {
   }
   if (missing.length) {
     throw new Error('The people directory has no row for ' + missing.join(', ') +
-      ', so the sample data cannot be seeded against it. Restore those spellings in ' +
-      '00 | Configuration, or seed nothing.');
+      ', so the sample data cannot be seeded against it. Restore those spellings on ' +
+      IS9WD_TAB.CONFIG + ', or seed nothing.');
   }
 
   var open = IS9WD_trim_(cfg.statuses.defaultStatus);
