@@ -83,7 +83,20 @@ export async function call(action, token, payload, opts) {
 
   try {
     const env = JSON.parse(text);
-    if (env && typeof env === 'object' && typeof env.ok === 'boolean') return env;
+    if (env && typeof env === 'object' && typeof env.ok === 'boolean') {
+      // The endpoint's GET handler answered a request that was sent as a POST: somewhere
+      // between this page and the sheet the body was dropped, which a signed in desktop
+      // Chrome profile has been seen to do and a private window has not. Said in words.
+      if (!env.ok && action !== 'ping' && env.error && env.action === 'ping' &&
+        /Only ping/.test(String(env.error.message || ''))) {
+        return {
+          v: 1, ok: false, action, serverTime: env.serverTime || '',
+          error: { code: 'DOWNGRADED',
+            message: 'Open this link in a private window, or on your phone.' },
+        };
+      }
+      return env;
+    }
   } catch (err) {
     // An Apps Script error returns an HTML page rather than JSON. Saying so plainly beats
     // showing a stack trace to a student officer.

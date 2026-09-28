@@ -226,12 +226,17 @@ function App() {
   const [signNote, setSignNote] = useState('');
 
   // The picker opens on whatever is stored for the week, and follows the server's answer
-  // after a save rather than what was clicked, so a rejected save never looks accepted.
+  // after a save rather than what was clicked, so a rejected save never looks accepted. It
+  // follows the STORED pair only: keyed on the two stored names rather than on the whole
+  // state, because every tick refreshes the state, and a refresh that wiped a half made
+  // choice is how the first save from this page silently did nothing.
+  const storedPrepared = state && state.signoff ? state.signoff.preparedName : '';
+  const storedChecked = state && state.signoff ? state.signoff.checkedName : '';
   useEffect(() => {
     if (!state || !state.signoff) return;
-    setPrepared(keyForName(state.people, state.signoff.preparedName));
-    setChecked(keyForName(state.people, state.signoff.checkedName));
-  }, [state]);
+    setPrepared(keyForName(state.people, storedPrepared));
+    setChecked(keyForName(state.people, storedChecked));
+  }, [storedPrepared, storedChecked]);
 
   async function saveSignoff() {
     if (signBusy || !state || !state.people) return;
@@ -441,6 +446,7 @@ function headline(error) {
     case 'LOCKED': return 'Somebody else is saving';
     case 'UNDO_EXPIRED': return 'Past the undo window';
     case 'NOT_FOUND': return 'That task is not on your list';
+    case 'DOWNGRADED': return 'This browser changed the request';
     default: return 'Something went wrong';
   }
 }
