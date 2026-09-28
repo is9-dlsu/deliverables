@@ -317,12 +317,12 @@ console.log('\n5. The renderers');
   check('a bare string renders as a paragraph', has(t, 'A bare string is a paragraph'), true);
   check('html escapes a title', has(h, '&lt;script&gt;') && !has(h, '<script>'), true);
   check('html escapes an ampersand and quotes', has(h, 'A &lt;b&gt;title&lt;/b&gt; &amp; &quot;quotes&quot;'), true);
-  check('html carries the link once as an href', count(h, 'href="https://x.example.test/#tok"'), 1);
-  check('html shows the overdue word in the letter purple', has(h, 'color:#6B4A8A;font-weight:700;">Overdue'), true);
+  check('html shows the overdue word in bold purple small caps', /color:#724485;">OVERDUE</.test(h), true);
   check('html paints no cream and no red or green that is not the palette',
     [has(h, '#e9ebd4'), /#(ff0000|00ff00|d32f2f|2e7d32)/i.test(h)], [false, false]);
   check('html uses only the letter palette', (h.match(/#[0-9a-fA-F]{6}\b/g) || []).every((x) =>
-    ['#0B4A3C', '#5D4170', '#6B4A8A', '#CFC0E0', '#58756A', '#1C2120', '#FBFAF6', '#EFEDE6', '#F1EEE4', '#D9D3C6'].indexOf(x) !== -1), true);
+    ['#085040', '#724485', '#8B74A1', '#58756A', '#2A2D2B', '#5C6360', '#FBF9F3', '#F0ECE2', '#DAD4C6', '#EDE8DC'].indexOf(x) !== -1), true);
+  check('html carries the raw address twice, as the button and as the line under it', count(h, 'href="https://x.example.test/#tok"'), 2);
   check('the body alone has no html element', has(fn('IS9WD_mailHtmlBody_')(blocks, {}), '<html'), false);
   const EM = String.fromCharCode(8212);
   check('no em dash anywhere in either rendering', [has(t, EM), has(h, EM)], [false, false]);
