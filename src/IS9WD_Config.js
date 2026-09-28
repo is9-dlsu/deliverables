@@ -3279,6 +3279,99 @@ function IS9WD_namedIndexReset_() {
   IS9WD_NAMED_REPOINTED_ = 0;
 }
 
+// ============================================================================
+//  NAME COORDINATES  (resolved by name, remembered between executions)
+// ============================================================================
+//
+// EVERY REQUEST TO THE ENDPOINT IS A FRESH EXECUTION, and resolving a name is a round trip to
+// Sheets: getRangeByName, then its sheet, row, column and two sizes. The settings reader
+// touches about sixty names, so every open of the officers page paid several hundred round
+// trips before it read one item, and a bare ping measured four to nine seconds on
+// 2026-09-28. What is remembered here is the RESOLUTION and only the resolution: name to sheet
+// name, row, column, rows, columns, in the script cache. The values are never remembered; the
+// snapshot reads them fresh on every request. Nothing reads by address: a name still names
+// its block, the address is just not asked for twice.
+//
+// It is cleared by the one thing that can move a name, IS9WD_setNamed_ re-pointing it, and it
+// expires on its own after six hours; the hourly dispatcher refreshes it so the expiry never
+// lands on an officer while the trigger is alive. A name that is not remembered is resolved
+// live and added, so a name created after the memory was made works at once, and a name
+// that does not exist is remembered as absent so it is not asked for again.
+var IS9WD_COORDS_KEY_ = 'IS9WD_NAME_COORDS_v1';
+var IS9WD_COORDS_TTL_ = 21600;
+var IS9WD_COORDS_ = null;
+var IS9WD_COORDS_DIRTY_ = false;
+
+function IS9WD_coords_() {
+  if (IS9WD_COORDS_) return IS9WD_COORDS_;
+  var held = null;
+  try {
+    held = CacheService.getScriptCache().get(IS9WD_COORDS_KEY_);
+  } catch (err) {
+    held = null;
+  }
+  var map = null;
+  if (held) {
+    try { map = JSON.parse(held); } catch (err) { map = null; }
+  }
+  IS9WD_COORDS_ = map && typeof map === 'object' ? map : {};
+  IS9WD_COORDS_DIRTY_ = false;
+  return IS9WD_COORDS_;
+}
+
+// One name's coordinates, {s, r, c, h, w}, from memory or resolved live and remembered. Null
+// when the name does not exist, and that answer is remembered too.
+function IS9WD_coordOf_(name) {
+  var key = IS9WD_trim_(name);
+  var map = IS9WD_coords_();
+  if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+  var range = IS9WD_ss_().getRangeByName(key);
+  map[key] = range ? {
+    s: range.getSheet().getName(), r: range.getRow(), c: range.getColumn(),
+    h: range.getNumRows(), w: range.getNumColumns()
+  } : null;
+  IS9WD_COORDS_DIRTY_ = true;
+  return map[key];
+}
+
+// Written back once per execution, by the settings reader and the endpoint, when something
+// new was resolved. One put, not one per name.
+function IS9WD_coordsFlush_() {
+  if (!IS9WD_COORDS_ || !IS9WD_COORDS_DIRTY_) return;
+  try {
+    CacheService.getScriptCache().put(IS9WD_COORDS_KEY_, JSON.stringify(IS9WD_COORDS_),
+      IS9WD_COORDS_TTL_);
+    IS9WD_COORDS_DIRTY_ = false;
+  } catch (err) {
+    Logger.log('IS9WD: the name coordinates were not remembered: ' + err);
+  }
+}
+
+function IS9WD_coordsReset_() {
+  IS9WD_COORDS_ = null;
+  IS9WD_COORDS_DIRTY_ = false;
+  try {
+    CacheService.getScriptCache().remove(IS9WD_COORDS_KEY_);
+  } catch (err) {
+    Logger.log('IS9WD: the name coordinates were not cleared: ' + err);
+  }
+}
+
+// The hourly refresh: resolve whatever the settings reader needs if the memory is empty, then
+// write it back with a fresh six hours, so the expiry never lands on an officer.
+function IS9WD_coordsWarm_() {
+  try {
+    var map = IS9WD_coords_();
+    var any = false;
+    for (var k in map) { if (Object.prototype.hasOwnProperty.call(map, k)) { any = true; break; } }
+    if (!any) IS9WD_readConfig_(true);
+    IS9WD_COORDS_DIRTY_ = true;
+    IS9WD_coordsFlush_();
+  } catch (err) {
+    Logger.log('IS9WD: the name coordinates were not refreshed: ' + err);
+  }
+}
+
 // EVERY DEFINITION OF THE NAME GOES BEFORE THE NEW ONE IS MADE, and this is the whole of
 // idempotency for names. `Spreadsheet.setNamedRange` does not move a name that already
 // exists: it adds a SECOND definition carrying the same name, and the older definition is
@@ -3324,6 +3417,8 @@ function IS9WD_setNamed_(name, range) {
   IS9WD_ss_().setNamedRange(want, range);
   IS9WD_NAMED_MADE_[want] = true;
   IS9WD_NAMED_REPOINTED_++;
+  // A name moved, so every remembered coordinate is suspect until the next resolution.
+  IS9WD_coordsReset_();
 }
 
 // True only when the workbook holds EXACTLY ONE definition of this name and it covers exactly
@@ -3878,33 +3973,35 @@ function IS9WD_cfgSnapshot_() {
     // The Configuration tab stays the snapshot's own identity, because that is the tab
     // every error message names and the tab a reader would go and look at.
     sheet: sheets[order[0]].sheet,
-    name: order[0],
-    names: IS9WD_namedMap_()
+    name: order[0]
   };
 }
 
 // { row, col, rows, cols, values }. A name that resolves off the snapshot, which is
 // what a moved block looks like, is read directly rather than guessed at.
 function IS9WD_read_(snap, name) {
-  var range = snap.names[name];
-  if (!range) {
+  var at = IS9WD_coordOf_(name);
+  if (!at) {
     throw new Error('The named range ' + name +
       ' is missing. Run IS9 Deliverables > Build or repair workbook.');
   }
-  var on = range.getSheet().getName();
-  var page = snap.sheets[on];
+  var page = snap.sheets[at.s];
   if (!page) {
-    throw new Error('The named range ' + name + ' points at "' + on +
+    throw new Error('The named range ' + name + ' points at "' + at.s +
       '" instead of one of the settings tabs (' + snap.order.join(', ') +
       '). Run IS9 Deliverables > Build or repair workbook.');
   }
-  var box = {
-    row: range.getRow(), col: range.getColumn(),
-    rows: range.getNumRows(), cols: range.getNumColumns(),
-    tab: page.tabKey
-  };
+  var box = { row: at.r, col: at.c, rows: at.h, cols: at.w, tab: page.tabKey };
   if (box.row + box.rows - 1 > page.rows || box.col + box.cols - 1 > page.cols) {
-    box.values = range.getValues();
+    // Off the snapshot, which is what a moved block looks like: read it live, and forget the
+    // memory so the next execution resolves everything again.
+    var live = IS9WD_ss_().getRangeByName(IS9WD_trim_(name));
+    if (!live) {
+      throw new Error('The named range ' + name +
+        ' is missing. Run IS9 Deliverables > Build or repair workbook.');
+    }
+    box.values = live.getValues();
+    IS9WD_coordsReset_();
     return box;
   }
   var out = [];
@@ -4210,6 +4307,7 @@ function IS9WD_readConfig_(force) {
   cfg.views = IS9WD_viewsLayout_(cfg.directory.rows.length, cfg.switches.statsTrendWeeks,
     cfg.schedule.raw.length, cfg.switches.statsOfficerRows);
   IS9WD_CONFIG_CACHE_ = cfg;
+  IS9WD_coordsFlush_();
   return cfg;
 }
 

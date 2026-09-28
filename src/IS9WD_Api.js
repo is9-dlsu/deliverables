@@ -206,6 +206,7 @@ function IS9WD_apiContext_(req, bodyBytes) {
   var reads = IS9WD_apiSetting_('IS9WD_RATE_READS', IS9WD_API_FALLBACK_READS_);
   var writes = IS9WD_apiSetting_('IS9WD_RATE_WRITES', IS9WD_API_FALLBACK_WRITES_);
   var badTries = IS9WD_apiSetting_('IS9WD_BAD_LINK_TRIES', IS9WD_API_FALLBACK_BAD_);
+  IS9WD_coordsFlush_();
 
   var limited = false;
   if (hash !== '') {
@@ -271,6 +272,9 @@ function IS9WD_apiTokenMap_() {
 
 function IS9WD_apiSetting_(name, fallback) {
   try {
+    // The three rate names do not exist as rows yet, and asking Sheets for each of them on
+    // every request was three round trips for three misses. The memory remembers a miss.
+    if (!IS9WD_coordOf_(name)) return fallback;
     var range = IS9WD_namedOrNull_(name);
     if (!range) return fallback;
     var n = IS9WD_posInt_(range.getValue());
@@ -559,7 +563,9 @@ function IS9WD_signoffWrite_(payload) {
 // even a key. So a leaked payload discloses that one committee's week and nothing else, which
 // is the accepted risk in SPEC section 6 kept to its stated size.
 function IS9WD_apiState_(plan) {
-  var cfg = IS9WD_readConfig_(true);
+  // Not forced: the context read the settings a moment ago in this same execution, and the
+  // one write that changes them, the sign-off, resets the cache itself.
+  var cfg = IS9WD_readConfig_();
   var mine = plan.role === 'admin' ? null : IS9WD_trim_(plan.committee);
   var items = IS9WD_readItems_(mine ? { committee: mine } : {});
   // The status list is the app's whole vocabulary: it never hardcodes Open or Accomplished,

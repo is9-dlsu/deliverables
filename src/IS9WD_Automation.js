@@ -118,6 +118,7 @@ function IS9WD_dispatch_() {
 
   IS9WD_autoHeartbeat_(now, me);
   IS9WD_autoPrune_(doneKeys, say);
+  IS9WD_coordsWarm_();
   say('dispatch: ' + ran + ' job(s) ran, ' + skipped + ' skipped, ' + swept +
     ' row(s) given an ID' + (failed.length ? ', FAILED: ' + failed.join(', ') : ''));
   return { lines: lines, ran: ran, skipped: skipped, swept: swept, failed: failed };
