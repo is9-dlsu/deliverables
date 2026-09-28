@@ -1,0 +1,73 @@
+# Publishes the officers' page to GitHub Pages.
+#
+# WHY A WORKFLOW RATHER THAN "DEPLOY FROM A BRANCH". The page needs one line naming the
+# /exec address, and SPEC section 3 says no URL that matters is ever committed, because this
+# repository is public: a free GitHub organization cannot publish Pages from a private one.
+# So endpoint.js is gitignored and written HERE instead, from a repository variable. The URL
+# lives in the repository settings and in the published site, and never in git history.
+#
+# NO npm, NO BUILD, NO BUNDLER. The job copies app/ and writes one file. That is the whole
+# pipeline, and it is deliberate: the next president inherits files, not a toolchain.
+#
+# SET THIS UP ONCE:
+#   Settings > Secrets and variables > Actions > Variables > New repository variable
+#   Name:  IS9WD_ENDPOINT
+#   Value: the /exec URL from Deploy > Manage deployments
+# Then Settings > Pages > Source: GitHub Actions.
+name: Publish the officers page
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the endpoint address
+        env:
+          ENDPOINT: ${{ vars.IS9WD_ENDPOINT }}
+        run: |
+          set -eu
+          if [ -z "${ENDPOINT}" ]; then
+            echo "::error::The repository variable IS9WD_ENDPOINT is not set."
+            echo "::error::Settings > Secrets and variables > Actions > Variables."
+            echo "::error::Publishing without it would put a page on the internet that"
+            echo "::error::cannot reach the sheet, and says so to every officer who opens it."
+            exit 1
+          fi
+          case "${ENDPOINT}" in
+            https://script.google.com/macros/s/*/exec) ;;
+            *)
+              echo "::error::IS9WD_ENDPOINT does not look like an Apps Script /exec address."
+              exit 1
+              ;;
+          esac
+          printf "window.IS9WD_ENDPOINT = '%s';\n" "${ENDPOINT}" > app/endpoint.js
+          echo "endpoint.js written, ${#ENDPOINT} characters"
+
+      # The site root is app/, so an officer's link is
+      # https://is9-dlsu.github.io/deliverables/#<token> rather than .../app/#<token>.
+      # Shorter is better on a phone, and there is nothing else in this repository an
+      # officer has any reason to open.
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app
+      - id: deployment
+        uses: actions/deploy-pages@v4
