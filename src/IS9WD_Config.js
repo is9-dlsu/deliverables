@@ -59,7 +59,7 @@
 // still met: a truncated Drive connector read must lose the Archive and the Log before it
 // loses a contract string, so the feed has to sit ahead of 03 | Deliverables,
 // 04 | Statistics, 05 | Officer Tables, 06 | Archive and 07 | Log, and it does. Two tabs
-// now precede it and neither is large: the Dashboard is 27 rows and Configuration is 67.
+// now precede it and neither is large: the Dashboard is 24 rows and Configuration is 67.
 // The feed also shrank on the same day, from 579 rows to 536, so the read has more room
 // ahead of the contract strings than it had before this change, not less (10.1).
 var IS9WD_TAB = {
@@ -353,15 +353,17 @@ var IS9WD_WIDTH = {
     200, 120, 130, 90, 210, 72, 72, 72, 72, 72, 72, 72,
     30,
     200, 110, 130, 120, 90, 150, 75, 75, 75, 75, 75, 75],
-  // 04 | Officer Tables is three nine column cards across. Seven columns a reader reads,
-  // one narrow column of air inside the card's border, then the hidden sort key at the
-  // cell's right edge. Title first because it is the thing you read; the band above already
-  // says whose table it is. Each set is 1,145 px of card plus the hidden key.
-  TABLES: [330, 110, 85, 110, 140, 290, 80, 40, 60,
+  // 05 | Officer Tables is three nine column cards across. Seven columns a reader reads,
+  // then the HIDDEN sort key, then one narrow column of air, both inside the card's border.
+  // Title first because it is the thing you read; the band above already says whose table it
+  // is. The eighth entry is the hidden key, so its width is never seen and the ninth is the
+  // visible spare, which is why the two are 60 and 40 rather than 40 and 60: they swapped
+  // when keyOffset was corrected and the widths had to swap with them.
+  TABLES: [330, 110, 85, 110, 140, 290, 80, 60, 40,
     30,
-    330, 110, 85, 110, 140, 290, 80, 40, 60,
+    330, 110, 85, 110, 140, 290, 80, 60, 40,
     30,
-    330, 110, 85, 110, 140, 290, 80, 40, 60],
+    330, 110, 85, 110, 140, 290, 80, 60, 40],
   ARCHIVE: [90, 150, 260, 380, 150, 300, 160, 90, 150, 160, 200, 190, 220, 220],
   LOG: [160, 220, 110, 190, 240, 90, 460, 150],
   // _Engine: nine columns, because the schedule block is the widest thing on it.
@@ -466,7 +468,7 @@ var IS9WD_CFG = {
   NOTE_COL: 4,
   FIRST_COL: 1,
   LAST_COL: 7,
-  BANNER: '00 | CONFIGURATION',
+  BANNER: IS9WD_TAB.CONFIG.toUpperCase(),
   HELP: 'Everything on this tab is something you set. A cell with a cream background is ' +
     'yours to type into, and the sentence beside it says what to type and what happens ' +
     'if it is wrong. A cell with no cream is worked out by the sheet: read it, do not ' +
@@ -922,7 +924,8 @@ var IS9WD_ENG = {
   LAST_COL: 9,
   BANNER: '_ENGINE',
   HELP: 'Machinery. Every setting on this tab exists for the code rather than for the ' +
-    'president, which is why it is hidden and why 00 | Configuration is short. Nothing ' +
+    'president, which is why it is hidden and why ' + IS9WD_TAB.CONFIG + ' is short. ' +
+    'Nothing ' +
     'here is secret: the Canva reader account can read every cell of every tab, which is ' +
     'why no token is ever written into one. Changing a value here changes behaviour, so ' +
     'change one only on purpose and run Build or repair workbook afterwards.'
@@ -1275,13 +1278,14 @@ IS9WD_ENG.THRESHOLDS = {
     },
     {
       row: 63, name: 'IS9WD_STATS_OFFICER_ROWS',
-      label: 'Rows reserved per officer on 04 | Officer Tables',
+      label: 'Rows reserved per officer on ' + IS9WD_TAB.TABLES,
       owner: IS9WD_OWN.ETHAN, value: 11, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
       validate: { kind: IS9WD_V.INT, min: 3, max: 40, help: 'One row is the overflow notice, so 11 shows 10 items. Raise it if a card says tasks are hidden.' },
-      hint: 'How many rows each officer\'s table reserves. One of them is the notice ' +
-        'row, so 11 shows 10 tasks and says so when there are more. It was 21, which sized ' +
-        'every card for a worst case almost nobody reaches and left fifteen blank rows ' +
-        'inside most cards. Raise it if the notice row starts appearing often.',
+      hint: 'How many rows each officer\'s table reserves. One of them is the notice row, ' +
+        'so this number minus one is the tasks a card shows before it says the rest are ' +
+        'hidden. 11 is the shipping value. This cell is yours, so a build never changes it: ' +
+        'if it still reads 21 from an earlier build, type 11 over it and run Build or repair ' +
+        'workbook.',
       note: '=IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,"Run Build or repair workbook: the reserved rows do not match the tab","OK")'
     }
   ]
@@ -1298,7 +1302,7 @@ IS9WD_ENG.DIAGNOSTICS = {
   tab: 'ENGINE',
   title: 'DIAGNOSTICS',
   help: 'Read only. Six pointers at cells that already exist, then five lines code writes ' +
-    'after each run. 03 | Statistics reads these rather than recomputing them.',
+    'after each run. ' + IS9WD_TAB.STATS + ' reads these rather than recomputing them.',
   titleRow: 65,
   hintRow: 66,
   headerRow: 0,
@@ -1334,7 +1338,8 @@ IS9WD_ENG.DIRECTORY = {
   key: 'DIRECTORY',
   tab: 'ENGINE',
   title: 'DIRECTORY MACHINERY',
-  help: 'One row per officer, in the same order as THE PEOPLE on 00 | Configuration and ' +
+  help: 'One row per officer, in the same order as THE PEOPLE on ' + IS9WD_TAB.CONFIG +
+    ' and ' +
     'joined to it by row. Never insert, delete or sort a row here.',
   titleRow: 79,
   hintRow: 80,
@@ -1545,7 +1550,7 @@ var IS9WD_ITEMS = {
   lastRow: 2004,
   firstCol: 1,
   lastCol: 17,
-  BANNER: '02 | DELIVERABLES',
+  BANNER: IS9WD_TAB.ITEMS.toUpperCase(),
   // The banner takes the section band fill and the header row takes the column
   // header fill, on every tab, which is 2.5's palette rule and Ethan's instruction.
   // Reference 5.1 names the two fills the other way round for this tab alone. The
@@ -1855,10 +1860,11 @@ function IS9WD_feed_() {
 // `[merged]` values.
 
 var IS9WD_STATS = {
-  BANNER: '03 | STATISTICS',
+  BANNER: IS9WD_TAB.STATS.toUpperCase(),
   HELP: 'A dashboard. There is nothing to fill in here and nothing here can hold the ' +
-    'carousel: every number is worked out from 02 | Deliverables, 05 | Archive and ' +
-    '00 | Configuration. A plain number needs nothing from you; a number that is marked ' +
+    'carousel: every number is worked out from ' + IS9WD_TAB.ITEMS + ', ' +
+    IS9WD_TAB.ARCHIVE + ' and ' + IS9WD_TAB.CONFIG +
+    '. A plain number needs nothing from you; a number that is marked ' +
     'names something to do. Due, Done and Rate cover this week only, while Overdue, ' +
     'Worst late, Silent, On time, Judged and Avg days cover everything still on the data ' +
     'tab. A task ticked this week counts against the week its deadline fell in. Silence ' +
@@ -2051,7 +2057,8 @@ var IS9WD_STATS_CHARTS = [
   {
     key: 'C.TREND', kind: 'LINE',
     title: 'WEEK BY WEEK',
-    help: 'Read from 05 | Archive, oldest week on the left. Published is reliable; ' +
+    help: 'Read from ' + IS9WD_TAB.ARCHIVE + ', oldest week on the left. Published is ' +
+      'reliable; ' +
       'Accomplished is recorded only for a task that has been retired.'
   }
 ];
@@ -2124,8 +2131,7 @@ function IS9WD_dashCards_() {
   return [
     {
       key: 'D.WEEK', title: 'THIS WEEK',
-      help: 'The week every other tab is describing. Sunday rolls it over, so from ' +
-        'Sunday onward this is the week that starts the next morning.',
+      help: 'The week every other tab describes. Sunday rolls it over.',
       rows: [
         { label: 'Week number', formula: '=' + q('IS9WD_WEEK_NUMBER'), kind: 'count' },
         { label: 'Monday', formula: '=' + q('IS9WD_WEEK_START'), kind: 'date' },
@@ -2142,8 +2148,7 @@ function IS9WD_dashCards_() {
     },
     {
       key: 'D.READY', title: 'READY FOR CANVA',
-      help: 'The first row is the feed\'s own verdict, word for word, so this card can ' +
-        'never disagree with the carousel. The seven below it are why.',
+      help: 'Row one is the feed\'s own verdict. The rest is why.',
       rows: [
         { label: 'Verdict', formula: '=' + q('IS9WD_FEED_READY'), kind: 'text',
           flag: '=IFERROR(RIGHT(IS9WD_FEED_READY,2)="NO",TRUE)' },
@@ -2167,8 +2172,7 @@ function IS9WD_dashCards_() {
     },
     {
       key: 'D.YOU', title: 'ONLY YOU CAN DO THESE',
-      help: 'Four things no automation can do for you. A zero here means there is ' +
-        'nothing of that kind waiting.',
+      help: 'Things no automation can do for you. A zero means nothing waiting.',
       rows: [
         { label: 'Set this week\'s sign-off', formula: '=IF(IS9WD_SIGNOFF_SET,' +
             '"done for this week","not set, so Ready for Canva reads NO")', kind: 'text',
@@ -2180,9 +2184,12 @@ function IS9WD_dashCards_() {
           kind: 'count',
           flag: '=COUNTIFS(IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",' +
             'IS9WD_DEL_DEADLINE,"<"&IS9WD_EFFECTIVE_TODAY)>0' },
-        { label: 'Officers with no name', formula: '=ROWS(IS9WD_DIR_NAME)-' +
-            'COUNTIF(IS9WD_DIR_NAME,"?*")', kind: 'count',
-          flag: '=ROWS(IS9WD_DIR_NAME)-COUNTIF(IS9WD_DIR_NAME,"?*")>0' },
+        // IS9WD_DIR_VP, not IS9WD_DIR_NAME. The directory's column names read oddly: NAME
+        // is the committee or office, which setup fills in itself, and VP is the person's
+        // name, which is Ethan's to type. Counting NAME could never report anything.
+        { label: 'Officers with no name', formula: '=ROWS(IS9WD_DIR_VP)-' +
+            'COUNTIF(IS9WD_DIR_VP,"?*")', kind: 'count',
+          flag: '=ROWS(IS9WD_DIR_VP)-COUNTIF(IS9WD_DIR_VP,"?*")>0' },
         { label: 'Officers with no address', formula: '=ROWS(IS9WD_DIR_EMAIL)-' +
             'COUNTIF(IS9WD_DIR_EMAIL,"?*")', kind: 'count',
           flag: '=ROWS(IS9WD_DIR_EMAIL)-COUNTIF(IS9WD_DIR_EMAIL,"?*")>0' },
@@ -2194,8 +2201,7 @@ function IS9WD_dashCards_() {
     },
     {
       key: 'D.MACHINE', title: 'IS THE MACHINE RUNNING',
-      help: 'Promoted out of the hidden _Engine and _Views tabs, because state you ' +
-        'cannot see is state you cannot trust.',
+      help: 'State you could not see before, because it was on a hidden tab.',
       rows: [
         { label: 'Hourly job last ran', formula: '=IF(ISNUMBER(IS9WD_DIAG_LAST_RUN),' +
             'ROUND((NOW()-IS9WD_DIAG_LAST_RUN)*24,1)&" hours ago",' +
@@ -2208,8 +2214,13 @@ function IS9WD_dashCards_() {
             'you","off, so email goes to the officers")', kind: 'text' },
         { label: 'Mail left today', formula: '=IF(IS9WD_DIAG_QUOTA="","not measured yet",' +
             'IS9WD_DIAG_QUOTA&", reserve "&IS9WD_QUOTA_RESERVE)', kind: 'text' },
+        // The verdict first, then the stamp. IS9WD_DIAG_SELFTEST leads with a timestamp and
+        // puts the pass and fail counts after it, so in 316 px of run-on room the half that
+        // matters was the half that got cut. The column cannot widen: all three card sets
+        // share one width table, so widening it costs the tab its no-scroll claim.
         { label: 'Last self test', formula: '=IF(IS9WD_DIAG_SELFTEST="","not run on this ' +
-            'workbook yet",IS9WD_DIAG_SELFTEST)', kind: 'text',
+            'workbook yet",IF(ISNUMBER(SEARCH("fail",IS9WD_DIAG_SELFTEST)),"FAILED  ","OK  ")' +
+            '&IS9WD_DIAG_SELFTEST)', kind: 'text',
           flag: '=IFERROR(ISNUMBER(SEARCH("fail",IS9WD_DIAG_SELFTEST)),FALSE)' },
         { label: 'Overrides set', formula: '=IF(IS9WD_DIAG_OVERRIDES="","none",' +
             'IS9WD_DIAG_OVERRIDES)', kind: 'text' },
@@ -2223,8 +2234,7 @@ function IS9WD_dashCards_() {
     },
     {
       key: 'D.BROKEN', title: 'BROKEN CELLS AND ROOM',
-      help: 'Every computed tab counts its own broken cells. Any number above zero here ' +
-        'is a formula or a named range that stopped working, not something you typed.',
+      help: 'Above zero is a broken formula, never something you typed.',
       rows: [
         { label: 'On the feed', formula: '=' + q('IS9WD_FEED_ERRORS'), kind: 'count',
           flag: '=IFERROR(N(IS9WD_FEED_ERRORS)>0,TRUE)' },
@@ -2244,8 +2254,7 @@ function IS9WD_dashCards_() {
     },
     {
       key: 'D.JOBS', title: 'THE SCHEDULED JOBS',
-      help: 'One row per job, read from the schedule on _Engine. Last status is what the ' +
-        'job itself wrote the last time it ran.',
+      help: 'One row per job. The status is what the job itself wrote.',
       rows: null,
       jobs: true
     }
@@ -2516,7 +2525,8 @@ function IS9WD_statsTileAt_(layout, key) {
 // Sunday brief read them exactly as before.
 var IS9WD_VIEWS = {
   BANNER: '_VIEWS',
-  HELP: 'Working out for 03 | Statistics and 04 | Officer Tables, and the machine ' +
+  HELP: 'Working out for ' + IS9WD_TAB.STATS + ' and ' + IS9WD_TAB.TABLES +
+    ', and the machine ' +
     'reporting on itself. Every cell here is a formula and nothing here is typed. It is ' +
     'hidden because it is plumbing, not because it is secret.',
   END: 'IS9WD VIEWS END',
@@ -2575,11 +2585,13 @@ function IS9WD_viewsLayout_(directoryRows, trendWeeks, jobRows, officerRows) {
 // ============================================================================
 
 var IS9WD_OT = {
-  BANNER: '04 | OFFICER TABLES',
+  BANNER: IS9WD_TAB.TABLES.toUpperCase(),
   HELP: 'One numbered section per officer, in order of rank, each with every task still ' +
-    'on 02 | Deliverables: unfinished first, then finished, each group by deadline and ' +
+    'on ' + IS9WD_TAB.ITEMS + ': unfinished first, then finished, each group by ' +
+    'deadline and ' +
     'then by ID, which is the order Canva publishes. There is nothing to fill in here. ' +
-    'Every count in a heading is read from 03 | Statistics rather than worked out again, ' +
+    'Every count in a heading is read from ' + IS9WD_TAB.STATS + ' rather than worked ' +
+    'out again, ' +
     'so the two tabs cannot disagree, and those counts cover all tasks rather than this ' +
     'week only.',
   END: 'IS9WD OFFICER TABLES END',
@@ -2657,9 +2669,13 @@ function IS9WD_otLayout_(directoryRows, officerRows) {
       var cell = out.cells[c];
       var itemFirst = firstRow + 2;
       var itemLast = itemFirst + out.itemRows - 1;
-      // The card's own last column is the one before the key, so the border and the
-      // background stop at the air column and the hidden key sits outside them.
-      var cardLast = cell.firstCol + out.keyOffset - 1;
+      // THE CARD FILLS ITS WHOLE GRID CELL. It used to stop one column before the key,
+      // which was right while the key was the cell's last column. Correcting keyOffset moved
+      // the key inward, so stopping before it left the cell's final column claimed by
+      // nothing: not the card, not the key, and not a separator, which SPEC requires to be
+      // the only unclaimed column. The key column is hidden, so a border around the whole
+      // cell reads as a border around the seven columns a person can see.
+      var cardLast = cell.lastCol;
       out.blocks.push({
         ordinal: index + 1, gridRow: g, gridCell: c,
         firstCol: cell.firstCol, lastCol: cardLast,
@@ -2669,7 +2685,10 @@ function IS9WD_otLayout_(directoryRows, officerRows) {
       });
       out.cards.push({
         key: 'officer' + (index + 1), firstRow: firstRow, lastRow: lastRow,
-        firstCol: cell.firstCol, lastCol: cardLast
+        firstCol: cell.firstCol, lastCol: cardLast,
+        // The hidden sort key sits INSIDE the card now, so the painter needs it by name
+        // rather than by arithmetic off the card's last column.
+        keyCol: cell.firstCol + out.keyOffset
       });
     }
     out.gridRows.push({ firstRow: firstRow, lastRow: lastRow,
@@ -2732,7 +2751,7 @@ var IS9WD_ARCHIVE = {
   minFreeRows: 100,
   firstCol: 1,
   lastCol: 14,
-  BANNER: '05 | ARCHIVE',
+  BANNER: IS9WD_TAB.ARCHIVE.toUpperCase(),
   HELP: 'Append only. Deadline holds the real date, not the rendered text, so a week can be reconstructed years later.',
   SOURCE_SNAPSHOT: 'Published snapshot',
   SOURCE_RETIRED: 'Retired',
@@ -2761,7 +2780,7 @@ var IS9WD_LOG = {
   firstRow: 4,
   firstCol: 1,
   lastCol: 8,
-  BANNER: '06 | LOG',
+  BANNER: IS9WD_TAB.LOG.toUpperCase(),
   HELP: 'Append only, newest at the bottom, trimmed to the newest 5,000 rows by the heartbeat.',
   TRIM_ROWS: 5000,
   SOURCES: ['App', 'Menu', 'Trigger', 'Setup'],
@@ -3449,17 +3468,20 @@ function IS9WD_clearPastEnd_(sheet, lastRow, lastCol) {
 // own border with bare paper beside it, which is the notch every card on both view tabs had.
 // The labels still go only in the first cells; the fill runs the whole width.
 //
-// The background is CARD_HEAD_BG, the sage, not HEAD_BG. HEAD_BG is #5d4170 and so is
-// CARD_BAND_BG, and on a card those two are adjacent rows, so a card used to open with one
-// unbroken 68 px block of deep purple with nothing telling its heading from its column
-// labels. Band, then header, then body, each a step down.
-function IS9WD_paintHeader_(sheet, row, firstCol, labels, lastCol) {
+// `bg` is optional and defaults to HEAD_BG, the deep purple every header has always had.
+// A CARD passes CARD_HEAD_BG, the sage, because on a card the band and the header are adjacent
+// rows and both were #5d4170, so a card opened with one unbroken 68 px block of deep purple
+// with nothing telling its heading from its column labels. Band, then header, then body, each
+// a step down. It is an argument rather than a blanket change because the feed, the data tab
+// and the settings tabs put a header under a GREEN band, where the purple is already the step
+// down and the sage would be a third colour solving nothing.
+function IS9WD_paintHeader_(sheet, row, firstCol, labels, lastCol, bg) {
   var width = IS9WD_posInt_(lastCol) ? lastCol - firstCol + 1 : labels.length;
   if (width < labels.length) width = labels.length;
   var range = sheet.getRange(row, firstCol, 1, width);
   IS9WD_style_(range, {
     size: IS9WD_SIZE.HEAD, fg: IS9WD_ROLE.HEAD_FG, bold: true,
-    align: IS9WD_ALIGN.CENTER, bg: IS9WD_ROLE.CARD_HEAD_BG, wrap: IS9WD_WRAP.WRAP,
+    align: IS9WD_ALIGN.CENTER, bg: bg || IS9WD_ROLE.HEAD_BG, wrap: IS9WD_WRAP.WRAP,
     format: IS9WD_FMT.TEXT
   });
   sheet.getRange(row, firstCol, 1, labels.length).setValues([labels]);
@@ -4229,6 +4251,10 @@ function IS9WD_guardRanges_() {
   add('ITEMS', IS9WD_a1_(IS9WD_ITEMS.firstRow, IS9WD_ITEMS.derivedFirstCol,
     IS9WD_ITEMS.lastRow - IS9WD_ITEMS.firstRow + 1,
     IS9WD_ITEMS.derivedLastCol - IS9WD_ITEMS.derivedFirstCol + 1));
+  // The dashboard is read only end to end, so it takes the same whole tab warning guard as
+  // every other tab nobody types into. It was missing, which made it the one computed tab a
+  // stray keystroke could edit without a prompt.
+  add('DASHBOARD', '');
   add('FEED', '');
   add('STATS', '');
   add('TABLES', '');

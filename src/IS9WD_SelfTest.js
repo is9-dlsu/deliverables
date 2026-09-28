@@ -2094,7 +2094,10 @@ function IS9WD_stOfficerTables_(suite, ctx) {
       if (ord === null || ord < 1 || ord > totals.length) continue;
       var total = IS9WD_int_(totals[ord - 1][0]);
       if (total === null) continue;
-      var notice = IS9WD_trim_(ctx.tables.disp[block.noticeRow - 1][0]);
+      // THE CARD'S OWN FIRST COLUMN, not column A. The three cards in one grid row share one
+    // notice row, so reading column A checked card one three times and never checked cards
+    // two and three at all.
+    var notice = IS9WD_trim_(ctx.tables.disp[block.noticeRow - 1][block.firstCol - 1]);
       var over = total - o.itemRows;
       var name = IS9WD_txt_(names[ord - 1][0]);
       if (over > 0) {

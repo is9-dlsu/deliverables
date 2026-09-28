@@ -62,8 +62,8 @@ var IS9WD_FEED_ERR_ = '!ERR';
 // The plain English sentence in E1 and in A1's note. Written for somebody who has never
 // written a formula: what the tab is for, that it fills itself, and who reads it.
 var IS9WD_FEED_PLAIN_ = 'What this tab is for: it is the words and the colours the ' +
-  'Instagram carousel prints. It fills itself from the deliverables you enter and from ' +
-  '00 | Configuration, so there is nothing to type here and nothing to tidy up. Every ' +
+  'carousel prints. It fills itself from the deliverables you enter and from ' +
+  IS9WD_TAB.CONFIG + ', so there is nothing to type here and nothing to tidy up. Every ' +
   'Sunday Claude reads this one tab and updates the Canva design from it, which is why ' +
   'the wording here is exact and why this tab is never hidden.';
 

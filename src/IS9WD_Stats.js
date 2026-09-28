@@ -271,14 +271,16 @@ function IS9WD_statsBandHelp_() {
     rank: 'The share of each officer\'s past-deadline tasks that were ticked on or before ' +
       'the deadline, so a busy committee is not punished for being busy. A blank means too ' +
       'few tasks to judge, not a score of zero.',
-    trend: 'Read from 05 | Archive, oldest week first. Published is reliable; ' +
+    trend: 'Read from ' + IS9WD_TAB.ARCHIVE + ', oldest week first. Published is ' +
+      'reliable; ' +
       'Accomplished is recorded only for a task that has been retired.',
     health: 'Whether the machine ran, whether it can still send, and how much room is ' +
       'left in the data tab.',
     job: 'Whether each job ran and whether it failed, read from the schedule block itself.',
     marker: 'What the build actually made, so a setting changed without a rebuild is ' +
       'caught by the guard beside it rather than by a stale tab.',
-    viewOfficer: 'One sorted spill and eight broadcast formulas. 03 | Statistics and ' +
+    viewOfficer: 'One sorted spill and eight broadcast formulas. ' + IS9WD_TAB.STATS +
+      ' and ' +
       '04 | Officer Tables both point at these rather than recomputing them.',
     viewRank: 'The ranked sort. An unscored officer is carried as -1 so a descending sort ' +
       'puts them last, and the dashboard shows the -1 as blank.',
@@ -455,7 +457,8 @@ function IS9WD_statsAttentionSpec_() {
       ',IS9WD_DEL_PUBKEY,"?*"))',
     reading: '=IF(IS9WD_STATS_BLOCKING=0,"Nothing is blocking the carousel.",' +
       'IFERROR("First is "&INDEX(IS9WD_FLAGS,1,5)&" on "&INDEX(IS9WD_FLAGS,1,6)&" ("&' +
-      'INDEX(IS9WD_FLAGS,1,3)&")"&' + sep + '&"Fix the marked rows on 02 | Deliverables.",' +
+      'INDEX(IS9WD_FLAGS,1,3)&")"&' + sep + '&"Fix the marked rows on ' +
+      IS9WD_TAB.ITEMS + '.",' +
       IS9WD_statsErr_() + '))',
     flag: '=N(' + IS9WD_statsRuleName_('IS9WD_STATS_BLOCKING') + ')>0',
     format: IS9WD_FMT.INT
@@ -495,7 +498,8 @@ function IS9WD_statsGateSpec_() {
   var spec = {};
   spec['G.TERM'] = {
     state: '=IF(IS9WD_IN_TERM,"PASS","HOLD")',
-    todo: 'Reads Inside a trimester right now on 00 | Configuration. A blank last day ' +
+    todo: 'Reads Inside a trimester right now on ' + IS9WD_TAB.CONFIG +
+      '. A blank last day ' +
       'pauses every job, so fill in the trimester dates.'
   };
   spec['G.SIGNOFF'] = {
@@ -526,7 +530,7 @@ function IS9WD_statsGateSpec_() {
   spec['G.BLOCKING'] = {
     state: '=IF(N(IS9WD_STATS_BLOCKING)=0,"PASS","HOLD")',
     todo: 'Reads the blocking count above, so the eight flag names exist once on this ' +
-      'tab. Fix the marked rows on 02 | Deliverables.'
+      'tab. Fix the marked rows on ' + IS9WD_TAB.ITEMS + '.'
   };
   return spec;
 }
@@ -686,11 +690,15 @@ function IS9WD_viewsPointNames_(sheet, layout) {
   return want.length;
 }
 
+// clear() does not clear a border, which the other three wipes on this tab say in a comment
+// and this one did not do at all. Now that every card draws inner dotted rules, a block that
+// moves would leave the previous layout's grid behind on rows that no longer hold a table.
 function IS9WD_viewsWipe_(sheet, layout) {
   var rows = Math.max(layout.endRow, sheet.getLastRow());
   var cols = Math.max(layout.lastCol, sheet.getLastColumn());
   var all = sheet.getRange(1, 1, rows, cols);
   all.clear();
+  all.setBorder(false, false, false, false, false, false);
   all.clearDataValidations();
   all.clearNote();
 }
@@ -1818,7 +1826,10 @@ function IS9WD_statsBlock_(sheet, layout, bandRow, title, help, headers, firstRo
   var cardLast = at + width - 1;
   IS9WD_paintCardBand_(sheet, bandRow, at, cardLast, title);
   IS9WD_paintHint_(sheet, bandRow + 1, at, cardLast, help);
-  if (headers) IS9WD_paintHeader_(sheet, bandRow + 2, at, headers, cardLast);
+  if (headers) {
+    IS9WD_paintHeader_(sheet, bandRow + 2, at, headers, cardLast,
+      IS9WD_ROLE.CARD_HEAD_BG);
+  }
   var rows = lastRow - firstRow + 1;
   if (rows < 1) return;
   var body = sheet.getRange(firstRow, at, rows, width);
@@ -2250,10 +2261,13 @@ function IS9WD_otPaintAll_(sheet, layout) {
   }
 
   // The hidden sort key column of each card, over that card's own rows only, so a separator
-  // row carries no fill anywhere across its width.
+  // row carries no fill anywhere across its width. Read from the card's declared keyCol: it
+  // used to be lastCol + 1, which was right only while the key was the grid cell's final
+  // column, and after the card grew to fill its cell that arithmetic pointed one column past
+  // the tab's last, which threw on the third card of every row.
   for (var b = 0; b < o.cards.length; b++) {
     var side = o.cards[b];
-    IS9WD_style_(sheet.getRange(side.firstRow, side.lastCol + 1,
+    IS9WD_style_(sheet.getRange(side.firstRow, side.keyCol,
       side.lastRow - side.firstRow + 1, 1), {
       size: IS9WD_SIZE.HINT, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.CARD_BODY_BG,
       align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
@@ -2291,7 +2305,8 @@ function IS9WD_otPaintBlock_(sheet, layout, block, cols) {
   var at = block.firstCol;
   var width = block.lastCol - at + 1;
   IS9WD_paintCardBand_(sheet, block.bandRow, at, block.lastCol, '');
-  IS9WD_paintHeader_(sheet, block.headerRow, at, IS9WD_OT_HEADERS, block.lastCol);
+  IS9WD_paintHeader_(sheet, block.headerRow, at, IS9WD_OT_HEADERS, block.lastCol,
+    IS9WD_ROLE.CARD_HEAD_BG);
 
   var rows = layout.itemRows;
   var body = sheet.getRange(block.itemFirst, at, rows, width);
@@ -2438,8 +2453,12 @@ function IS9WD_dashPaintAll_(sheet, layout) {
     IS9WD_dashPaintBody_(sheet, card);
   }
 
+  IS9WD_statsEndBand_(sheet, layout.endRow, layout.lastCol);
+
   // A gap carries nothing: no value, no fill, no border. That is the only thing that makes
-  // three cards read as three cards rather than as one banded table.
+  // three cards read as three cards rather than as one banded table. LAST, after the end
+  // band, for the reason the two other card tabs learned: the end band runs the tab's own
+  // width and therefore crosses both separator columns.
   for (var g = 0; g < layout.gapCols.length; g++) {
     // The width comes from IS9WD_WIDTH.DASHBOARD like every other column on the tab, so
     // the gap is declared in one place rather than set twice from two numbers.
@@ -2449,7 +2468,6 @@ function IS9WD_dashPaintAll_(sheet, layout) {
     IS9WD_clearGap_(sheet, layout.gapRows[r], layout.gapRows[r], 1, layout.lastCol);
     sheet.setRowHeight(layout.gapRows[r], IS9WD_ROW_H.SPACER);
   }
-  IS9WD_statsEndBand_(sheet, layout.endRow, layout.lastCol);
   IS9WD_dashChrome_(sheet, layout);
 }
 
@@ -2541,12 +2559,38 @@ function IS9WD_dashWriteAll_(sheet, layout, cfg) {
 
 // Bold #724485 on the paper white, never on cream, which is the workbook's one blocking
 // treatment. A calm value gets no treatment at all.
+//
+// EVERY NAMED RANGE IN THE FORMULA IS WRAPPED IN INDIRECT, and this is not cosmetic: a
+// conditional format rule may not reference another sheet, and Sheets refuses it at the
+// moment the rule list is applied, not when it evaluates. Every name a dashboard flag reads
+// lives on another tab, because this tab carries exactly one name of its own, so an unwrapped
+// list would throw inside IS9WD_dashWriteAll_ on the FIRST rule. IS9WD_setupCall_ does not
+// catch, so the throw would propagate out of the whole build, past the directory backfill,
+// the token issue, the name audit and the log append: a fully renamed workbook with a half
+// painted dashboard and no log row saying the run happened, and every later run dying on the
+// same line.
+//
+// This project has hit this exact class twice before: once on 04 | Officer Tables, which is
+// why IS9WD_statsRuleName_ exists, and once here. Wrapping at the RULE PATH rather than in the
+// twenty flag strings is deliberate: the card VALUE formulas legitimately cross sheets and
+// must not be wrapped, and one rewriter cannot be forgotten on a flag added later.
 function IS9WD_dashFlagRule_(sheet, row, firstCol, lastCol, formula) {
   return SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied(formula)
+    .whenFormulaSatisfied(IS9WD_dashRuleSafe_(formula))
     .setFontColor(IS9WD_ROLE.FLAG_FG).setBold(true)
     .setRanges([sheet.getRange(row, firstCol, 1, lastCol - firstCol + 1)])
     .build();
+}
+
+// Every IS9WD_ token in a rule formula becomes INDIRECT("token"). Applied to the rule path
+// only, never to a value formula. A token already inside an INDIRECT is left alone so the
+// rewriter is safe to apply twice.
+function IS9WD_dashRuleSafe_(formula) {
+  var text = String(formula === null || formula === undefined ? '' : formula);
+  if (text.indexOf('INDIRECT(') >= 0) return text;
+  return text.replace(/\bIS9WD_[A-Z0-9_]+\b/g, function (name) {
+    return IS9WD_statsRuleName_(name);
+  });
 }
 
 // The five job rows, read by INDEX over the schedule block because the schedule has no per
@@ -2577,12 +2621,15 @@ function IS9WD_dashJobRows_(cfg) {
 // gets a sentence fragment instead.
 function IS9WD_dashJobLabel_(jobKey) {
   var key = IS9WD_trim_(jobKey).toUpperCase();
+  // THE KEYS ARE THE KEYS THE SCHEDULE ACTUALLY HOLDS. The first version of this map used
+  // shortened names that matched none of them, so all five rows fell through to the raw
+  // machine key and the card read MONDAY_ASSIGNMENTS instead of a sentence.
   var map = {
-    MONDAY: 'Monday assignment emails',
-    DIGEST: 'Daily digest emails',
-    BRIEF: 'Your Sunday brief',
-    ARCHIVE: 'Archive the week',
-    HEARTBEAT: 'Hourly heartbeat'
+    MONDAY_ASSIGNMENTS: 'Monday assignment emails',
+    DAILY_DIGEST: 'Daily digest emails',
+    SUNDAY_BRIEF: 'Your Sunday brief',
+    ARCHIVE_WEEK: 'Archive the week',
+    RETIRE_ACCOMPLISHED: 'Retire finished tasks'
   };
   return map[key] || (IS9WD_trim_(jobKey) === '' ? 'Unnamed job' : IS9WD_trim_(jobKey));
 }
