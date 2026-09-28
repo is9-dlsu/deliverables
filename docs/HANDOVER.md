@@ -52,7 +52,7 @@ sender and a living receiver, and a suspended account can transfer nothing.
    `Test mode: ON  (click to turn OFF)` when it is on. If it reads
    `Test mode: OFF (click to turn ON)`, click it. While test mode is on, every email goes to the
    address in `Your own email address` and nothing reaches an officer. It stays on through the
-   whole handover and is turned off only by the new owner, in Part G, after a preflight.
+   whole handover and is turned off only by the new owner, in Part F, after a preflight.
 
 4. **Remove the hourly trigger.** `IS9 Deliverables > Automation > Remove automations`,
    confirm. This is the one step that cannot be done afterwards by anyone else. An installable
@@ -107,7 +107,9 @@ sender and a living receiver, and a suspended account can transfer nothing.
 2. **Authorize the script as yourself.** The script asks for its permissions per person, so the
    outgoing president's grant does nothing for you.
    - `Extensions > Apps Script` opens the editor.
-   - In the function dropdown beside `Run`, pick `IS9WD_buildMenu_` and click `Run`.
+   - In the function dropdown beside `Run`, pick `onOpen` and click `Run`. It is the only
+     menu function the dropdown lists: the editor hides every function whose name ends in an
+     underscore, and every other one in this project does.
    - Click `Review permissions`, choose your DLSU account, and `Allow`. If Google says the app
      is unverified, use `Advanced` and continue; it is your own script, bound to your own Sheet.
    - The run logs one line saying no menu was built from the editor. That is the expected
@@ -123,9 +125,23 @@ sender and a living receiver, and a suspended account can transfer nothing.
      admin link is tied to this row. Update `Full name` and `Email` for every other officer who
      changed. Do not add, remove or reorder rows and never edit a `Key`: the links are tied to
      the keys.
+   - `TRIMESTER DATES`: `First day (a Monday)` and `Last day` for the trimester in progress,
+     and the next ones when DLSU publishes them. Do this now and not later: while no
+     trimester covers the week, every job pauses, the week number is blank, and the app
+     refuses every write from every phone, the sign-off in Part D included. A blank
+     `Last day` on the trimester in progress does the same, so enter a generous later date
+     and correct it rather than leaving it blank.
+   - `Academic year, printed on the carousel`, under `WHAT YOU SET ABOUT THE WEEK`. It prints
+     in the week line on every slide.
+   - `Pretend today is a different date` and `Force a week number`, in the same block: clear
+     both, before step 10 runs a pass. A leftover today override pauses nothing: every job
+     keeps running on the real clock, and every email and the Canva feed describe the wrong
+     week. A leftover week number is printed on every slide in place of the counted one.
    - `Test mode: send every email to me instead` stays ticked.
    - Leave `Web address of the officers' page` and `Web address the page talks to` alone for
      now. Steps 6 and 7 and Part C decide whether they change.
+   Then `IS9 Deliverables > Checks > Check the term calendar`, and confirm the week number it
+   reports is the week you are in.
 
 5. **Fill in what is yours on `_Engine`.** It is hidden: `View > Hidden sheets > _Engine`.
    Under `MAIL AND APP PLUMBING`:
@@ -279,25 +295,7 @@ to be final first.
    The outgoing president's project stays with their account; nothing in it is needed beyond
    that file. Do a dry run on a copy of the design before the first live Sunday.
 
-## Part F. The term calendar and the week
-
-1. **Fill the trimester dates** on `01 | Configuration` under `TRIMESTER DATES`: `First day
-   (a Monday)` and `Last day` for the trimester in progress, and the next ones when DLSU
-   publishes them. A blank `Last day` on the trimester in progress pauses every job, blanks the
-   week number and refuses every tick from every phone. Enter a generous later date and correct
-   it rather than leaving it blank.
-
-2. **Set the academic year** under `WHAT YOU SET ABOUT THE WEEK`, the row labelled
-   `Academic year, printed on the carousel`. It prints in the week line on every slide.
-
-3. **Clear both overrides** in the same block: `Pretend today is a different date` and
-   `Force a week number`. The first pauses the dispatcher while it is set; the second relabels
-   every week.
-
-4. `IS9 Deliverables > Checks > Check the term calendar`, and confirm the week number it
-   reports is the week you are in.
-
-## Part G. Turning the mail on
+## Part F. Turning the mail on
 
 Only the new owner does this, and only after reading what would go out.
 
@@ -327,7 +325,7 @@ Run all four. If any fails, test mode goes back on until it passes.
       address as the sender's reply-to, this week's sign-off set, and zero rows without an ID.
 - [ ] The admin link from `IS9 Deliverables > Open the app (admin)` opens on your phone, lists
       every officer, and shows this week's sign-off as set.
-- [ ] One test send arrived: the Sunday brief to your own address from Part G step 2, and, if
+- [ ] One test send arrived: the Sunday brief to your own address from Part F step 2, and, if
       it is a Monday or evening, one officer email while test mode was on.
 
 Then, one week later, look at `00 | Dashboard` on a Sunday: the last run is under two hours

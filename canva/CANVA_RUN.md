@@ -32,7 +32,7 @@ Nine rows, column A reading `SENTINEL`, column B reading exactly:
 
 | Row | Column B |
 |---|---|
-| 1 | `IS9WD FEED START v2` (beside `02 | Canva Feed` in A1) |
+| 1 | `IS9WD FEED START v2` (beside `02 \| Canva Feed` in A1) |
 | 2 | `IS9WD BLOCK: READINESS` |
 | 14 | `IS9WD BLOCK: TITLE` |
 | 23 | `IS9WD BLOCK: COMMITTEES` |
@@ -70,13 +70,13 @@ Stop on `Ready for Canva: NO`, on any check cell that is not `OK`, on `Feed erro
 
 | Gate | Where it shows on the feed | Who clears it |
 |---|---|---|
-| In term | the week line in Block B reads `WEEK --` | Ethan, trimester dates in `01 | Configuration` |
+| In term | the week line in Block B reads `WEEK --` | Ethan, trimester dates in `01 \| Configuration` |
 | Sign-off set for this week | Block B's four sign-off cells are blank | Ethan, in the app, from the picker over the fourteen |
 | Capacity check | `A.CAPACITY` is not `OK` | Ethan, then `Build or repair workbook` |
-| Plan check | `A.PLAN` names the problem, for example `No committee for carousel order 7` | Ethan, the directory on `01 | Configuration` |
+| Plan check | `A.PLAN` names the problem, for example `No committee for carousel order 7` | Ethan, the directory on `01 \| Configuration` |
 | Flag list check | `A.FLAGCAP` reads `Flag list truncated by <n> rows` | `Build or repair workbook` |
 | Feed errors | `A.ERRORS` is above zero and some cell on the tab reads `!ERR` | `Build or repair workbook`, then the self test |
-| Blocking flags on publishing rows | Block D lists a row whose `Flag` is one of `Missing ID`, `Missing status`, `Unknown committee`, `Missing title`, `Missing deadline`, `Deadline not a date`, `Title too long`, `Remark too long` | Ethan, on `03 | Deliverables` |
+| Blocking flags on publishing rows | Block D lists a row whose `Flag` is one of `Missing ID`, `Missing status`, `Unknown committee`, `Missing title`, `Missing deadline`, `Deadline not a date`, `Title too long`, `Remark too long` | Ethan, on `03 \| Deliverables` |
 
 A NO stops the run. Nothing in this procedure clears a gate; the Sunday brief already told Ethan which one is holding, and the run resumes with a fresh read after he fixes it. `Overdue` is a flag but not a blocking one: an overdue item publishes, with `Overdue: Fri, Sep 25` as its deadline text and `OVERDUE` as its window.
 

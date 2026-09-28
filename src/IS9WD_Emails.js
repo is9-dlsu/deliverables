@@ -1290,7 +1290,8 @@ function IS9WD_jobAlert_(jobKey, err, extraLines) {
   if (tail.length) lines.push('', 'The last ' + tail.length + ' log rows:', tail.join('\n'));
   lines.push('', 'This is sent at most once per job per day. The job will not run again today by ' +
     'itself: a failed run marks its window as used, so a broken job cannot repeat every hour. ' +
-    'To send it by hand, use the matching item on the Emails menu.');
+    'To run it by hand, use its own item on the IS9 Deliverables menu: the three emails are ' +
+    'under Emails, Archive this week and Retire accomplished items are on the root menu.');
   return IS9WD_alertOnce_(key, subject, lines.join('\n'));
 }
 

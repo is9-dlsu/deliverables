@@ -19,6 +19,7 @@ const FILES = [
   ['core.test.js', 'the pure core, against SPEC'],
   ['schedule.test.js', 'when each job fires, against the schedule rows'],
   ['email.test.js', 'the four emails, against the approved wording'],
+  ['archive.test.js', 'the two archive jobs, against reference 10.1 and the trend block'],
   ['api.test.js', 'the endpoint decision layer, against SPEC section 3'],
 ];
 
