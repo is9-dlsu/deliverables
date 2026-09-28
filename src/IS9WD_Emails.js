@@ -74,6 +74,34 @@ var IS9WD_JOB_DIGEST_ = 'DAILY_DIGEST';
 var IS9WD_JOB_BRIEF_ = 'SUNDAY_BRIEF';
 
 var IS9WD_MAIL_BRAND_ = "Investors' Society";
+
+// THE LETTER'S OWN PALETTE. The workbook's green and purple are the identity; around them the
+// mail uses warm neutrals a screen does not shout: ivory paper, a stone hairline, ink for the
+// body, a pale lilac for the subtitle on green. Nothing neon, nothing that reads as a status
+// colour by accident. It is the only place these hexes appear.
+var IS9WD_MAIL_INK_ = {
+  green: '#0B4A3C', plum: '#5D4170', purple: '#6B4A8A', lilac: '#CFC0E0',
+  sage: '#58756A', ink: '#1C2120', paper: '#FBFAF6', page: '#EFEDE6',
+  cream: '#F1EEE4', line: '#D9D3C6'
+};
+var IS9WD_MAIL_GREET_ = 'Greetings in St. La Salle!';
+var IS9WD_MAIL_CLOSE_ = 'For a financially literate Lasallian community,';
+
+// A position as the directory shouts it, as a letter prints it: EXECUTIVE VICE PRESIDENT FOR
+// EXTERNALS becomes Executive Vice President for Externals. Small words stay small unless they
+// open the phrase.
+function IS9WD_titleCase_(text) {
+  var small = { 'for': 1, 'of': 1, 'and': 1, 'the': 1, 'in': 1, 'on': 1, 'to': 1 };
+  var words = IS9WD_trim_(text).toLowerCase().split(/\s+/);
+  var out = [];
+  for (var i = 0; i < words.length; i++) {
+    var w = words[i];
+    if (w === '') continue;
+    if (i > 0 && small[w]) { out.push(w); continue; }
+    out.push(w.charAt(0).toUpperCase() + w.slice(1));
+  }
+  return out.join(' ');
+}
 var IS9WD_MAIL_FOOT_ = 'Sent by the IS9 Weekly Deliverables Tracker. Reply to this message ' +
   'if something on your list is wrong.';
 
@@ -93,6 +121,8 @@ function IS9WD_mailContext_(cfg) {
   var cur = so.current || {};
   var set = cur.set === true || so.derivedSet === true;
   var range = IS9WD_rangeText(w.weekStart, w.weekEnd);
+  var adminKey = IS9WD_trim_(IS9WD_CFG.DIRECTORY.adminKey).toUpperCase();
+  var signer = cfg.directory && cfg.directory.byKey ? cfg.directory.byKey[adminKey] : null;
   return {
     testMode: sw.testMode === true,
     adminEmail: IS9WD_trim_(sw.adminEmail),
@@ -115,7 +145,10 @@ function IS9WD_mailContext_(cfg) {
     checkedName: IS9WD_txt_(cur.set === true ? cur.checkedName : so.checkedName),
     checkedPosition: IS9WD_txt_(cur.set === true ? cur.checkedPosition : so.checkedPosition),
     slotsPerPage: IS9WD_posInt_(sw.slotsPerPage),
-    maxParts: IS9WD_posInt_(sw.maxParts)
+    maxParts: IS9WD_posInt_(sw.maxParts),
+    // The letter is signed by the President, from the directory, never typed here.
+    signName: IS9WD_txt_(signer ? signer.fullName : ''),
+    signPosition: IS9WD_titleCase_(signer ? signer.position : '')
   };
 }
 
@@ -149,12 +182,34 @@ function IS9WD_mailEntry_(row) {
 //  THE THREE BODIES  (pure: a context, an entry, the items, the link)
 // ============================================================================
 
-// 'Hi ' plus the full name exactly as typed, falling back to the committee or office. No
-// first name splitting: a two word given name is common here, and getting somebody's name
+// THE SALUTE, as the Society's letters open: the Lasallian greeting, then Dear and the full
+// name exactly as typed, falling back to the committee or office, with the position under it.
+// No first name splitting: a two word given name is common here, and getting somebody's name
 // wrong in the first line of the first email is the worst place to guess.
 function IS9WD_mailGreeting_(entry) {
   var who = IS9WD_txt_(entry.fullName) !== '' ? entry.fullName : entry.committee;
-  return 'Hi ' + who + ',';
+  return 'Dear ' + who + ',';
+}
+
+function IS9WD_mailSalute_(entry) {
+  return {
+    k: 'salute',
+    greet: IS9WD_MAIL_GREET_,
+    text: IS9WD_mailGreeting_(entry),
+    position: IS9WD_titleCase_(entry.position)
+  };
+}
+
+// THE CLOSING, as the Society's letters end: the line, then the President's name, position
+// and the Society. Omitted when the directory has no President to sign.
+function IS9WD_mailClosing_(ctx) {
+  return {
+    k: 'closing',
+    text: IS9WD_MAIL_CLOSE_,
+    name: IS9WD_txt_(ctx.signName),
+    position: IS9WD_txt_(ctx.signPosition),
+    org: IS9WD_MAIL_BRAND_
+  };
 }
 
 // The first line of every body while test mode is on: who it was meant for, so the fourteen
@@ -232,10 +287,10 @@ function IS9WD_mailItemRows_(ctx, entry, items) {
   return out;
 }
 
-function IS9WD_mailMeta_(ctx, entry) {
+function IS9WD_mailMeta_(ctx, entry, kind) {
   return {
-    eyebrow: IS9WD_MAIL_BRAND_,
-    title: entry.committee !== '' ? entry.committee : entry.fullName,
+    title: IS9WD_MAIL_BRAND_,
+    eyebrow: IS9WD_txt_(kind) || 'Weekly Deliverables',
     sub: ctx.weekLine,
     foot: IS9WD_MAIL_FOOT_
   };
@@ -252,13 +307,14 @@ function IS9WD_mondaySubject_(ctx, entry) {
 function IS9WD_mondayBlocks_(ctx, entry, active, link) {
   var b = [];
   if (ctx.testMode) b.push(IS9WD_mailTestLine_(entry));
-  b.push({ k: 'p', text: IS9WD_mailGreeting_(entry) });
+  b.push(IS9WD_mailSalute_(entry));
   var n = active.length;
   b.push({
     k: 'p',
     text: 'Here ' + (n === 1 ? 'is your deliverable' : 'are your ' + n + ' deliverables') +
       ' for week ' + ctx.weekNo + (ctx.weekLong !== '' ? ', ' + ctx.weekLong : '') + '.'
   });
+  b.push({ k: 'h', text: 'Week ' + ctx.weekNo + ' deliverables' });
   var rows = IS9WD_mailItemRows_(ctx, entry, active);
   b.push({ k: 'items', rows: rows });
   var notOnPage = 0;
@@ -282,6 +338,7 @@ function IS9WD_mondayBlocks_(ctx, entry, active, link) {
   }
   b.push.apply(b, IS9WD_mailLinkBlock_(entry, link));
   b.push.apply(b, IS9WD_mailSignoff_(ctx));
+  b.push(IS9WD_mailClosing_(ctx));
   return b;
 }
 
@@ -319,12 +376,14 @@ function IS9WD_noticeSubject_(entry, fresh) {
 function IS9WD_noticeBlocks_(ctx, entry, fresh, link) {
   var b = [];
   if (ctx.testMode) b.push(IS9WD_mailTestLine_(entry));
-  b.push({ k: 'p', text: IS9WD_mailGreeting_(entry) });
+  b.push(IS9WD_mailSalute_(entry));
   b.push({ k: 'p', text: (fresh.length === 1 ? 'One deliverable was' : fresh.length + ' deliverables were') +
     ' added to your list.' });
+  b.push({ k: 'h', text: 'New on your list' });
   b.push({ k: 'items', rows: IS9WD_mailItemRows_(ctx, entry, fresh) });
   b.push({ k: 'note', text: 'Your whole list for the week is on your page, and the Monday email carries all of it.' });
   b.push.apply(b, IS9WD_mailLinkBlock_(entry, link));
+  b.push(IS9WD_mailClosing_(ctx));
   return b;
 }
 
@@ -343,7 +402,7 @@ function IS9WD_digestSubject_(entry, dueTomorrow, overdue) {
 function IS9WD_digestBlocks_(ctx, entry, dueTomorrow, overdue, link) {
   var b = [];
   if (ctx.testMode) b.push(IS9WD_mailTestLine_(entry));
-  b.push({ k: 'p', text: IS9WD_mailGreeting_(entry) });
+  b.push(IS9WD_mailSalute_(entry));
   if (dueTomorrow.length) {
     b.push({ k: 'h', text: 'Due tomorrow' });
     b.push({ k: 'items', rows: IS9WD_mailItemRows_(ctx, entry, dueTomorrow) });
@@ -354,6 +413,7 @@ function IS9WD_digestBlocks_(ctx, entry, dueTomorrow, overdue, link) {
   }
   b.push.apply(b, IS9WD_mailLinkBlock_(entry, link));
   b.push.apply(b, IS9WD_mailSignoff_(ctx));
+  b.push(IS9WD_mailClosing_(ctx));
   return b;
 }
 
@@ -743,6 +803,7 @@ function IS9WD_mailText_(blocks, meta) {
   var out = [];
   var m = meta || {};
   if (IS9WD_txt_(m.title) !== '') out.push(IS9WD_upper_(m.title));
+  if (IS9WD_txt_(m.eyebrow) !== '') out.push(IS9WD_upper_(m.eyebrow));
   if (IS9WD_txt_(m.sub) !== '') out.push(m.sub);
   if (out.length) out.push('');
   for (var i = 0; i < blocks.length; i++) {
@@ -751,6 +812,18 @@ function IS9WD_mailText_(blocks, meta) {
     switch (b.k) {
       case 'test':
         out.push(b.text, '');
+        break;
+      case 'salute':
+        out.push(b.greet, '', b.text);
+        if (b.position !== '') out.push(b.position);
+        out.push('');
+        break;
+      case 'closing':
+        out.push('', b.text);
+        if (b.name !== '') out.push('', b.name);
+        if (b.position !== '') out.push(b.position);
+        if (b.name !== '') out.push(b.org);
+        out.push('');
         break;
       case 'h':
         out.push('', IS9WD_upper_(b.text));
@@ -814,22 +887,26 @@ function IS9WD_mailBlock_(block) {
     url: IS9WD_txt_(b.url),
     note: IS9WD_txt_(b.note),
     flag: b.flag === true,
-    small: b.small === true
+    small: b.small === true,
+    greet: IS9WD_txt_(b.greet),
+    position: IS9WD_txt_(b.position),
+    name: IS9WD_txt_(b.name),
+    org: IS9WD_txt_(b.org)
   };
 }
 
 /**
  * The HTML body. Tables for structure and inline styles on every element, because that is
  * the only markup Gmail on a phone renders the same way twice. No image, no web font, no
- * script: a system stack, the workbook's palette, no green and no red, and a flag is bold
- * strong purple on paper with no fill, exactly as on every tab. Every value is escaped.
+ * script: a serif stack for the letter and a sans for the small caps, the letter's own palette
+ * above, and a flag is bold purple on the paper with no fill. Every value is escaped.
  */
 function IS9WD_mailHtml_(blocks, meta) {
   var m = meta || {};
   return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + IS9WD_mailEsc_(m.title) + '</title></head>' +
-    '<body style="margin:0;padding:0;background:' + IS9WD_CLR.PAPER + ';">' +
+    '<body style="margin:0;padding:0;background:' + IS9WD_MAIL_INK_.page + ';">' +
     IS9WD_mailHtmlBody_(blocks, meta) +
     '</body></html>';
 }
@@ -838,132 +915,147 @@ function IS9WD_mailHtml_(blocks, meta) {
 // than a whole document inside a document.
 function IS9WD_mailHtmlBody_(blocks, meta) {
   var m = meta || {};
-  var P = IS9WD_CLR;
+  var P = IS9WD_MAIL_INK_;
   var F = IS9WD_mailFontStack_();
   var body = [];
   for (var i = 0; i < blocks.length; i++) body.push(IS9WD_mailBlockHtml_(IS9WD_mailBlock_(blocks[i]), P, F));
   return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" ' +
-    'style="background:' + P.PAPER + ';">' +
-    '<tr><td align="center" style="padding:24px 12px;">' +
+    'style="background:' + P.page + ';">' +
+    '<tr><td align="center" style="padding:28px 12px;">' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" ' +
-    'style="max-width:560px;background:' + P.PAPER + ';border:1px solid ' + P.SAGE +
-    ';border-radius:18px;">' +
-    // The one surface: the deep green band with the strong purple rule under it, which is the
-    // mark's own two ends and the same panel the officers page opens with.
-    '<tr><td style="background:' + P.GREEN_DEEP + ';padding:22px 24px 20px;' +
-    'border-bottom:4px solid ' + P.PURPLE_STRONG + ';border-radius:17px 17px 0 0;">' +
-    '<div style="font:700 11px/1.4 ' + F + ';letter-spacing:0.14em;text-transform:uppercase;' +
-    'color:' + P.PAPER + ';opacity:0.8;">' + IS9WD_mailEsc_(m.eyebrow) + '</div>' +
-    '<div style="font:700 26px/1.15 ' + F + ';letter-spacing:-0.01em;color:' + P.PAPER +
-    ';margin-top:8px;">' + IS9WD_mailEsc_(m.title) + '</div>' +
-    (IS9WD_txt_(m.sub) !== '' ? '<div style="font:400 12px/1.5 ' + F + ';color:' + P.PAPER +
-      ';opacity:0.85;margin-top:6px;letter-spacing:0.04em;">' + IS9WD_mailEsc_(m.sub) + '</div>' : '') +
+    'style="max-width:600px;background:' + P.paper + ';border:1px solid ' + P.line + ';">' +
+    // The band: the Society in the serif on deep green, the letter's kind in small caps under
+    // it in pale lilac, and the purple rule that is the mark's other end.
+    '<tr><td style="background:' + P.green + ';padding:26px 24px 20px;border-bottom:5px solid ' +
+    P.purple + ';">' +
+    '<div style="font:700 26px/1.2 ' + F.serif + ';letter-spacing:-0.01em;color:' + P.paper + ';">' +
+    IS9WD_mailEsc_(m.title) + '</div>' +
+    (IS9WD_txt_(m.eyebrow) !== '' ? '<div style="font:700 10px/1.4 ' + F.sans + ';letter-spacing:0.22em;' +
+      'text-transform:uppercase;color:' + P.lilac + ';margin-top:8px;">' + IS9WD_mailEsc_(m.eyebrow) + '</div>' : '') +
     '</td></tr>' +
-    '<tr><td style="padding:6px 24px 26px;">' + body.join('') + '</td></tr>' +
-    (IS9WD_txt_(m.foot) !== '' ? '<tr><td style="padding:14px 24px 18px;border-top:1px solid ' +
-      P.SAGE + ';font:400 12px/1.5 ' + F + ';color:' + P.SAGE + ';">' + IS9WD_mailEsc_(m.foot) +
-      '</td></tr>' : '') +
+    '<tr><td style="padding:28px 24px 10px;">' + body.join('') + '</td></tr>' +
+    (IS9WD_txt_(m.foot) !== '' ? '<tr><td style="padding:16px 24px 24px;border-top:1px solid ' +
+      P.line + ';font:400 11px/1.6 ' + F.sans + ';color:' + P.sage + ';">' + IS9WD_mailEsc_(m.foot) +
+      (IS9WD_txt_(m.sub) !== '' ? '<br>' + IS9WD_mailEsc_(m.sub) : '') + '</td></tr>' : '') +
     '</table></td></tr></table>';
 }
 
+// Two stacks: the serif the Society's letters are set in, which Georgia carries on every
+// phone and desktop mail client, and a sans for the small caps labels.
 function IS9WD_mailFontStack_() {
-  return "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+  return {
+    serif: "Georgia,'Times New Roman',Times,serif",
+    sans: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+  };
 }
 
 function IS9WD_mailBlockHtml_(b, P, F) {
   var j;
   var p = function (text, extra) {
-    return '<p style="margin:16px 0 0;font:400 15px/1.55 ' + F + ';color:' + P.GREEN_DEEP + ';' +
+    return '<p style="margin:0 0 14px;font:400 15px/1.65 ' + F.serif + ';color:' + P.ink + ';' +
       (extra || '') + '">' + text + '</p>';
+  };
+  // The label cell of the grid: small caps in green on the cream, as the Society's letters
+  // label an activity's date and venue.
+  var label = function (text, width) {
+    return '<td valign="top" width="' + (width || 96) + '" style="padding:12px 14px;background:' + P.cream +
+      ';border:1px solid ' + P.line + ';font:700 10px/1.5 ' + F.sans + ';letter-spacing:0.16em;' +
+      'text-transform:uppercase;color:' + P.green + ';">' + IS9WD_mailEsc_(text) + '</td>';
+  };
+  var cell = function (inner) {
+    return '<td valign="top" style="padding:12px 14px;border:1px solid ' + P.line + ';font:400 14px/1.6 ' +
+      F.serif + ';color:' + P.ink + ';">' + inner + '</td>';
+  };
+  var grid = function (rows) {
+    return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" ' +
+      'style="border-collapse:collapse;margin:0 0 18px;">' + rows.join('') + '</table>';
   };
   switch (b.k) {
     case 'test':
-      return '<p style="margin:16px 0 0;padding:10px 14px;border-left:3px solid ' + P.PURPLE_STRONG +
-        ';font:700 13px/1.5 ' + F + ';color:' + P.PURPLE_STRONG + ';">' + IS9WD_mailEsc_(b.text) + '</p>';
+      return '<p style="margin:0 0 18px;padding:10px 14px;border-left:3px solid ' + P.purple +
+        ';font:700 12px/1.5 ' + F.sans + ';color:' + P.purple + ';">' + IS9WD_mailEsc_(b.text) + '</p>';
+    case 'salute':
+      return '<p style="margin:0 0 16px;font:700 20px/1.3 ' + F.serif + ';color:' + P.ink + ';">' +
+        IS9WD_mailEsc_(b.greet) + '</p>' +
+        '<p style="margin:0 0 2px;font:400 15px/1.5 ' + F.serif + ';color:' + P.ink + ';">' +
+        IS9WD_mailEsc_(b.text).replace(/^Dear (.*),$/, 'Dear <b>$1</b>,') + '</p>' +
+        (b.position !== '' ? '<p style="margin:0 0 16px;font:italic 400 13px/1.5 ' + F.serif + ';color:' + P.sage + ';">' +
+          IS9WD_mailEsc_(b.position) + '</p>' : '<p style="margin:0 0 14px;"></p>');
+    case 'closing':
+      return '<p style="margin:26px 0 0;font:italic 400 14px/1.5 ' + F.serif + ';color:' + P.ink + ';">' +
+        IS9WD_mailEsc_(b.text) + '</p>' +
+        (b.name !== '' ? '<p style="margin:16px 0 0;font:700 15px/1.4 ' + F.serif + ';color:' + P.ink + ';">' +
+          IS9WD_mailEsc_(b.name) + '</p><p style="margin:2px 0 0;font:400 13px/1.5 ' + F.serif + ';color:' + P.sage + ';">' +
+          (b.position !== '' ? IS9WD_mailEsc_(b.position) + '<br>' : '') + IS9WD_mailEsc_(b.org) + '</p>' : '');
     case 'h':
-      return '<h2 style="margin:28px 0 4px;font:700 11px/1.4 ' + F + ';letter-spacing:0.12em;' +
-        'text-transform:uppercase;color:' + P.SAGE + ';">' + IS9WD_mailEsc_(b.text) + '</h2>';
+      // The chip: plum, small caps, the way the Society's letters name an activity's kind.
+      return '<p style="margin:6px 0 10px;"><span style="display:inline-block;padding:7px 12px;background:' + P.plum +
+        ';color:' + P.paper + ';font:700 10px/1.2 ' + F.sans + ';letter-spacing:0.18em;text-transform:uppercase;' +
+        'border-radius:3px;">' + IS9WD_mailEsc_(b.text) + '</span></p>';
     case 'p':
-      return p(IS9WD_mailEsc_(b.text), b.flag ? 'color:' + P.PURPLE_STRONG + ';font-weight:700;' : '');
+      return p(IS9WD_mailEsc_(b.text), b.flag ? 'color:' + P.purple + ';font-weight:700;' : '');
     case 'note':
-      return '<p style="margin:14px 0 0;font:' + (b.flag ? '700' : '400') + ' 13px/1.5 ' + F +
-        ';color:' + (b.flag ? P.PURPLE_STRONG : P.SAGE) + ';">' + IS9WD_mailEsc_(b.text) + '</p>';
+      return '<p style="margin:0 0 14px;font:italic ' + (b.flag ? '700' : '400') + ' 13px/1.6 ' + F.serif +
+        ';color:' + (b.flag ? P.purple : P.sage) + ';">' + IS9WD_mailEsc_(b.text) + '</p>';
     case 'items': {
       if (!b.rows.length) return p('Nothing on your list.');
       var rows = [];
       for (j = 0; j < b.rows.length; j++) {
         var r = b.rows[j];
-        var meta = '<div style="margin-top:4px;font:400 13px/1.5 ' + F + ';color:' + P.SAGE + ';">' +
-          (r.overdue ? '<span style="color:' + P.PURPLE_STRONG + ';font-weight:700;">Overdue</span>' +
-            '<span style="color:' + P.SAGE + ';">, was due ' + IS9WD_mailEsc_(r.due) + '</span>'
-            : 'Due ' + IS9WD_mailEsc_(r.due)) + '</div>';
-        var remark = r.remark !== '' ? '<div style="margin-top:3px;font:400 13px/1.5 ' + F +
-          ';color:' + P.SAGE + ';">' + IS9WD_mailEsc_(IS9WD_remarkText(r.remark)) + '</div>' : '';
-        var flag = r.flag !== '' ? '<div style="margin-top:3px;font:700 12px/1.5 ' + F + ';color:' +
-          P.PURPLE_STRONG + ';">' + IS9WD_mailEsc_(r.flag) + '</div>' : '';
-        var carousel = r.carousel ? '<div style="margin-top:3px;font:400 12px/1.5 ' + F + ';color:' +
-          P.LILAC + ';">Not on the carousel this week</div>' : '';
-        rows.push('<tr>' +
-          '<td valign="top" width="28" style="padding:13px 0 12px;border-top:1px dotted ' + P.SAGE +
-          ';font:600 13px/1.6 ' + F + ';color:' + P.SAGE + ';">' + r.n + '</td>' +
-          '<td valign="top" style="padding:12px 0;border-top:1px dotted ' + P.SAGE + ';">' +
-          '<div style="font:600 15px/1.45 ' + F + ';color:' + P.GREEN_DEEP + ';">' +
-          IS9WD_mailEsc_(r.title) + '</div>' + meta + remark + flag + carousel + '</td></tr>');
+        var inner = '<b>' + IS9WD_mailEsc_(r.title) + '</b>' +
+          '<br><span style="color:' + P.sage + ';font-size:13px;">' +
+          (r.overdue ? '<span style="color:' + P.purple + ';font-weight:700;">Overdue</span>, was due ' + IS9WD_mailEsc_(r.due)
+            : 'Due ' + IS9WD_mailEsc_(r.due)) + '</span>' +
+          (r.remark !== '' ? '<br><i style="color:' + P.sage + ';font-size:13px;">' + IS9WD_mailEsc_(r.remark) + '</i>' : '') +
+          (r.flag !== '' ? '<br><span style="color:' + P.purple + ';font-weight:700;font-size:12px;">' + IS9WD_mailEsc_(r.flag) + '</span>' : '') +
+          (r.carousel ? '<br><span style="color:' + P.sage + ';font-size:12px;">Not on the carousel this week</span>' : '');
+        rows.push('<tr>' + label('No. ' + r.n) + cell(inner) + '</tr>');
       }
-      return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" ' +
-        'style="margin-top:14px;">' + rows.join('') + '</table>';
+      return grid(rows);
     }
     case 'kv': {
       var kv = [];
-      var size = b.small ? '13px' : '14px';
       for (j = 0; j < b.rows.length; j++) {
         var row = b.rows[j];
         var hot = row[2] === true;
-        kv.push('<tr>' +
-          '<td valign="top" style="padding:8px 14px 8px 0;border-top:1px dotted ' + P.SAGE +
-          ';font:400 13px/1.5 ' + F + ';color:' + P.SAGE + ';white-space:nowrap;">' +
-          IS9WD_mailEsc_(row[0]) + '</td>' +
-          '<td valign="top" style="padding:8px 0;border-top:1px dotted ' + P.SAGE + ';font:' +
-          (hot ? '700' : '400') + ' ' + size + '/1.5 ' + F + ';color:' +
-          (hot ? P.PURPLE_STRONG : P.GREEN_DEEP) + ';">' + IS9WD_mailEsc_(row[1]) + '</td></tr>');
+        kv.push('<tr>' + label(row[0], 150) + cell(hot
+          ? '<span style="color:' + P.purple + ';font-weight:700;">' + IS9WD_mailEsc_(row[1]) + '</span>'
+          : IS9WD_mailEsc_(row[1])) + '</tr>');
       }
-      return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" ' +
-        'style="margin-top:' + (b.small ? '22px' : '10px') + ';">' + kv.join('') + '</table>';
+      return grid(kv);
     }
     case 'table': {
       var cells = [];
       var head = [];
       for (j = 0; j < b.head.length; j++) {
-        head.push('<td style="padding:6px 8px 6px 0;border-bottom:1px solid ' + P.SAGE +
-          ';font:700 11px/1.4 ' + F + ';letter-spacing:0.08em;text-transform:uppercase;color:' +
-          P.SAGE + ';">' + IS9WD_mailEsc_(b.head[j]) + '</td>');
+        head.push('<td style="padding:8px 10px;background:' + P.cream + ';border:1px solid ' + P.line +
+          ';font:700 10px/1.4 ' + F.sans + ';letter-spacing:0.14em;text-transform:uppercase;color:' +
+          P.green + ';">' + IS9WD_mailEsc_(b.head[j]) + '</td>');
       }
       cells.push('<tr>' + head.join('') + '</tr>');
       for (j = 0; j < b.rows.length; j++) {
         var line = [];
         for (var c = 0; c < b.rows[j].length; c++) {
-          line.push('<td valign="top" style="padding:7px 8px 7px 0;border-bottom:1px dotted ' +
-            P.SAGE + ';font:400 13px/1.45 ' + F + ';color:' + P.GREEN_DEEP + ';">' +
-            IS9WD_mailEsc_(b.rows[j][c]) + '</td>');
+          line.push('<td valign="top" style="padding:8px 10px;border:1px solid ' + P.line + ';font:400 13px/1.5 ' +
+            F.serif + ';color:' + P.ink + ';">' + IS9WD_mailEsc_(b.rows[j][c]) + '</td>');
         }
         cells.push('<tr>' + line.join('') + '</tr>');
       }
-      return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" ' +
-        'style="margin-top:10px;">' + cells.join('') + '</table>';
+      return grid(cells);
     }
     case 'link': {
       var out = '';
       if (b.url !== '') {
-        out += '<p style="margin:22px 0 0;"><a href="' + IS9WD_mailEsc_(b.url) + '" style="display:inline-block;' +
-          'padding:12px 20px;background:' + P.GREEN_DEEP + ';color:' + P.PAPER + ';border-radius:10px;' +
-          'font:700 14px/1.2 ' + F + ';text-decoration:none;">' + IS9WD_mailEsc_(b.text) + '</a></p>' +
-          '<p style="margin:8px 0 0;font:400 12px/1.5 ' + F + ';color:' + P.SAGE + ';word-break:break-all;">' +
+        out += '<p style="margin:6px 0 0;"><a href="' + IS9WD_mailEsc_(b.url) + '" style="display:inline-block;' +
+          'padding:12px 22px;background:' + P.green + ';color:' + P.paper + ';border-radius:4px;' +
+          'font:700 14px/1.2 ' + F.serif + ';text-decoration:none;">' + IS9WD_mailEsc_(b.text) + '</a></p>' +
+          '<p style="margin:8px 0 0;font:400 11px/1.5 ' + F.sans + ';color:' + P.sage + ';word-break:break-all;">' +
           IS9WD_mailEsc_(b.url) + '</p>';
       } else {
         out += p(IS9WD_mailEsc_(b.text));
       }
       if (b.note !== '') {
-        out += '<p style="margin:10px 0 0;font:400 13px/1.5 ' + F + ';color:' + P.SAGE + ';">' +
+        out += '<p style="margin:10px 0 14px;font:italic 400 13px/1.6 ' + F.serif + ';color:' + P.sage + ';">' +
           IS9WD_mailEsc_(b.note) + '</p>';
       }
       return out;
@@ -1147,6 +1239,7 @@ function IS9WD_sendMondayAssignments_(opt) {
   return IS9WD_mailBatch_(opt, {
     jobKey: IS9WD_JOB_MONDAY_,
     label: 'Monday email',
+    kind: 'Weekly Deliverables',
     on: function (cfg) { return cfg.switches.mailMonday; },
     compose: function (ctx, entry, active, link) {
       return {
@@ -1168,6 +1261,7 @@ function IS9WD_sendNewAssignments_(opt) {
   return IS9WD_mailBatch_(opt, {
     jobKey: 'NEW_ASSIGNMENTS',
     label: 'same day notice, which follows the Monday email switch,',
+    kind: 'New Assignment',
     on: function (cfg) { return cfg.switches.mailMonday; },
     noDoneKeys: true,
     recipients: function (cfg, items, ctx) {
@@ -1205,6 +1299,7 @@ function IS9WD_sendDailyDigest_(opt) {
   return IS9WD_mailBatch_(opt, {
     jobKey: IS9WD_JOB_DIGEST_,
     label: 'Daily email',
+    kind: 'Daily Digest',
     on: function (cfg) { return cfg.switches.mailDaily; },
     compose: function (ctx, entry, active, link) {
       var split = IS9WD_digestSplit_(ctx, active);
@@ -1290,7 +1385,7 @@ function IS9WD_mailBatch_(opt, job) {
       var link = IS9WD_linkFor_(entry.key);
       var mail = job.compose(ctx, entry, active, link);
       if (!mail) { out.skipped.push(entry.key + ' (nothing to say)'); continue; }
-      IS9WD_mailSend_(entry.email, mail.subject, mail.blocks, IS9WD_mailMeta_(ctx, entry), ctx);
+      IS9WD_mailSend_(entry.email, mail.subject, mail.blocks, IS9WD_mailMeta_(ctx, entry, job.kind), ctx);
       keys.set(entry.key);
       // The rows the message listed are stamped the moment it has gone, in test mode too.
       if (mail.rows && mail.rows.length) {
@@ -1366,7 +1461,7 @@ function IS9WD_sendSundayBrief_(opt) {
   try {
     var items = IS9WD_readItems_();
     var bc = IS9WD_briefContext_(cfg, items);
-    var meta = { eyebrow: IS9WD_MAIL_BRAND_, title: 'Sunday brief', sub: bc.weekLine, foot: IS9WD_MAIL_FOOT_ };
+    var meta = { title: IS9WD_MAIL_BRAND_, eyebrow: 'Sunday Brief', sub: bc.weekLine, foot: IS9WD_MAIL_FOOT_ };
     IS9WD_mailSend_(ctx.adminEmail, IS9WD_briefSubject_(bc), IS9WD_briefBlocks_(bc), meta, ctx);
     keys.set(adminKey);
     out.sent = 1;
@@ -1517,7 +1612,7 @@ function IS9WD_mailPreflight_() {
       to: ctx.testMode ? ctx.adminEmail : me.email,
       subject: IS9WD_mailSubject_(ctx, IS9WD_mondaySubject_(ctx, me)),
       blocks: IS9WD_mondayBlocks_(ctx, me, active, IS9WD_linkFor_(me.key)),
-      meta: IS9WD_mailMeta_(ctx, me),
+      meta: IS9WD_mailMeta_(ctx, me, 'Weekly Deliverables'),
       count: mondayList.length
     });
   } else {
@@ -1531,7 +1626,7 @@ function IS9WD_mailPreflight_() {
       to: ctx.testMode ? ctx.adminEmail : de.email,
       subject: IS9WD_mailSubject_(ctx, IS9WD_digestSubject_(de, split.dueTomorrow, split.overdue)),
       blocks: IS9WD_digestBlocks_(ctx, de, split.dueTomorrow, split.overdue, IS9WD_linkFor_(de.key)),
-      meta: IS9WD_mailMeta_(ctx, de),
+      meta: IS9WD_mailMeta_(ctx, de, 'Daily Digest'),
       count: digestList.length
     });
   } else {
@@ -1549,7 +1644,7 @@ function IS9WD_mailPreflight_() {
       to: ctx.testMode ? ctx.adminEmail : freshFor.entry.email,
       subject: IS9WD_mailSubject_(ctx, IS9WD_noticeSubject_(freshFor.entry, freshFor.fresh)),
       blocks: IS9WD_noticeBlocks_(ctx, freshFor.entry, freshFor.fresh, IS9WD_linkFor_(freshFor.entry.key)),
-      meta: IS9WD_mailMeta_(ctx, freshFor.entry),
+      meta: IS9WD_mailMeta_(ctx, freshFor.entry, 'New Assignment'),
       count: 1
     });
   } else {
@@ -1561,7 +1656,7 @@ function IS9WD_mailPreflight_() {
     to: ctx.adminEmail || '(blank admin address)',
     subject: IS9WD_mailSubject_(ctx, IS9WD_briefSubject_(bc)),
     blocks: IS9WD_briefBlocks_(bc),
-    meta: { eyebrow: IS9WD_MAIL_BRAND_, title: 'Sunday brief', sub: bc.weekLine, foot: IS9WD_MAIL_FOOT_ },
+    meta: { title: IS9WD_MAIL_BRAND_, eyebrow: 'Sunday Brief', sub: bc.weekLine, foot: IS9WD_MAIL_FOOT_ },
     count: 1
   });
   out.lines.push('', 'Nothing was sent. ' + out.previews.length + ' rendering(s) follow.');

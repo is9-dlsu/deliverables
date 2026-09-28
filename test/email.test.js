@@ -144,8 +144,12 @@ console.log('\n2. The Monday email');
   check('subject with test mode on',
     fn('IS9WD_mailSubject_')(ctxOf({ testMode: true }), fn('IS9WD_mondaySubject_')(ctx, entry)),
     '[IS9] [TEST MODE] Week 04 deliverables: Partnerships');
-  check('greeting is the full name as typed', has(body, 'Hi Sample Officer,'), true);
-  check('greeting falls back to the committee', has(text(monday(ctx, entryOf({ fullName: '' }), ITEMS)), 'Hi Partnerships,'), true);
+  check('the salute opens the letter', has(body, 'Greetings in St. La Salle!'), true);
+  check('greeting is the full name as typed, as Dear', has(body, 'Dear Sample Officer,'), true);
+  check('the position follows the name, in title case', has(body, 'Dear Sample Officer,\nVice President'), true);
+  check('the closing signs as the Society', has(body, 'For a financially literate Lasallian community,'), true);
+  check('greeting falls back to the committee', has(text(monday(ctx, entryOf({ fullName: '' }), ITEMS)), 'Dear Partnerships,'), true);
+  check('title case keeps the small words small', fn('IS9WD_titleCase_')('EXECUTIVE VICE PRESIDENT FOR EXTERNALS'), 'Executive Vice President for Externals');
   check('the week line is in the body', has(body, 'WEEK 04  |  SEP 28 TO OCT 4  |  A.Y. 2026 - 2027'), true);
   check('the count sentence', has(body, 'Here are your 3 deliverables for week 04, September 28 to October 4, 2026.'), true);
   check('a single item reads singular', has(text(monday(ctx, entry, [ITEMS[1]])), 'Here is your deliverable for week 04'), true);
@@ -314,11 +318,11 @@ console.log('\n5. The renderers');
   check('html escapes a title', has(h, '&lt;script&gt;') && !has(h, '<script>'), true);
   check('html escapes an ampersand and quotes', has(h, 'A &lt;b&gt;title&lt;/b&gt; &amp; &quot;quotes&quot;'), true);
   check('html carries the link once as an href', count(h, 'href="https://x.example.test/#tok"'), 1);
-  check('html shows the overdue word in the strong purple', has(h, 'color:#724485;font-weight:700;">Overdue'), true);
+  check('html shows the overdue word in the letter purple', has(h, 'color:#6B4A8A;font-weight:700;">Overdue'), true);
   check('html paints no cream and no red or green that is not the palette',
     [has(h, '#e9ebd4'), /#(ff0000|00ff00|d32f2f|2e7d32)/i.test(h)], [false, false]);
-  check('html uses only the palette hexes', (h.match(/#[0-9a-fA-F]{6}\b/g) || []).every((x) =>
-    ['#085040', '#58756a', '#5d4170', '#724485', '#8a64a9', '#8b74a1', '#F8FBFD'].indexOf(x) !== -1), true);
+  check('html uses only the letter palette', (h.match(/#[0-9a-fA-F]{6}\b/g) || []).every((x) =>
+    ['#0B4A3C', '#5D4170', '#6B4A8A', '#CFC0E0', '#58756A', '#1C2120', '#FBFAF6', '#EFEDE6', '#F1EEE4', '#D9D3C6'].indexOf(x) !== -1), true);
   check('the body alone has no html element', has(fn('IS9WD_mailHtmlBody_')(blocks, {}), '<html'), false);
   const EM = String.fromCharCode(8212);
   check('no em dash anywhere in either rendering', [has(t, EM), has(h, EM)], [false, false]);
