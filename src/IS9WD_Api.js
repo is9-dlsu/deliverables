@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 9;
+var IS9WD_API_VERSION_ = 10;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -657,7 +657,11 @@ function IS9WD_apiState_(plan) {
       headline: IS9WD_upper_(plan.committee),
       vpLine: IS9WD_vpLine(plan.name, IS9WD_apiPosition_(cfg, plan.key))
     },
-    items: IS9WD_apiItems_(items)
+    // The reader returns {rows, byId, ...}; the list is its rows. Passing the whole object
+    // here left every officer page empty from Phase 4 until 2026-09-28, because the loop
+    // over it never ran and nothing else noticed: the probe read 3 titled rows while the
+    // page said nothing was on the list.
+    items: IS9WD_apiItems_(IS9WD_itemList_(items))
   };
   // THE ADMIN VIEW ALONE carries the fourteen people and this week's sign-off, because the
   // sign-off is set from a picker over them and nobody else may set it. A member response
