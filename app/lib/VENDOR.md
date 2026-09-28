@@ -1,7 +1,10 @@
 # Vendored libraries
 
-Three files, 16.4 KB together, pinned here on 2026-09-28 with Ethan's approval. Nothing is
-fetched at runtime: the officers' page loads only files from its own origin.
+Three files, 16.4 KB together, pinned here on 2026-09-28 with Ethan's approval. Nothing the
+page needs in order to work is fetched at runtime: every script loads from its own origin. The
+one cross-origin request is the optional Google Fonts stylesheet, added later the same day at
+Ethan's request for a better typeface. It is loaded without blocking the first paint, and if it
+never arrives the page renders in the system face and loses nothing but the letterforms.
 
 **Why pinned rather than loaded from a CDN.** The app is a link that thirteen officers open on
 their phones once a week, often on university wifi. A CDN outage, a DNS failure or a school

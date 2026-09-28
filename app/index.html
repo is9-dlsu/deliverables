@@ -6,6 +6,10 @@
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex, nofollow">
 <title>IS9 Weekly Deliverables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="./style.css">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -24,21 +28,48 @@
   is committed instead so the tree explains itself, and the page says so plainly when the value
   is still the placeholder.
 
-  No font is loaded from anywhere. A system font stack means nothing about this page reaches a
-  third party, and it renders instantly on a phone on bad wifi.
+  The two typefaces are optional. Their stylesheet is loaded as print media and switched to all
+  once it arrives, so it never blocks the first paint: the page renders at once in the system
+  face and swaps when the files land, and if fonts.googleapis.com is slow or blocked the page
+  costs only the typeface. Every open already talks to Google for the list itself, so the font
+  request tells no new party that an officer opened their page.
 -->
 <script src="./endpoint.js" onerror="window.IS9WD_ENDPOINT=''"></script>
 </head>
 <body>
 <div id="app">
   <main class="wrap">
-    <noscript>
-      <div class="notice stop">
-        <p class="notice-title">This page needs JavaScript</p>
-        <p class="notice-detail">Turn it on, or open the link in another browser.</p>
-      </div>
-    </noscript>
-    <div class="wait">Loading your list...</div>
+    <!-- The same brand row app.js draws, so the first paint and the loaded page share one
+         shape. The mark is the same vector as icon.svg. -->
+    <header class="head">
+      <p class="brand">
+        <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="is9boot" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" stop-color="#085040"/>
+              <stop offset="1" stop-color="#724485"/>
+            </linearGradient>
+          </defs>
+          <rect width="100" height="100" rx="22" fill="url(#is9boot)"/>
+          <g fill="#F8FBFD">
+            <rect x="33" y="41" width="9" height="25"/>
+            <rect x="46" y="47" width="9" height="19"/>
+            <rect x="59" y="34" width="9" height="32"/>
+          </g>
+        </svg>
+        <span>Investors' Society</span>
+      </p>
+    </header>
+    <div class="sheet">
+      <noscript>
+        <style>.wait { display: none; }</style>
+        <div class="notice stop">
+          <p class="notice-title">This page needs JavaScript</p>
+          <p class="notice-detail">Turn it on, or open the link in another browser.</p>
+        </div>
+      </noscript>
+      <div class="wait">Loading your list...</div>
+    </div>
   </main>
 </div>
 <script type="module" src="./app.js"></script>

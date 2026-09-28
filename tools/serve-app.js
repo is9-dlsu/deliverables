@@ -94,6 +94,9 @@ http.createServer((req, res) => {
   }
   const full = path.join(ROOT, file);
   if (!full.startsWith(ROOT) || !fs.existsSync(full)) { res.writeHead(404); res.end('no'); return; }
-  res.writeHead(200, { 'Content-Type': TYPES[path.extname(full)] || 'text/plain' });
+  // No caching, ever: this server exists to show the file as it is on disk right now, and a
+  // browser that keeps yesterday's stylesheet defeats the only reason it runs.
+  res.writeHead(200, { 'Content-Type': TYPES[path.extname(full)] || 'text/plain',
+    'Cache-Control': 'no-store' });
   res.end(fs.readFileSync(full));
 }).listen(PORT, () => console.log('officers page on http://localhost:' + PORT));

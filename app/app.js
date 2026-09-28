@@ -71,6 +71,14 @@ function weekSpan(week) {
   return a + ' to ' + b;
 }
 
+// "Week 4", not "Week 04": the zero is the carousel's, where WEEK 04 is a contract string,
+// and it reads as machine text under a title on a page for a person.
+function weekNo(week) {
+  const raw = week && week.number !== undefined ? String(week.number) : '';
+  const n = parseInt(raw, 10);
+  return isNaN(n) ? raw : String(n);
+}
+
 // THE TICK IS DRAWN, NOT TYPED. A U+2713 glyph is a different shape and weight in every
 // system font, and on some Android builds it falls back to an emoji font and arrives green.
 function Check() {
@@ -99,8 +107,10 @@ function Notice({ kind, title, detail, onRetry }) {
 function Item({ item, busy, undoLeft, onToggle }) {
   const done = item.active === false;
   const overdue = item.overdue === true && !done;
-  const cls = ['item', done ? 'done' : '', overdue ? 'overdue' : '', busy ? 'busy' : ''].
-    filter(Boolean).join(' ');
+  // `fresh` marks the item ticked on this screen inside its undo window: the only one whose
+  // circle should move. Without it every earlier tick would pop again on each load.
+  const cls = ['item', done ? 'done' : '', overdue ? 'overdue' : '', busy ? 'busy' : '',
+    done && undoLeft > 0 ? 'fresh' : ''].filter(Boolean).join(' ');
   return html`
     <li class=${cls}>
       <button
@@ -130,7 +140,7 @@ function Item({ item, busy, undoLeft, onToggle }) {
           Undo (${undoLeft}s)
         </button>` : null}
       ${!busy && done && undoLeft === 0 ? html`
-        <span class="locked">Ticked off. Ask Ethan to reopen it.</span>` : null}
+        <span class="locked">Ticked off. Ask the President to reopen it.</span>` : null}
     </li>`;
 }
 
@@ -231,47 +241,70 @@ function App() {
 
   const items = state.items || [];
   const left = items.filter((i) => i.active !== false).length;
+  const done = items.length - left;
+  // The office name as typed, not the uppercase headline: the serif reads as a title in title
+  // case and as a shout in capitals. The headline stays what the carousel prints.
+  // The admin link carries no office, and an empty heading is read aloud as exactly that.
+  const who = state.role === 'admin' ? 'All officers'
+    : (state.committee ? (state.committee.name || state.committee.headline) : '');
+
+  const head = html`
+    <header class="head">
+      <p class="brand"><${Mark} /><span>Investors' Society</span></p>
+      ${who ? html`<h1 class="who">${who}</h1>` : null}
+      <p class="week">
+        Week ${weekNo(state.week)}
+        ${weekSpan(state.week) ? ' · ' + weekSpan(state.week) : ''}
+      </p>
+      ${items.length > 0 ? html`
+        <div class="progress" aria-hidden="true">
+          <span style=${'width:' + Math.round((done / items.length) * 100) + '%'}></span>
+        </div>` : null}
+    </header>`;
 
   return html`
-    <${Shell}>
-      <header class="head">
-        <p class="brand"><${Mark} /><span>Investors' Society</span></p>
-        <p class="who">${state.committee ? state.committee.headline : ''}</p>
-        <p class="week">
-          Week ${state.week.number}
-          ${weekSpan(state.week) ? ' · ' + weekSpan(state.week) : ''}
-        </p>
-      </header>
+    <${Shell} head=${head}>
+      <div class="body">
+        ${error ? html`<${Notice} kind="warn" title=${headline(error)} detail=${error.message} />` : null}
 
-      ${error ? html`<${Notice} kind="warn" title=${headline(error)} detail=${error.message} />` : null}
-
-      ${items.length === 0 ? html`
-        <div class="empty">
-          <p class="empty-title">Nothing on your list this week.</p>
-          <p class="empty-detail">Ethan adds items by Saturday evening.</p>
-        </div>
-      ` : html`
-        <p class="count" role="status" aria-live="polite">${left === 0 ? 'All done for this week'
-          : left + (left === 1 ? ' task left' : ' tasks left')}</p>
-        <ul class="list">
-          ${items.map((item) => html`
-            <${Item}
-              key=${item.id}
-              item=${item}
-              busy=${busyId === item.id}
-              undoLeft=${undoLeftFor(item)}
-              onToggle=${toggle} />`)}
-        </ul>
-      `}
+        ${items.length === 0 ? html`
+          <div class="empty">
+            <p class="empty-title">Nothing on your list this week.</p>
+            <p class="empty-detail">The President adds items by Saturday evening.</p>
+          </div>
+        ` : html`
+          <p class="count" role="status" aria-live="polite">${left === 0 ? 'All done for this week'
+            : left + (left === 1 ? ' task left' : ' tasks left')}</p>
+          <ul class="list">
+            ${items.map((item) => html`
+              <${Item}
+                key=${item.id}
+                item=${item}
+                busy=${busyId === item.id}
+                undoLeft=${undoLeftFor(item)}
+                onToggle=${toggle} />`)}
+          </ul>
+        `}
+      </div>
 
       <footer class="foot">
-        <p>Ticking is yours for ${undoSeconds} seconds. After that, ask Ethan to reopen it.</p>
+        <p>Ticking is yours for ${undoSeconds} seconds. After that, ask the President to reopen it.</p>
       </footer>
     <//>`;
 }
 
-function Shell({ children }) {
-  return html`<main class="wrap">${children}</main>`;
+// ONE SHAPE FOR EVERY STATE. The brand row sits on the backdrop above one frosted sheet,
+// whether the sheet holds the list, the loading line or an error, so the page never changes
+// shape between one state and the next. A screen that has the list passes its own header.
+function Shell({ head, children }) {
+  return html`
+    <main class="wrap">
+      ${head || html`
+        <header class="head">
+          <p class="brand"><${Mark} /><span>Investors' Society</span></p>
+        </header>`}
+      <div class="sheet">${children}</div>
+    </main>`;
 }
 
 // A code is for the log, not for a student. Every one of these is a sentence that says what

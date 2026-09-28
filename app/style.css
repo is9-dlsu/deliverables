@@ -1,29 +1,31 @@
 /*
   THE OFFICERS PAGE.
 
-  ONE SURFACE, AND IT IS THE HEADER. The whole page is plain paper except a single panel
-  carrying the mark's own gradient, #085040 to #724485. That gradient appears exactly once.
-  Everything below it is type, whitespace and one hairline per row: no cards, no boxes, no
-  second fill, no shadow. A minimal page earns its calm by having one thing to look at, and
-  repeating a gradient is how a page stops being calm.
+  THE BACKGROUND IS THE HEADER. The top of the page is the mark's own gradient, deep green
+  blooming from the left and strong purple from the right over the slate that sits between
+  them, fading into a tinted paper further down, with a faint grain over all of it so it
+  reads as a surface rather than as a screen. The mark, the office name and the week sit
+  straight on that backdrop. Below them one frosted sheet rises over it and holds the list.
+  The backdrop is fixed, so on a long list the sheet slides over a still sky rather than
+  dragging a stripe of colour with it. Nothing else on the page has a fill, a shadow or a
+  box: the calm comes from having one thing to look at.
 
-  THE BACKGROUND IS NOT WHITE AND IS NOT BUSY. A wash sits behind the page, the same two
-  colours at two percent, so paper reads as paper rather than as a blank browser. It is a
-  fixed gradient rather than an image: nothing to download, nothing to go stale, and no
-  request leaves the page.
+  TWO TYPEFACES, EACH WITH ONE JOB. Fraunces, a soft serif, carries the office name and
+  nothing else: it is the one word an officer reads first, and a serif at that size reads as
+  a title rather than as a label. Plus Jakarta Sans carries every other word, because a
+  geometric sans at 13 to 16 px on a phone stays crisp where a serif smears. Both come from
+  Google Fonts, which is not a new party: every open already talks to script.google.com.
+  Only weights that ship are asked for, so an iPhone and an Android render the same page.
 
   THE PALETTE IS THE WORKBOOK'S, unchanged:
     #085040 deep green    text, and a completed tick
     #58756a sage          secondary text and hairlines
     #724485 strong purple overdue and blocking, never on cream
     #8a64a9 bright purple a number worth the eye that is not a fault
+    #5d4170 deep purple   the focus ring
     #F8FBFD paper
   There is no red and no green-for-good here. A good state gets NO treatment at all; only an
   exception is decorated. That restraint is the design.
-
-  NO WEB FONT. A system stack is SF Pro on an iPhone and Roboto on an Android, both of which
-  are better than anything that could be downloaded, and neither costs a request on university
-  wifi or tells a third party that an officer opened their list.
 */
 
 :root {
@@ -31,27 +33,35 @@
   --sage: #58756a;
   --strong: #724485;
   --bright: #8a64a9;
-  --paper: #F8FBFD;
+  --lilac: #8b74a1;
   --deep: #5d4170;
+  --paper: #F8FBFD;
 
-  /* ONLY 400, 500 AND 700 ARE REAL. Roboto has no Semibold, so a weight of 550 or 650 is
-     snapped or synthesised on Android while iOS renders a true cut, and the same screen comes
-     out heavier on one phone than the other. Asking for a weight that exists is the whole
-     trick. */
+  /* The tinted paper behind everything, derived from the palette: paper pulled a step
+     toward sage so the white sheet has something to sit on. */
+  --ground: #edf1ef;
+
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 
   /* One hairline weight everywhere. Structure comes from space, not from lines. */
-  --rule: rgba(88, 117, 106, 0.22);
-  --rule-strong: rgba(88, 117, 106, 0.38);
+  --rule: rgba(88, 117, 106, 0.18);
+  --rule-strong: rgba(88, 117, 106, 0.4);
 
   /* A 4 px rhythm. Every vertical measure below is a multiple of it. */
   --tap: 44px;
-  --gutter: 20px;
+  --gutter: 22px;
+  --radius: 28px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html {
-  background: var(--paper);
+  /* Slate, the top of the backdrop. It is what iOS paints in the gap when the page is pulled
+     down past its top, and it is the whole page on a WebKit too old for the fixed layers
+     below, where the paper header text still reads. */
+  background: #3d4a63;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -59,87 +69,164 @@ body {
   margin: 0;
   min-height: 100%;
   color: var(--green);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  font-family: var(--font-body);
   /* Never below 16 px: iOS zooms the whole page when a control is smaller. */
   font-size: 16px;
   line-height: 1.5;
-  letter-spacing: -0.006em;
+  letter-spacing: -0.004em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* The wash. Fixed, so it does not slide under a long list and turn into a stripe. */
-  background:
-    radial-gradient(120% 60% at 0% 0%, rgba(8, 80, 64, 0.045), transparent 60%),
-    radial-gradient(100% 55% at 100% 0%, rgba(114, 68, 133, 0.05), transparent 62%),
-    var(--paper);
-  background-attachment: fixed;
+  /* NO BACKGROUND ON BODY. The two fixed layers below sit at a negative z-index in the root
+     stacking context, and an in-flow body background paints AFTER them, which would hide
+     the backdrop under a flat tint. The ground colour lives on html, which paints first. */
+  background: transparent;
 }
+
+/* ---------- the background ---------- */
+
+/* Two fixed layers behind the page. Fixed pseudo-elements rather than background-attachment,
+   because iOS Safari ignores background-attachment: fixed and would scroll the blooms away
+   under a long list. The first layer is the colour: three blooms of the palette on the
+   tinted ground. The second is grain, an SVG noise at six percent alpha, which is what makes
+   a flat gradient read as paper instead of as a phone wallpaper. */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -2;
+  background:
+    radial-gradient(110% 62% at 100% -8%, rgba(114, 68, 133, 0.95), rgba(114, 68, 133, 0) 62%),
+    radial-gradient(110% 62% at 0% -8%, rgba(8, 80, 64, 0.95), rgba(8, 80, 64, 0) 62%),
+    radial-gradient(70% 40% at 50% 104%, rgba(138, 100, 169, 0.2), transparent 70%),
+    /* Slate, the midpoint of the two ends, for the first 220 px, then the tinted paper. The
+       stops are in pixels because the header is a fixed height in pixels: the horizon has to
+       sit just behind the top of the sheet on every phone, not at a share of the screen. */
+    linear-gradient(180deg, #3d4a63 0, #3d4a63 250px, var(--ground) 340px, var(--ground) 100%);
+}
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- the sheet ---------- */
 
 .wrap {
   max-width: 34rem;
   margin: 0 auto;
-  padding: var(--gutter) var(--gutter) calc(40px + env(safe-area-inset-bottom));
+  /* viewport-fit=cover lets the backdrop run under the notch; the content must not. */
+  padding: 10px max(14px, env(safe-area-inset-right)) calc(36px + env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
 }
 
-/* ---------- the one surface ---------- */
-
-.head {
+/* Paper, lit along its top edge. It was translucent and blurred for a while; at the opacity
+   that hid the horizon behind it the blur did no visible work and cost a re-raster on every
+   scroll frame, so the sheet is honest paper now and the highlight along its rim is what
+   makes it read as a surface rather than as a grey card. One shadow, soft and green, so it
+   sits on the page instead of floating above it. */
+.sheet {
   position: relative;
-  background: linear-gradient(to top right, #085040, #724485);
-  color: var(--paper);
-  border-radius: 18px;
-  padding: 20px;
-  margin: 0 0 28px;
+  background: var(--paper);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: var(--radius);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 30px 60px -28px rgba(8, 80, 64, 0.55),
+    0 2px 10px rgba(8, 80, 64, 0.08);
   overflow: hidden;
 }
 
-/* A single soft highlight so the panel reads as a surface rather than as a flat swatch.
-   One, very quiet, and no shadow anywhere on the page. */
-.head::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(120% 90% at 88% 6%, rgba(255, 255, 255, 0.14), transparent 55%);
-  pointer-events: none;
+/* ---------- the header, on the backdrop ---------- */
+
+.head {
+  color: var(--paper);
+  /* The same gutter as the sheet's body, so the mark, the name, the week and the progress line
+     share one left edge with the count and the tick circles below. The minimum height is the
+     loaded header's, so the sheet does not drop when the list replaces the loading line. */
+  padding: 14px var(--gutter) 22px;
+  min-height: 172px;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 14px;
+  margin: 0 0 20px;
 }
-.brand svg { display: block; width: 26px; height: 26px; border-radius: 7px; }
+.brand svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+  /* 22 percent tracks the mark's own corner (rx 22 on a 100 box) at any size. */
+  border-radius: 22%;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28), 0 6px 16px -6px rgba(0, 0, 0, 0.35);
+}
 .brand span {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  opacity: 0.72;
+  opacity: 0.8;
 }
 
+/* The office name, in the serif, as typed: Partnerships, not PARTNERSHIPS. A serif in all
+   caps shouts; in title case it reads as the name of a place. */
 .who {
   margin: 0;
-  font-size: 25px;
-  line-height: 1.15;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 34px;
+  /* Loose enough that a two line name's descenders clear the caps of line two. */
+  line-height: 1.12;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
 }
 .week {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   font-size: 13px;
-  line-height: 1.4;
-  opacity: 0.78;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  opacity: 0.84;
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- the count ---------- */
+/* One quiet line of progress. It is not a percentage and prints no number: the count below
+   the header does that. It exists so the header changes as the week is worked through. */
+.progress {
+  margin: 18px 0 0;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(248, 251, 253, 0.22);
+  overflow: hidden;
+}
+.progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--paper);
+}
+
+/* ---------- the body ---------- */
+
+.body { padding: 6px var(--gutter) 6px; }
 
 .count {
-  margin: 0 0 4px;
-  font-size: 12px;
+  margin: 20px 0 2px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--sage);
 }
@@ -158,7 +245,7 @@ body {
   gap: 14px;
   width: 100%;
   min-height: var(--tap);
-  padding: 16px 2px;
+  padding: 17px 0;
   border: 0;
   background: none;
   font: inherit;
@@ -169,37 +256,33 @@ body {
 }
 .row:disabled { cursor: progress; }
 
-/* The tick box is a circle, not a square: a square reads as a checkbox control and invites
+/* The tick is a circle, not a square: a square reads as a checkbox control and invites
    somebody to hunt for the exact 20 px of it. The whole row is the target. */
 .box {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   margin-top: 1px;
   border: 1.5px solid var(--rule-strong);
   border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
   display: grid;
   place-items: center;
-  font-size: 12px;
-  font-weight: 700;
   color: transparent;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .box { transition: border-color 140ms ease, background-color 140ms ease; }
 }
 
 /* The drawn tick. currentColor is transparent on an open row and paper on a done one, so the
    mark appears and disappears with the colour rather than with a second rule. */
-.check { width: 13px; height: 13px; display: block; }
+.check { width: 14px; height: 14px; display: block; }
 
 .text { flex: 1 1 auto; min-width: 0; }
 
 .title {
   display: block;
   font-size: 16px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.008em;
 }
 .remark {
   display: block;
@@ -211,20 +294,31 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
   margin-top: 7px;
   font-size: 13px;
   color: var(--sage);
 }
 .due { font-variant-numeric: tabular-nums; }
 
-/* A tag is type, not a pill. A border around two words is decoration doing hierarchy's job. */
+/* A tag is type, not a pill: two small words and a dot in the colour that means something.
+   A border around them would be decoration doing hierarchy's job. */
 .tag {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--strong);
+}
+.tag::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
 }
 .tag.flag { color: var(--bright); }
 
@@ -240,35 +334,35 @@ body {
   text-decoration-thickness: 1px;
   text-decoration-color: var(--rule-strong);
   color: var(--sage);
-  font-weight: 400;
+  font-weight: 500;
 }
-.item.done .remark,
-.item.done .meta { opacity: 0.72; }
+/* No fade on a done row either. The strike, the filled circle and the sage title already say
+   done three times, and fading the date took sage below 3:1. */
 
-/* Overdue is weight and colour on the tag alone. No border on the row, no fill: the row is
-   still a row, and one word carries the exception. */
+/* Overdue is weight and colour on the date and the tag alone. No border on the row, no fill:
+   the row is still a row, and one word carries the exception. */
 .item.overdue .due { color: var(--strong); font-weight: 700; }
 
-/* NO OPACITY ON A BUSY ROW. Fading it took sage from 4.86:1 to about 2.2:1, in the one
+/* NO OPACITY ON A BUSY ROW. Fading it takes sage from 4.86:1 to about 2.2:1, in the one
    moment an officer is reading the row hardest. The row stays fully legible and says what is
    happening instead: a word survives sunlight and greyscale, a fade does not. */
 .item.busy .box { border-color: var(--bright); }
 .saving {
   display: block;
-  padding: 0 2px 16px 36px;
+  padding: 0 0 16px 38px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bright);
 }
 
-/* INDENTED TO THE TEXT COLUMN, not to the row's edge. The tick circle is 22 px and the gap
-   is 14, so 36 px puts these under the title rather than under the circle. Left aligned to
-   the wrong column is the detail that makes a careful layout look accidental. */
+/* INDENTED TO THE TEXT COLUMN, not to the row's edge. The circle is 24 px and the gap is 14,
+   so 38 px puts these under the title rather than under the circle. Left aligned to the
+   wrong column is the detail that makes a careful layout look accidental. */
 .undo {
   display: block;
   width: 100%;
   min-height: var(--tap);
-  padding: 0 2px 16px 36px;
+  padding: 0 0 16px 38px;
   border: 0;
   background: none;
   color: var(--strong);
@@ -281,7 +375,7 @@ body {
 }
 .locked {
   display: block;
-  padding: 0 2px 16px 36px;
+  padding: 0 0 16px 38px;
   font-size: 13px;
   color: var(--sage);
 }
@@ -289,22 +383,31 @@ body {
 /* ---------- states ---------- */
 
 .wait {
-  padding: 64px 0;
+  padding: 72px var(--gutter);
   text-align: center;
   color: var(--sage);
   font-size: 14px;
 }
 
-.empty { padding: 56px 8px; text-align: center; }
-.empty-title { margin: 0; font-size: 18px; font-weight: 700; }
-.empty-detail { margin: 8px 0 0; color: var(--sage); font-size: 14px; }
+.empty { padding: 56px 8px 48px; text-align: center; }
+.empty-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.empty-detail { margin: 10px 0 0; color: var(--sage); font-size: 14px; }
 
 /* A notice is a rule and a heading, not a coloured box. The colour lives on the rule. */
 .notice {
   border-left: 2px solid var(--sage);
   padding: 2px 0 2px 14px;
-  margin: 0 0 24px;
+  margin: 20px 0 4px;
 }
+.sheet > .notice { margin: 24px var(--gutter); }
 .notice.stop { border-left-color: var(--strong); }
 .notice.warn { border-left-color: var(--bright); }
 .notice-title { margin: 0; font-size: 16px; font-weight: 700; }
@@ -315,7 +418,7 @@ body {
   min-height: var(--tap);
   padding: 0 18px;
   border: 1px solid var(--rule-strong);
-  border-radius: 10px;
+  border-radius: 12px;
   background: none;
   color: var(--green);
   font: inherit;
@@ -325,16 +428,29 @@ body {
 }
 
 .foot {
-  margin-top: 36px;
-  padding-top: 18px;
+  margin-top: 16px;
+  padding: 18px var(--gutter) 22px;
   border-top: 1px solid var(--rule);
   font-size: 12px;
+  line-height: 1.5;
   color: var(--sage);
 }
 .foot p { margin: 0; }
 
-/* Focus stays visible. Some officers navigate by keyboard, and every row is a button. */
-/* The deep purple, not the accent. The accent means "a number worth the eye"; a focus ring
-   wearing it invites somebody to read focus as a state on the row. This measures 8.2:1. */
-:focus-visible { outline: 2px solid var(--deep); outline-offset: 3px; border-radius: 6px; }
+/* ---------- motion, opted into ---------- */
 
+@media (prefers-reduced-motion: no-preference) {
+  .box { transition: border-color 140ms ease, background-color 140ms ease, transform 160ms ease; }
+  .row:active .box { transform: scale(0.92); }
+  .progress > span { transition: width 420ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .item.fresh .box { animation: pop 260ms cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+  @keyframes pop {
+    from { transform: scale(0.8); }
+    to { transform: scale(1); }
+  }
+}
+
+/* Focus stays visible. Some officers navigate by keyboard, and every row is a button. The deep
+   purple, not the accent: the accent means "a number worth the eye", and a focus ring wearing
+   it invites somebody to read focus as a state on the row. This measures 8.2:1. */
+:focus-visible { outline: 2px solid var(--deep); outline-offset: 3px; border-radius: 6px; }

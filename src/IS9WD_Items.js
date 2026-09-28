@@ -514,6 +514,11 @@ function IS9WD_itemObject_(line, row) {
   item.statusBy = IS9WD_txt_(item.statusBy);
   if (IS9WD_blank_(item.deadline) && !IS9WD_isDate_(item.deadline)) item.deadline = '';
   item.check = IS9WD_trim_(item.check);
+  // Typed means a person filled one of the five cells that are theirs. A row with only the
+  // app's own stamps left in it, half cleared by hand, is used but not typed, and no backfill
+  // may give it an ID: that would resurrect a phantom item.
+  item.typed = IS9WD_filled_(item.committee) || IS9WD_filled_(item.title) ||
+    IS9WD_filled_(item.remark) || IS9WD_filled_(item.status) || IS9WD_filled_(item.deadline);
   item.active = item.active === true;
   item.publishKey = IS9WD_trim_(item.publishKey);
   item.rank = IS9WD_int_(item.rank);

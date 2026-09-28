@@ -104,7 +104,10 @@ function walk(dir, out) {
 function tracked() {
   try {
     const cp = require('child_process');
-    const out = cp.execSync('git ls-files -z', { cwd: ROOT, encoding: 'utf8' });
+    // Tracked files PLUS untracked ones that are not ignored, so a new file is scanned before
+    // its first commit rather than after. An ignored file stays out: .clasp.json is ignored.
+    const out = cp.execSync('git ls-files -z', { cwd: ROOT, encoding: 'utf8' }) +
+      cp.execSync('git ls-files -z --others --exclude-standard', { cwd: ROOT, encoding: 'utf8' });
     const list = out.split('\u0000').filter((f) => f !== '');
     if (list.length) return list.map((f) => path.join(ROOT, f));
   } catch (err) {

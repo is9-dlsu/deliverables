@@ -2,10 +2,8 @@
   "name": "IS9 Weekly Deliverables",
   "short_name": "IS9",
   "description": "Your weekly deliverables. Tick them off.",
-  "start_url": ".",
-  "scope": ".",
-  "display": "standalone",
-  "background_color": "#F8FBFD",
+  "display": "browser",
+  "background_color": "#edf1ef",
   "theme_color": "#3d4a63",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }

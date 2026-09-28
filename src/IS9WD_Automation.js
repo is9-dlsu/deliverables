@@ -31,7 +31,17 @@ var IS9WD_AUTO_TRIGGER_ = 'IS9WD_hourlyDispatch';
  * nothing but delegate, so there is one implementation of the dispatcher and not two.
  */
 function IS9WD_hourlyDispatch() {
-  IS9WD_dispatch_();
+  var out = IS9WD_dispatch_();
+  // THE RE-THROW, after every job has had its turn. The failure mail went out inside the pass,
+  // at most once per job per day; this is the second channel, Google's own failure notice, the
+  // backstop for the day the mail itself is what is broken (SPEC section 5). It is thrown here
+  // and not inside IS9WD_dispatch_, so the menu's Run the dispatcher now reads a report rather
+  // than an error dialog, and it is thrown after the heartbeat so the dashboard still shows the
+  // pass happened.
+  if (out && out.failed && out.failed.length) {
+    throw new Error('IS9 tracker: ' + out.failed.length + ' job(s) failed: ' +
+      out.failed.join(', ') + '. See the failure mail and 07 | Log.');
+  }
 }
 
 /**
@@ -42,6 +52,7 @@ function IS9WD_hourlyDispatch() {
  */
 function IS9WD_dispatch_() {
   var lines = [];
+  var failed = [];
   var say = function (line) { lines.push(line); Logger.log(line); };
   var now = IS9WD_nowManila_();
   var today = IS9WD_dateKey_(now);
@@ -58,7 +69,7 @@ function IS9WD_dispatch_() {
       source: IS9WD_LOG_SOURCE_TRIGGER_, actor: me, action: 'dispatch',
       detail: 'owner mismatch, expected ' + owner, ok: false, result: 'SKIPPED'
     });
-    return { lines: lines, ran: 0, skipped: 0 };
+    return { lines: lines, ran: 0, skipped: 0, failed: failed };
   }
 
   var cfg = null;
@@ -66,13 +77,14 @@ function IS9WD_dispatch_() {
     cfg = IS9WD_readConfig_(true);
   } catch (err) {
     IS9WD_autoFail_('DISPATCH', err, say);
-    return { lines: lines, ran: 0, skipped: 0 };
+    failed.push('DISPATCH');
+    return { lines: lines, ran: 0, skipped: 0, failed: failed };
   }
 
   if (cfg.switches && cfg.switches.automationOn === false) {
     say('automation is switched off on ' + IS9WD_TAB.CONFIG + ', so no job ran');
     IS9WD_autoHeartbeat_(now, me);
-    return { lines: lines, ran: 0, skipped: 0 };
+    return { lines: lines, ran: 0, skipped: 0, failed: failed };
   }
 
   // THE ID SWEEP, BEFORE ANY EMAIL. A row Ethan typed has no ID until something mints one,
@@ -100,19 +112,20 @@ function IS9WD_dispatch_() {
       skipped++;
       continue;
     }
-    var out = IS9WD_autoRunJob_(row, cfg, say);
+    var out = IS9WD_autoRunJob_(row, cfg, say, failed);
     if (out) ran++;
   }
 
   IS9WD_autoHeartbeat_(now, me);
+  IS9WD_autoPrune_(doneKeys, say);
   say('dispatch: ' + ran + ' job(s) ran, ' + skipped + ' skipped, ' + swept +
-    ' row(s) given an ID');
-  return { lines: lines, ran: ran, skipped: skipped, swept: swept };
+    ' row(s) given an ID' + (failed.length ? ', FAILED: ' + failed.join(', ') : ''));
+  return { lines: lines, ran: ran, skipped: skipped, swept: swept, failed: failed };
 }
 
 // One job, inside its own try. The whole point of the isolation is that job three still runs
 // when job two throws.
-function IS9WD_autoRunJob_(row, cfg, say) {
+function IS9WD_autoRunJob_(row, cfg, say, failed) {
   var key = IS9WD_trim_(row.jobKey).toUpperCase();
   var impl = IS9WD_autoImpl_(key);
   if (!impl) {
@@ -132,6 +145,7 @@ function IS9WD_autoRunJob_(row, cfg, say) {
     return true;
   } catch (err) {
     say(key + ': failed, ' + err);
+    if (failed) failed.push(key);
     IS9WD_autoRecord_(key, IS9WD_dateKey_(IS9WD_nowManila_()), 'failed: ' + err, false);
     IS9WD_autoFail_(key, err, say);
     return false;
@@ -358,6 +372,32 @@ function IS9WD_autoWriteStatus_(jobKey, note, ok) {
   return false;
 }
 
+// Job record keys older than this are deleted on every pass, over the map the pass already
+// read. Document Properties has a hard size limit, and live sends write one key per recipient
+// per job per day, so the store only grows unless something prunes it.
+var IS9WD_AUTO_KEEP_DAYS_ = 90;
+
+function IS9WD_autoPrune_(props, say) {
+  try {
+    var cutoff = IS9WD_dateKey_(IS9WD_addDays_(IS9WD_todayManila_(), -IS9WD_AUTO_KEEP_DAYS_));
+    var store = PropertiesService.getDocumentProperties();
+    var gone = 0;
+    for (var key in props) {
+      if (!Object.prototype.hasOwnProperty.call(props, key)) continue;
+      if (key.indexOf(IS9WD_PROP.DONE_PREFIX) !== 0 && key.indexOf(IS9WD_PROP.ALERT_PREFIX) !== 0) continue;
+      var m = key.match(/\d{4}-\d{2}-\d{2}/);
+      if (!m || m[0] >= cutoff) continue;
+      store.deleteProperty(key);
+      gone++;
+    }
+    if (gone > 0 && say) say(gone + ' job record key(s) older than ' + IS9WD_AUTO_KEEP_DAYS_ + ' days pruned');
+    return gone;
+  } catch (err) {
+    Logger.log('IS9WD: the job record keys were not pruned: ' + err);
+    return 0;
+  }
+}
+
 function IS9WD_autoDoneKeys_() {
   try {
     return PropertiesService.getDocumentProperties().getProperties();
@@ -386,8 +426,12 @@ function IS9WD_autoFail_(jobKey, err, say) {
   ].join('\n');
   var sent = false;
   try {
-    var fn = IS9WD_apiImpl_('IS9WD_alertOnce_');
-    if (fn) sent = fn(jobKey, subject, body);
+    // EMAIL FOUR lives in IS9WD_Emails.js: it honours the alert switch and appends the last
+    // log rows. The bare once a day sender stays as the fallback for a project without it.
+    var four = IS9WD_apiImpl_('IS9WD_jobAlert_');
+    var fn = four ? null : IS9WD_apiImpl_('IS9WD_alertOnce_');
+    if (four) sent = four(jobKey, err, []);
+    else if (fn) sent = fn(jobKey, subject, body);
   } catch (inner) {
     Logger.log('IS9WD: the failure mail itself failed: ' + inner);
   }

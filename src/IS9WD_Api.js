@@ -431,7 +431,7 @@ function IS9WD_apiPerform_(plan, req, ctx) {
   if (plan.action === 'setStatus') return IS9WD_apiSetStatus_(plan, req, ctx);
   if (plan.action === 'setSignoff') return IS9WD_apiSetSignoff_(plan, req);
   return IS9WD_envelopeErr_(plan.action, 'VALIDATION',
-    'That action is not built yet. Ask Ethan.');
+    'That action is not built yet. Ask the President.');
 }
 
 /**
@@ -474,7 +474,7 @@ function IS9WD_apiSetStatus_(plan, req, ctx) {
     var seconds = IS9WD_apiUndoSeconds_(cfg);
     if (!IS9WD_undoAllowed(item.statusAt, IS9WD_nowManila_(), seconds, plan.role)) {
       return IS9WD_apiRefuse_(plan, ctx, 'UNDO_EXPIRED',
-        'That one is past the ' + seconds + ' second window. Ask Ethan to reopen it.', id);
+        'That one is past the ' + seconds + ' second window. Ask the President to reopen it.', id);
     }
   }
 
@@ -606,7 +606,7 @@ function IS9WD_apiItems_(items) {
 }
 
 function IS9WD_apiPosition_(cfg, key) {
-  var row = IS9WD_dirByKey_(cfg.directory ? cfg.directory.rows : [], key);
+  var row = IS9WD_dirByKey_(key, cfg.directory ? cfg.directory.rows : []);
   return row ? row.position : '';
 }
 

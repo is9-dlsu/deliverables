@@ -94,6 +94,7 @@ function IS9WD_selfTest_() {
   IS9WD_stCream_(suite, ctx);
   IS9WD_stEndpoint_(suite, ctx);
   IS9WD_stQuota_(suite);
+  IS9WD_stMail_(suite, ctx);
 
   var summary = IS9WD_stSummary_(suite);
   IS9WD_stRecord_(suite, summary);
@@ -2669,4 +2670,127 @@ function IS9WD_stColNum_(letters) {
     n = n * 26 + (s.charCodeAt(i) - 64);
   }
   return n;
+}
+
+// ============================================================================
+//  PHASE 5: THE TRIGGER, THE MAIL PLUMBING AND THE ROWS THE APP CANNOT SEE
+// ============================================================================
+
+// Seven assertions that tell an INSTALLED system from a PUSHED one. A workbook with a full
+// schedule and no trigger looks exactly like a working system until a Monday goes quiet, and
+// a typed row with no ID is a task an officer can see on the tab and cannot tick on a phone.
+function IS9WD_stMail_(suite, ctx) {
+  var have = ctx.cfg !== null;
+
+  IS9WD_stRun_(suite, 'Hourly trigger installed', true, function () {
+    var n = 0;
+    var all = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].getHandlerFunction() === IS9WD_AUTO_TRIGGER_) n++;
+    }
+    if (n > 1) {
+      return IS9WD_stFail_(n + ' hourly triggers, and each would run the whole schedule. ' +
+        'Automation > Install automations again, which removes them all first.');
+    }
+    if (n === 0) {
+      return { state: IS9WD_ST.WARN, detail: 'No hourly trigger, so nothing runs by itself. ' +
+        'Automation > Install automations, after the wording is approved.' };
+    }
+    return 'One hourly trigger.';
+  });
+
+  IS9WD_stRun_(suite, 'Mail plumbing', have, function () {
+    var sw = ctx.cfg.switches;
+    var bad = [];
+    if (sw.adminEmail === '') bad.push('your own address is blank, so nothing can reach you');
+    if (sw.senderName === '') bad.push('the sender display name is blank');
+    if (sw.mailNoReply === true && sw.replyTo !== '') {
+      bad.push('no reply and reply-to are both set, and no reply wins');
+    }
+    if (bad.length) return { state: IS9WD_ST.WARN, detail: bad.join('; ') + '.' };
+    return 'Admin address and sender name set' +
+      (sw.mailNoReply ? ', sent as no reply.' : (sw.replyTo !== '' ? ', reply-to set.' : '.'));
+  });
+
+  IS9WD_stRun_(suite, 'Email functions present', true, function () {
+    var names = ['IS9WD_mailPreflight_', 'IS9WD_sendMondayAssignments_',
+      'IS9WD_sendDailyDigest_', 'IS9WD_sendSundayBrief_', 'IS9WD_jobAlert_'];
+    var missing = [];
+    for (var i = 0; i < names.length; i++) if (!IS9WD_apiImpl_(names[i])) missing.push(names[i]);
+    if (missing.length) return IS9WD_stFail_('Not in this project: ' + missing.join(', '));
+    return 'All five resolve.';
+  });
+
+  IS9WD_stRun_(suite, 'Every schedule job has a function', have, function () {
+    var rows = ctx.cfg.schedule.rows;
+    var notBuilt = [];
+    for (var i = 0; i < rows.length; i++) {
+      var impl = IS9WD_autoImpl_(rows[i].jobKey);
+      if (impl === '' || !IS9WD_apiImpl_(impl)) notBuilt.push(rows[i].jobKey);
+    }
+    if (notBuilt.length) {
+      return { state: IS9WD_ST.WARN, detail: 'Not built yet: ' + notBuilt.join(', ') +
+        '. The dispatcher reports each one and moves on.' };
+    }
+    return rows.length + ' jobs, every one built.';
+  });
+
+  IS9WD_stRun_(suite, 'Job record store size', true, function () {
+    var props = PropertiesService.getDocumentProperties().getProperties();
+    var n = 0;
+    var oldest = '';
+    for (var key in props) {
+      if (!Object.prototype.hasOwnProperty.call(props, key)) continue;
+      if (key.indexOf(IS9WD_PROP.DONE_PREFIX) !== 0 && key.indexOf(IS9WD_PROP.ALERT_PREFIX) !== 0) continue;
+      n++;
+      var m = key.match(/\d{4}-\d{2}-\d{2}/);
+      if (m && (oldest === '' || m[0] < oldest)) oldest = m[0];
+    }
+    if (n > 2000) {
+      return { state: IS9WD_ST.WARN, detail: n + ' job record keys, oldest ' + oldest +
+        '. Document Properties has a hard size limit, and the hourly pass prunes keys older ' +
+        'than ' + IS9WD_AUTO_KEEP_DAYS_ + ' days, so either the pass is not running or the ' +
+        'store holds something else.' };
+    }
+    return n + ' job record key' + (n === 1 ? '' : 's') + (oldest === '' ? '.' : ', oldest ' + oldest + '.');
+  });
+
+  IS9WD_stRun_(suite, 'Dispatcher has run recently', true, function () {
+    var cell = IS9WD_namedOrNull_('IS9WD_DIAG_LAST_RUN');
+    var at = cell ? cell.getValue() : '';
+    if (!IS9WD_isDate_(at)) {
+      return { state: IS9WD_ST.WARN, detail: 'The dispatcher has never run. Until it does, ' +
+        'the two diagnostics cells read not measured yet.' };
+    }
+    var hours = (new Date().getTime() - at.getTime()) / 3600000;
+    if (hours > 3) {
+      return { state: IS9WD_ST.WARN, detail: 'Last run ' + Math.round(hours) + ' hours ago. ' +
+        'An hourly trigger should have run since; check Automation > Show automation status.' };
+    }
+    return 'Last run ' + (hours < 1 ? 'under an hour' : Math.round(hours) + ' hours') + ' ago.';
+  });
+
+  IS9WD_stRun_(suite, 'No row is missing an ID', have, function () {
+    var items = IS9WD_readItems_();
+    var missing = [];
+    var stale = [];
+    for (var i = 0; i < items.rows.length; i++) {
+      var it = items.rows[i];
+      if (it.id !== '') continue;
+      if (it.typed === true) missing.push(it.row);
+      else stale.push(it.row);
+    }
+    if (missing.length) {
+      return IS9WD_stFail_(missing.length + ' row' + (missing.length === 1 ? '' : 's') +
+        ' with content and no ID, invisible to the app: row ' + missing.slice(0, 5).join(', ') +
+        (missing.length > 5 ? ' and more' : '') + '. Automation > Give new rows an ID now.');
+    }
+    if (stale.length) {
+      return { state: IS9WD_ST.WARN, detail: stale.length + ' half cleared row' +
+        (stale.length === 1 ? '' : 's') + ', only the app stamps in G to I remain: row ' +
+        stale.slice(0, 5).join(', ') + (stale.length > 5 ? ' and more' : '') +
+        '. Clear the whole row; the ID sweep will not touch it.' };
+    }
+    return 'Every used row has an ID.';
+  });
 }

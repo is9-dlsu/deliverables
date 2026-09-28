@@ -116,11 +116,15 @@ function IS9WD_alertOnce_(jobKey, subject, body) {
     IS9WD_dateKey_(IS9WD_todayManila_());
   var store = PropertiesService.getDocumentProperties();
   if (IS9WD_filled_(store.getProperty(key))) return false;
-  store.setProperty(key, IS9WD_stampText_(IS9WD_nowManila_()));
   try {
     var to = IS9WD_trim_(IS9WD_namedOrNull_('IS9WD_ADMIN_EMAIL') ?
       IS9WD_named_('IS9WD_ADMIN_EMAIL').getValue() : '');
+    // No address, no key: a failure while the address is blank must not use up the day's one
+    // alert, or filling the address in that afternoon would produce nothing.
     if (to === '') return false;
+    // The key goes in BEFORE the send, not after: if the send itself is what is broken, the
+    // next hourly pass must not try again and again.
+    store.setProperty(key, IS9WD_stampText_(IS9WD_nowManila_()));
     MailApp.sendEmail(to, IS9WD_txt_(subject), IS9WD_txt_(body));
     return true;
   } catch (err) {

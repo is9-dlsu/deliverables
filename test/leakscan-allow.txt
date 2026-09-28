@@ -23,3 +23,7 @@ iiiiiiiiiiiiiiiiiiiiiiiiii
 # every symbol. Neither was ever issued to anyone.
 abcdefghjkmnpqrstvwxyz0123
 0123456789abcdefghjkmnpqrs
+
+# The fake link token in test/email.test.js and the local preview. Shaped like a token
+# so the link count and the fragment check are exercised. Never issued.
+abcdefghjkmnpqrstvwxyz2345

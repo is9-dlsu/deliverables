@@ -17,6 +17,8 @@ const FILES = [
   ['emdash.test.js', 'no em dash in anything a person reads'],
   ['leakscan.test.js', 'no address, token, endpoint or file id is committed'],
   ['core.test.js', 'the pure core, against SPEC'],
+  ['schedule.test.js', 'when each job fires, against the schedule rows'],
+  ['email.test.js', 'the four emails, against the approved wording'],
   ['api.test.js', 'the endpoint decision layer, against SPEC section 3'],
 ];
 

@@ -390,38 +390,62 @@ function IS9WD_menuRetire() {
   IS9WD_do_(ui, IS9WD_ACTION.RETIRE);
 }
 
+// The one place the wording is approved. It sends nothing: it renders the actual Monday
+// email, the actual digest and the whole Sunday brief, HTML and all, into a dialog.
 function IS9WD_menuMailPreflight() {
   var ui = IS9WD_assertUiContext_();
-  IS9WD_do_(ui, IS9WD_ACTION.MAIL_PREFLIGHT);
+  var out = IS9WD_do_(ui, IS9WD_ACTION.MAIL_PREFLIGHT, [], { quiet: true });
+  if (out === null || out === '') return;
+  IS9WD_showMailPreview_(ui, IS9WD_ACTION.MAIL_PREFLIGHT.label, out);
 }
 
 function IS9WD_menuSendMonday() {
   var ui = IS9WD_assertUiContext_();
   if (!IS9WD_confirmSend_(ui, IS9WD_ACTION.MAIL_MONDAY.label)) return;
-  IS9WD_do_(ui, IS9WD_ACTION.MAIL_MONDAY);
+  IS9WD_do_(ui, IS9WD_ACTION.MAIL_MONDAY, [{ source: 'Menu' }]);
 }
 
 function IS9WD_menuSendDigest() {
   var ui = IS9WD_assertUiContext_();
   if (!IS9WD_confirmSend_(ui, IS9WD_ACTION.MAIL_DIGEST.label)) return;
-  IS9WD_do_(ui, IS9WD_ACTION.MAIL_DIGEST);
+  IS9WD_do_(ui, IS9WD_ACTION.MAIL_DIGEST, [{ source: 'Menu' }]);
 }
 
 function IS9WD_menuSendBrief() {
   var ui = IS9WD_assertUiContext_();
   if (!IS9WD_confirmSend_(ui, IS9WD_ACTION.MAIL_BRIEF.label)) return;
-  IS9WD_do_(ui, IS9WD_ACTION.MAIL_BRIEF);
+  IS9WD_do_(ui, IS9WD_ACTION.MAIL_BRIEF, [{ source: 'Menu' }]);
 }
 
 // The toggle is one Configuration checkbox, so it lives here rather than waiting
 // on a module. The label in the bar is rebuilt on the next open.
+// TURNING TEST MODE OFF IS THE ONE IRREVERSIBLE CLICK between a wording draft and thirteen
+// students, so before it flips the dialog counts the directory rows with an address and says
+// exactly who will receive mail on the next run. Turning it ON asks nothing.
 function IS9WD_menuToggleTestMode() {
   var ui = IS9WD_assertUiContext_();
   try {
+    if (IS9WD_bool_(IS9WD_named_('IS9WD_TEST_MODE').getValue())) {
+      var cfg = IS9WD_readConfig_(true);
+      var who = [];
+      var rows = cfg.directory.inHierarchy;
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].email !== '') who.push(rows[i].key + ' ' + rows[i].committee);
+      }
+      var ok = IS9WD_confirm_(ui, 'Turn test mode OFF?',
+        'The next run will email ' + who.length + ' ' + (who.length === 1 ? 'person' : 'people') +
+        ' at their real addresses:\n\n' + (who.length ? who.join('\n') : '(nobody has an address yet)') +
+        '\n\nTurn test mode off now?');
+      if (!ok) return;
+    }
     var now = IS9WD_lockedRun_(function () {
       var cell = IS9WD_named_('IS9WD_TEST_MODE');
       var next = !IS9WD_bool_(cell.getValue());
       cell.setValue(next);
+      // A rehearsal run by the trigger today wrote the job level keys; left alone they would
+      // tell the next live pass that the mail already went out.
+      var clear = IS9WD_impl_('IS9WD_mailClearTodayKeys_');
+      if (!next && clear) clear();
       IS9WD_configReset_();
       return next;
     });
@@ -750,6 +774,45 @@ function IS9WD_showReport_(ui, title, lines, note) {
     '<div class="box">' + body.join('') + '</div>' +
     '</div>' + IS9WD_dialogFoot_();
   ui.showModalDialog(HtmlService.createHtmlOutput(html).setWidth(640).setHeight(520), title);
+}
+
+// THE PREFLIGHT DIALOG. The plumbing lines at the top, then every rendered email inside a
+// phone width frame, HTML exactly as Gmail will get it, so the wording is approved by reading
+// the real thing rather than a description of it. Nothing in it sends.
+function IS9WD_showMailPreview_(ui, title, pre) {
+  var lines = IS9WD_lines_(pre.lines);
+  var warnings = pre.warnings || [];
+  var html = IS9WD_dialogHead_() +
+    '<style>' +
+    '.warn{margin:0 0 12px 0;padding:10px 14px;border-left:3px solid ' + IS9WD_ROLE.FLAG_FG +
+    ';color:' + IS9WD_ROLE.FLAG_FG + ';font-weight:600;font-size:12px;line-height:1.5;}' +
+    '.mail{margin:22px 0 0 0;}' +
+    '.mail h3{margin:0 0 4px 0;font-size:13px;font-weight:600;color:' + IS9WD_ROLE.BODY_FG + ';}' +
+    '.mail .env{margin:0 0 10px 0;font-size:12px;line-height:1.6;color:' + IS9WD_ROLE.HINT_FG + ';' +
+    'white-space:pre-wrap;word-break:break-word;}' +
+    '.mail .frame{border:1px solid ' + IS9WD_ROLE.CARD_BORDER + ';border-radius:14px;' +
+    'background:' + IS9WD_ROLE.BODY_BG + ';max-width:420px;overflow:hidden;}' +
+    '</style>' +
+    '<div class="wrap">';
+  for (var w = 0; w < warnings.length; w++) {
+    html += '<p class="warn">' + IS9WD_esc_(warnings[w]) + '</p>';
+  }
+  html += '<p class="note">Nothing was sent. Read each rendering below exactly as it will ' +
+    'arrive, then tell me what to change.</p><div class="box">';
+  for (var i = 0; i < lines.length; i++) {
+    html += '<div class="line">' + IS9WD_esc_(lines[i]) + '</div>';
+  }
+  html += '</div>';
+  var previews = pre.previews || [];
+  for (var p = 0; p < previews.length; p++) {
+    var v = previews[p];
+    html += '<div class="mail"><h3>' + IS9WD_esc_(v.title) + '</h3>' +
+      '<div class="env">To: ' + IS9WD_esc_(v.to) + '\nSubject: ' + IS9WD_esc_(v.subject) +
+      (v.count > 1 ? '\nOne of ' + v.count + ' like it' : '') + '</div>' +
+      '<div class="frame">' + IS9WD_mailHtmlBody_(v.blocks, v.meta) + '</div></div>';
+  }
+  html += '</div>' + IS9WD_dialogFoot_();
+  ui.showModalDialog(HtmlService.createHtmlOutput(html).setWidth(720).setHeight(640), title);
 }
 
 // The palette and the font the workbook uses, so a dialog does not look like a

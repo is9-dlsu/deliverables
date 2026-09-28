@@ -3064,6 +3064,8 @@ function IS9WD_statsNames_(layout) {
 
   add('IS9WD_STATS_GATE_LABEL', s.gateFirst, s.gateCol, s.gateLast - s.gateFirst + 1, 1);
   add('IS9WD_STATS_GATE_STATE', s.gateFirst, s.gateCol + 1, s.gateLast - s.gateFirst + 1, 1);
+  // The gate's own sentence, which the Sunday brief prints as the reason beside each HOLD.
+  add('IS9WD_STATS_GATE_NOTE', s.gateFirst, s.gateCol + 2, s.gateLast - s.gateFirst + 1, 1);
   return out;
 }
 
