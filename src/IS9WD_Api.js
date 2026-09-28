@@ -860,6 +860,8 @@ function IS9WD_apiUndoSeconds_(cfg) {
 
 function IS9WD_apiItems_(items) {
   var out = [];
+  // Manila's today once, not twice per item: Utilities.formatDate is a call each time.
+  var today = IS9WD_todayManila_();
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     // No title, nothing to show; no ID, nothing to tick: a typed row waits for the sweep or
@@ -877,7 +879,7 @@ function IS9WD_apiItems_(items) {
       // reads, so the page shows deadlineLong instead and the carousel keeps its contract.
       // Both are sent: the short one stays because an admin view may want to see exactly what
       // the slide will print.
-      deadlineText: IS9WD_deadlineText(it.deadline, IS9WD_todayManila_()),
+      deadlineText: IS9WD_deadlineText(it.deadline, today),
       deadlineLong: IS9WD_longDateDay(it.deadline),
       status: it.status,
       active: it.active === true,
@@ -886,7 +888,7 @@ function IS9WD_apiItems_(items) {
       // from the workbook's own effective date. SPEC's human meaning of overdue is used, the
       // deadline has passed and the item is still active, which is the one a person reads.
       overdue: it.active === true && IS9WD_isDate_(it.deadline) &&
-        IS9WD_midnight_(it.deadline) < IS9WD_midnight_(IS9WD_todayManila_()),
+        IS9WD_midnight_(it.deadline) < IS9WD_midnight_(today),
       statusAt: IS9WD_isDate_(it.statusAt) ? IS9WD_stampText_(it.statusAt) : '',
       flag: it.check
     });
