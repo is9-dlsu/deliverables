@@ -2540,7 +2540,7 @@ function IS9WD_viewsLayout_(directoryRows, trendWeeks, jobRows, officerRows) {
   var jobs = IS9WD_posInt_(jobRows) ||
     (IS9WD_ENG.SCHEDULE.lastRow - IS9WD_ENG.SCHEDULE.firstRow + 1);
   var reserved = IS9WD_posInt_(officerRows) ||
-    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 21;
+    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 11;
   var out = {
     directoryRows: dir, trendWeeks: trend, jobRows: jobs, officerRows: reserved,
     healthRows: IS9WD_STATS_HEALTH_ROWS.length,
@@ -2618,7 +2618,7 @@ var IS9WD_OT_CELL_COLS = 9;
 function IS9WD_otLayout_(directoryRows, officerRows) {
   var dir = IS9WD_posInt_(directoryRows) || IS9WD_DIR_ROWS;
   var reserved = IS9WD_posInt_(officerRows) ||
-    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 21;
+    IS9WD_posInt_(IS9WD_switchDefault_('IS9WD_STATS_OFFICER_ROWS')) || 11;
   if (reserved < 3) reserved = 3;
   var grid = IS9WD_gridGeometry_(IS9WD_OT_CELL_COLS);
   var out = {
