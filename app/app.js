@@ -57,6 +57,30 @@ function Mark() {
     </svg>`;
 }
 
+// THE YEAR PRINTS ONCE. The server sends two full long dates, and a week almost always sits
+// inside one year, so "September 28, 2026 to October 4, 2026" says 2026 twice in a line that
+// is already at the edge of a 375 px screen. Across a new year it keeps both, because then
+// the year is the interesting part.
+function weekSpan(week) {
+  const a = (week && week.startLong) || '';
+  const b = (week && week.endLong) || '';
+  if (!a || !b) return '';
+  const yearA = a.slice(a.lastIndexOf(',') + 1).trim();
+  const yearB = b.slice(b.lastIndexOf(',') + 1).trim();
+  if (yearA && yearA === yearB) return a.slice(0, a.lastIndexOf(',')) + ' to ' + b;
+  return a + ' to ' + b;
+}
+
+// THE TICK IS DRAWN, NOT TYPED. A U+2713 glyph is a different shape and weight in every
+// system font, and on some Android builds it falls back to an emoji font and arrives green.
+function Check() {
+  return html`
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="check">
+      <path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor"
+        stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>`;
+}
+
 function Spinner() {
   return html`<div class="wait" role="status" aria-live="polite">Loading your list...</div>`;
 }
@@ -85,7 +109,7 @@ function Item({ item, busy, undoLeft, onToggle }) {
         aria-pressed=${done}
         disabled=${busy}
         onClick=${() => onToggle(item)}>
-        <span class="box" aria-hidden="true">${done ? '✓' : ''}</span>
+        <span class="box" aria-hidden="true">${done ? html`<${Check} />` : null}</span>
         <span class="text">
           <span class="title">${item.title}</span>
           ${item.remark ? html`<span class="remark">${item.remark}</span>` : null}
@@ -96,11 +120,16 @@ function Item({ item, busy, undoLeft, onToggle }) {
           </span>
         </span>
       </button>
-      ${done && undoLeft > 0 ? html`
-        <button type="button" class="undo" disabled=${busy} onClick=${() => onToggle(item)}>
+      ${busy ? html`<span class="saving">Saving...</span>` : null}
+      ${!busy && done && undoLeft > 0 ? html`
+        <button
+          type="button"
+          class="undo"
+          aria-label=${'Undo, ' + undoLeft + ' seconds left'}
+          onClick=${() => onToggle(item)}>
           Undo (${undoLeft}s)
         </button>` : null}
-      ${done && undoLeft === 0 ? html`
+      ${!busy && done && undoLeft === 0 ? html`
         <span class="locked">Ticked off. Ask Ethan to reopen it.</span>` : null}
     </li>`;
 }
@@ -210,9 +239,7 @@ function App() {
         <p class="who">${state.committee ? state.committee.headline : ''}</p>
         <p class="week">
           Week ${state.week.number}
-          ${state.week.startLong
-            ? ' · ' + state.week.startLong + ' to ' + state.week.endLong
-            : ''}
+          ${weekSpan(state.week) ? ' · ' + weekSpan(state.week) : ''}
         </p>
       </header>
 
@@ -224,7 +251,7 @@ function App() {
           <p class="empty-detail">Ethan adds items by Saturday evening.</p>
         </div>
       ` : html`
-        <p class="count">${left === 0 ? 'All done for this week'
+        <p class="count" role="status" aria-live="polite">${left === 0 ? 'All done for this week'
           : left + (left === 1 ? ' task left' : ' tasks left')}</p>
         <ul class="list">
           ${items.map((item) => html`

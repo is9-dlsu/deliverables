@@ -32,6 +32,12 @@
   --strong: #724485;
   --bright: #8a64a9;
   --paper: #F8FBFD;
+  --deep: #5d4170;
+
+  /* ONLY 400, 500 AND 700 ARE REAL. Roboto has no Semibold, so a weight of 550 or 650 is
+     snapped or synthesised on Android while iOS renders a true cut, and the same screen comes
+     out heavier on one phone than the other. Asking for a weight that exists is the whole
+     trick. */
 
   /* One hairline weight everywhere. Structure comes from space, not from lines. */
   --rule: rgba(88, 117, 106, 0.22);
@@ -106,7 +112,7 @@ body {
 .brand svg { display: block; width: 26px; height: 26px; border-radius: 7px; }
 .brand span {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   opacity: 0.72;
@@ -116,7 +122,7 @@ body {
   margin: 0;
   font-size: 25px;
   line-height: 1.15;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 .week {
@@ -132,7 +138,7 @@ body {
 .count {
   margin: 0 0 4px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--sage);
@@ -177,15 +183,22 @@ body {
   font-size: 12px;
   font-weight: 700;
   color: transparent;
-  transition: border-color 140ms ease, background-color 140ms ease;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .box { transition: border-color 140ms ease, background-color 140ms ease; }
+}
+
+/* The drawn tick. currentColor is transparent on an open row and paper on a done one, so the
+   mark appears and disappears with the colour rather than with a second rule. */
+.check { width: 13px; height: 13px; display: block; }
 
 .text { flex: 1 1 auto; min-width: 0; }
 
 .title {
   display: block;
   font-size: 16px;
-  font-weight: 550;
+  font-weight: 500;
   letter-spacing: -0.01em;
 }
 .remark {
@@ -227,16 +240,26 @@ body {
   text-decoration-thickness: 1px;
   text-decoration-color: var(--rule-strong);
   color: var(--sage);
-  font-weight: 450;
+  font-weight: 400;
 }
 .item.done .remark,
 .item.done .meta { opacity: 0.72; }
 
 /* Overdue is weight and colour on the tag alone. No border on the row, no fill: the row is
    still a row, and one word carries the exception. */
-.item.overdue .due { color: var(--strong); font-weight: 600; }
+.item.overdue .due { color: var(--strong); font-weight: 700; }
 
-.item.busy { opacity: 0.45; }
+/* NO OPACITY ON A BUSY ROW. Fading it took sage from 4.86:1 to about 2.2:1, in the one
+   moment an officer is reading the row hardest. The row stays fully legible and says what is
+   happening instead: a word survives sunlight and greyscale, a fade does not. */
+.item.busy .box { border-color: var(--bright); }
+.saving {
+  display: block;
+  padding: 0 2px 16px 36px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bright);
+}
 
 /* INDENTED TO THE TEXT COLUMN, not to the row's edge. The tick circle is 22 px and the gap
    is 14, so 36 px puts these under the title rather than under the circle. Left aligned to
@@ -251,7 +274,7 @@ body {
   color: var(--strong);
   font: inherit;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
@@ -273,7 +296,7 @@ body {
 }
 
 .empty { padding: 56px 8px; text-align: center; }
-.empty-title { margin: 0; font-size: 18px; font-weight: 600; }
+.empty-title { margin: 0; font-size: 18px; font-weight: 700; }
 .empty-detail { margin: 8px 0 0; color: var(--sage); font-size: 14px; }
 
 /* A notice is a rule and a heading, not a coloured box. The colour lives on the rule. */
@@ -284,7 +307,7 @@ body {
 }
 .notice.stop { border-left-color: var(--strong); }
 .notice.warn { border-left-color: var(--bright); }
-.notice-title { margin: 0; font-size: 16px; font-weight: 650; }
+.notice-title { margin: 0; font-size: 16px; font-weight: 700; }
 .notice-detail { margin: 6px 0 0; font-size: 14px; color: var(--sage); }
 
 .retry {
@@ -297,7 +320,7 @@ body {
   color: var(--green);
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -311,8 +334,7 @@ body {
 .foot p { margin: 0; }
 
 /* Focus stays visible. Some officers navigate by keyboard, and every row is a button. */
-:focus-visible { outline: 2px solid var(--bright); outline-offset: 3px; border-radius: 6px; }
+/* The deep purple, not the accent. The accent means "a number worth the eye"; a focus ring
+   wearing it invites somebody to read focus as a state on the row. This measures 8.2:1. */
+:focus-visible { outline: 2px solid var(--deep); outline-offset: 3px; border-radius: 6px; }
 
-@media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
-}
