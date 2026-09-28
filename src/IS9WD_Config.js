@@ -148,11 +148,15 @@ var IS9WD_ROLE = {
   // A FLAG CARRIES NO FILL AT ALL. Ethan's instruction of 2026-09-27: cream means exactly
   // one thing in this workbook, "you type here", and the old flag style painted cream
   // behind bold #724485 on calculated Check cells, which is the one place a reader must
-  // never type. So a flag is bold #724485 on the paper white, with a #724485 border where
-  // a border is available to draw. Nothing outside the input set is ever cream again.
+  // never type. So a flag is bold #724485 on the paper white. Nothing outside the input set
+  // is ever cream again.
+  //
+  // There is no FLAG_BORDER, and there never can be: every flag in this workbook is a
+  // conditional format rule, and a conditional format rule in Sheets cannot set a border.
+  // One was declared here for months and drawn nowhere, which read as an oversight rather
+  // than as the impossibility it is.
   FLAG_FG: IS9WD_CLR.PURPLE_STRONG,
   FLAG_BG: IS9WD_CLR.PAPER,
-  FLAG_BORDER: IS9WD_CLR.PURPLE_STRONG,
   MUTED_FG: IS9WD_CLR.LILAC,
   // A CARD on a computed view: the heading band, its text, the body behind the table and
   // the border around the whole of it. Ethan's instruction of 2026-09-27 named all four:
@@ -1809,8 +1813,6 @@ function IS9WD_switchDefault_(name) {
   return null;
 }
 
-var IS9WD_FEED_HELP = 'Live formulas only. Nothing here is typed, and nothing here is merged.';
-
 var IS9WD_FEED_CACHE_ = null;
 
 // The shipping layout: fourteen publishing rows, fifteen slots, one part.
@@ -1826,8 +1828,10 @@ function IS9WD_feed_() {
       IS9WD_switchDefault_('IS9WD_MAX_PARTS'),
       IS9WD_DIR_ROWS
     );
+    // No HELP: the feed has no help row by design. Row 1 is its identity line, which the
+    // Drive connector reads to tell which tab it is looking at, and row 2 is already a
+    // block. A HELP string was set here for months and painted nowhere.
     layout.BANNER = IS9WD_TAB.FEED;
-    layout.HELP = IS9WD_FEED_HELP;
     IS9WD_FEED_CACHE_ = layout;
   }
   return IS9WD_FEED_CACHE_;
@@ -2424,13 +2428,12 @@ function IS9WD_statsLayout_(directoryRows, trendWeeks) {
         out.tileHint = hint;
         out.tileCol = cell.firstCol;
         out.tileGroups = [];
-        out.tileGapRows = [];
         var at = hint + 1;
         for (var g = 0; g < out.tileRows; g++) {
           // The blank row between the two rows of tiles belongs to the tile card, not
           // to the grid: the grid separator list is used to wipe fill, border and note
           // across the whole width, which would strip the card it sits inside.
-          if (g > 0) { out.tileGapRows.push(at); at++; }
+          if (g > 0) at++;
           out.tileGroups.push({ valueRow: at, labelRow: at + 1, noteRow: at + 2 });
           at += 3;
         }
@@ -2485,9 +2488,6 @@ function IS9WD_statsLayout_(directoryRows, trendWeeks) {
 
   out.endRow = top;
 
-  out.bandRows = [out.tileBand, out.attentionBand, out.gateBand, out.officerBand,
-    out.rankBand, out.trendBand];
-  for (var c = 0; c < out.charts.length; c++) out.bandRows.push(out.charts[c].bandRow);
   // The scan stops one row short of the end row for the reason the feed's stops two
   // short of its own: the count lives on that row and a scan over itself is circular.
   out.scanLastRow = out.endRow - 1;
@@ -2653,14 +2653,6 @@ function IS9WD_otLayout_(directoryRows, officerRows) {
   // The tab's own header span, which is the first card's visible width: the banner, the help
   // line and the summary row read across it rather than across all 29 columns.
   out.visibleLastCol = out.visibleCols;
-  // Every key column, one per grid cell, so they are hidden by position rather than by a
-  // hardcoded letter.
-  out.keyCols = [];
-  for (var k = 0; k < out.cells.length; k++) {
-    out.keyCols.push(out.cells[k].firstCol + out.keyOffset);
-  }
-  // Kept for any reader that still asks for "the" key column: it is the first card's.
-  out.keyCol = out.keyCols[0];
 
   out.spacerRows = [4];
   out.blocks = [];

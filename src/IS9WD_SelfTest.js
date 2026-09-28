@@ -2133,6 +2133,36 @@ function IS9WD_stOfficerTables_(suite, ctx) {
   // The sort key is what orders every block and what the muted rule reads, so a
   // malformed key is a block in the wrong order and an accomplished row that does not
   // read as one.
+  // WHAT THE DEAD keyCols ARRAY WAS FOR, done as a check instead of as an unread field. The
+  // hidden sort key column of each card is computed from keyOffset, while IS9WD_HIDE_COLS
+  // names the columns to hide as literals. Those two drifted apart once already, on the day
+  // keyOffset was corrected from 8 to 7, and the symptom was 280 machine sort keys sitting
+  // visible inside the cards with an empty hidden column beside them.
+  IS9WD_stRun_(suite, 'The hidden key column is the one that is hidden', ctx.tables,
+    function () {
+      var o = IS9WD_officerTables_();
+      var hide = IS9WD_HIDE_COLS.TABLES || [];
+      var want = [];
+      for (var c = 0; c < o.cells.length; c++) want.push(o.cells[c].firstCol + o.keyOffset);
+      var got = [];
+      for (var h = 0; h < hide.length; h++) {
+        for (var col = hide[h].first; col <= hide[h].last; col++) got.push(col);
+      }
+      var problems = [];
+      if (got.length !== want.length) {
+        problems.push('the layout computes ' + want.length + ' key columns and ' +
+          got.length + ' are listed as hidden');
+      }
+      for (var i = 0; i < want.length; i++) {
+        if (IS9WD_stIndexOf_(got, want[i]) < 0) {
+          problems.push('column ' + IS9WD_colLetter_(want[i]) + ' holds a sort key and is ' +
+            'not hidden');
+        }
+      }
+      if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+      return 'All ' + want.length + ' sort key columns are hidden, and nothing else is.';
+    });
+
   IS9WD_stRun_(suite, 'Officer table sort keys', ctx.tables, function () {
     var o = ctx.otLayout;
     var problems = [];
