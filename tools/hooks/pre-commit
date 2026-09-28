@@ -46,6 +46,13 @@ fail=0
 node test/leakscan.test.js $list || fail=1
 node test/emdash.test.js $list || fail=1
 
+# The duplicate function scan reads the whole of src/ rather than the staged list, because a
+# collision is between two files and a scan of one of them cannot see it. It only runs when a
+# source file is staged, so a docs-only commit stays fast.
+case "$staged" in
+  *src/*) node test/dupfn.test.js || fail=1 ;;
+esac
+
 if [ "$fail" -ne 0 ]; then
   echo ""
   echo "pre-commit: nothing was committed."

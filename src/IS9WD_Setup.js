@@ -65,12 +65,29 @@ var IS9WD_SETUP_DEFAULT_TAB_ = /^sheet\s*1$/i;
 // A tab name this project wrote: two digits, a space, a pipe, a space. It is how setup
 // tells a tab it renumbered itself from a tab Ethan renamed by hand, which is the one
 // distinction the Archive and Log renumbering turns on (section 3).
-// The only names this project has ever given a tab and then renumbered. A regex
-// over the NN | Name shape would also match a name Ethan chose himself, say
-// "03 | Archive backup", and rename it back to canonical on the next build.
+// THE ONLY NAMES THIS PROJECT HAS EVER GIVEN A TAB. Append only, never replace: a name
+// removed from this map is a tab that stops being recognised as ours, and a tab that is not
+// recognised is renamed no further and keeps an old number in the bar forever while its own
+// banner prints the new one.
+//
+// A regex over the NN | Name shape is deliberately NOT used. It would also match a name
+// Ethan chose himself, say "03 | Archive backup", and rename it back to canonical on the
+// next build, destroying a deliberate rename.
+//
+// The 2026-09-28 entries are the whole reason this map had to grow. 00 | Dashboard took the
+// front of the reading order, so seven tabs shifted by one number, and before that day this
+// map covered two keys out of nine. The other five would each have been left under their old
+// name, with their own banner printing the new one, and nothing anywhere would have said so:
+// nothing in the project compared a sheet's live name to its canonical name until the self
+// test learned to.
 var IS9WD_SETUP_FORMER_NAMES_ = {
-  ARCHIVE: ['03 | Archive'],
-  LOG: ['04 | Log']
+  CONFIG: ['00 | Configuration'],
+  FEED: ['01 | Canva Feed'],
+  ITEMS: ['02 | Deliverables'],
+  STATS: ['03 | Statistics'],
+  TABLES: ['04 | Officer Tables'],
+  ARCHIVE: ['03 | Archive', '05 | Archive'],
+  LOG: ['04 | Log', '06 | Log']
 };
 
 function IS9WD_setupWasOurName_(key, current) {
@@ -156,7 +173,7 @@ function IS9WD_buildViews_() {
 }
 
 function IS9WD_buildViewsLocked_() {
-  var report = { lines: [], namesSet: 0, views: null, stats: null, tables: null };
+  var report = { lines: [], namesSet: 0, views: null, stats: null, tables: null, dash: null };
   var say = function (line) { report.lines.push(line); Logger.log(line); };
   var cfg = IS9WD_readConfig_(true);
 
@@ -182,6 +199,16 @@ function IS9WD_buildViewsLocked_() {
     say('officer tables sized: ' + report.tables.blocks + ' blocks, ' +
       report.tables.officerRows + ' rows reserved each showing ' +
       report.tables.itemRows + ' items, last row ' + report.tables.lastRow);
+  }
+  // The dashboard is built LAST of the computed views, because every number on it is read
+  // from a named range one of the others points. Built first, it would paint a tab full of
+  // #NAME? on a fresh workbook.
+  report.dash = IS9WD_setupCall_('IS9WD_dashResize_', [cfg], say,
+    'the dashboard was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.dash) {
+    report.namesSet += IS9WD_int_(report.dash.namesPointed) || 0;
+    say('dashboard built: ' + report.dash.cards + ' cards, ' + report.dash.rows +
+      ' rows, last row ' + report.dash.lastRow);
   }
   say('named ranges pointed: ' + report.namesSet);
   return report;
@@ -257,7 +284,7 @@ function IS9WD_buildOrRepairLocked_() {
   var report = {
     lines: [], tabsCreated: [], namesSet: 0, namesDropped: [], feedResized: false,
     storeLastRow: 0, storeGrown: false, archiveLastRow: 0, archiveGrown: false,
-    items: null, views: null, stats: null, tables: null, backfilledIds: 0,
+    items: null, views: null, stats: null, tables: null, dash: null, backfilledIds: 0,
     backfilledStatus: 0, tokensIssued: 0, userCellsChanged: 0, changedCells: [],
     missingNames: []
   };
@@ -358,6 +385,16 @@ function IS9WD_buildOrRepairLocked_() {
     say('officer tables sized: ' + report.tables.blocks + ' blocks, ' +
       report.tables.officerRows + ' rows reserved each showing ' +
       report.tables.itemRows + ' items, last row ' + report.tables.lastRow);
+  }
+  // The dashboard is built LAST of the computed views, because every number on it is read
+  // from a named range one of the others points. Built first, it would paint a tab full of
+  // #NAME? on a fresh workbook.
+  report.dash = IS9WD_setupCall_('IS9WD_dashResize_', [cfg], say,
+    'the dashboard was not built: IS9WD_Stats.js is not in this project yet');
+  if (report.dash) {
+    report.namesSet += IS9WD_int_(report.dash.namesPointed) || 0;
+    say('dashboard built: ' + report.dash.cards + ' cards, ' + report.dash.rows +
+      ' rows, last row ' + report.dash.lastRow);
   }
 
   IS9WD_setupBackfillDirectory_(sheets.CONFIG, sheets.ENGINE, say);
@@ -495,7 +532,17 @@ function IS9WD_setupTabs_(report, say) {
       }
     }
     IS9WD_stampTab_(sheet, key);
-    sheet.setTabColor(IS9WD_TAB_COLOR[key]);
+    // A KEY WITH NO COLOUR THROWS, WITH A SENTENCE. setTabColor(undefined) is accepted
+    // silently and clears the chip, so a tab added to IS9WD_TAB_ORDER and forgotten in
+    // IS9WD_TAB_COLOR would ship with no colour and nothing would say which one. This fires
+    // inside the rename loop, before anything else is written, which is the cheapest place
+    // for a layout fault to stop a build.
+    var colour = IS9WD_TAB_COLOR[key];
+    if (!colour) {
+      throw new Error('IS9WD: the tab ' + key + ' has no colour in IS9WD_TAB_COLOR, so ' +
+        'the workbook was not built. Every key in IS9WD_TAB_ORDER needs one.');
+    }
+    sheet.setTabColor(colour);
     if (sheet.getIndex() !== i + 1) {
       // A hidden sheet cannot be activated, and the log tab is hidden from the second
       // run onward, so it is shown here and hidden again by the loop below.
@@ -636,6 +683,7 @@ function IS9WD_setupGrids_(sheets, say) {
   var stats = IS9WD_stats_();
   var tables = IS9WD_officerTables_();
   var views = IS9WD_views_();
+  var dash = IS9WD_dash_();
   var plan = {
     // 00 | Configuration ends on the sign-off block now, because every growing and
     // machine owned block moved to `_Engine`.
@@ -651,12 +699,23 @@ function IS9WD_setupGrids_(sheets, say) {
     // The Archive now declares a last row, because the trend block's six named ranges
     // have to span a real grid. It is grown in place by IS9WD_setupArchiveSpan_.
     ARCHIVE: { rows: IS9WD_ARCHIVE.lastRow, cols: IS9WD_ARCHIVE.lastCol, trimRows: false, chrome: true },
-    LOG: { rows: IS9WD_LOG.firstRow, cols: IS9WD_LOG.lastCol, trimRows: false, chrome: true }
+    LOG: { rows: IS9WD_LOG.firstRow, cols: IS9WD_LOG.lastCol, trimRows: false, chrome: true },
+    // The dashboard sizes and trims itself in IS9WD_dashResize_, the same way the two other
+    // computed views do, so the grid pass only has to know how big it will be.
+    DASHBOARD: { rows: dash.endRow, cols: dash.lastCol, trimRows: false, chrome: false }
   };
   for (var k = 0; k < IS9WD_TAB_ORDER.length; k++) {
     var key = IS9WD_TAB_ORDER[k];
     var sheet = sheets[key];
     var want = plan[key];
+    // A KEY WITH NO PLAN THROWS, WITH A SENTENCE. Unguarded, `want.rows` threw a bare
+    // TypeError here, and it threw AFTER every tab had already been renamed and BEFORE a
+    // single log row was written, which is the worst possible moment: a half migrated
+    // workbook and no record of how far it got.
+    if (!want) {
+      throw new Error('IS9WD: the tab ' + key + ' has no entry in the grid plan, so the ' +
+        'workbook was not built. Every key in IS9WD_TAB_ORDER needs one.');
+    }
     IS9WD_ensureGrid_(sheet, want.rows, want.cols);
     IS9WD_setupTrim_(sheet, want, say);
     // A row hidden by hand is a block the connector cannot read, and a hidden row on

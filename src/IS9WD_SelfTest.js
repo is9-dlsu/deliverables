@@ -1215,12 +1215,34 @@ function IS9WD_stTabOrder_(suite, ctx) {
         problems.push(key + ' is at position ' + sheet.getIndex() + ' not ' + (i + 1));
       }
     }
-    // The one position that is a hard constraint rather than a reading order: a
-    // truncated connector read must lose the Archive and the Log before it loses a
-    // contract string (10.1).
-    if (IS9WD_sheet_('FEED').getIndex() !== 2) {
-      problems.push('01 | Canva Feed is not the second tab, so a truncated read can ' +
-        'lose a contract string before it loses the Archive');
+    // EVERY TAB'S LIVE NAME MUST EQUAL ITS CANONICAL NAME, and until 2026-09-28 nothing
+    // anywhere in this project compared the two. A tab left under an old number by a
+    // rename that did not fire read perfectly clean forever, while its own banner printed
+    // the new one, which is exactly the failure the renumber to eight tabs could produce.
+    for (var nm = 0; nm < IS9WD_TAB_ORDER.length; nm++) {
+      var nmKey = IS9WD_TAB_ORDER[nm];
+      var live = IS9WD_sheet_(nmKey).getName();
+      if (live !== IS9WD_TAB[nmKey]) {
+        problems.push(nmKey + ' is named "' + live + '" and should be "' +
+          IS9WD_TAB[nmKey] + '". Add the old name to IS9WD_SETUP_FORMER_NAMES_ and run ' +
+          'Build or repair workbook, or rename the tab by hand');
+      }
+    }
+
+    // THE ONE POSITION THAT IS A CONSTRAINT RATHER THAN A READING ORDER, and it is
+    // asserted by its reason rather than by a number. A truncated connector read must lose
+    // the Archive and the Log before it loses a contract string, so the feed has to sit
+    // ahead of every tab the read is allowed to lose. Hardcoding "second" failed on a
+    // correct workbook the moment the Dashboard took the front of the order (10.1).
+    var mayLose = ['ITEMS', 'STATS', 'TABLES', 'ARCHIVE', 'LOG'];
+    var feedAt = IS9WD_sheet_('FEED').getIndex();
+    for (var ml = 0; ml < mayLose.length; ml++) {
+      var theirs = IS9WD_sheet_(mayLose[ml]).getIndex();
+      if (theirs < feedAt) {
+        problems.push(IS9WD_TAB[mayLose[ml]] + ' sits ahead of ' + IS9WD_TAB.FEED +
+          ' in the connector read, so a truncated read could lose a contract string ' +
+          'before it loses that tab');
+      }
     }
     if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
     // A tab of Ethan's own is reported rather than failed: setup moves the seven it
@@ -1229,6 +1251,54 @@ function IS9WD_stTabOrder_(suite, ctx) {
     var extra = IS9WD_ss_().getSheets().length - IS9WD_TAB_ORDER.length;
     return IS9WD_TAB_ORDER.length + ' tabs in order: ' + order.join(', ') +
       (extra > 0 ? IS9WD_SEP + extra + ' other tab(s) sit below them' : '') + '.';
+  });
+
+  // THE DASHBOARD IS READ ONLY AND NO CELL ON IT IS CREAM. That is the whole of its
+  // contract with the cream rule, and it is the one thing about this tab that a later
+  // change could break without anyone noticing, because a cream cell on a tab nobody types
+  // into destroys the only visual rule a first time reader can learn in one second.
+  IS9WD_stRun_(suite, 'The dashboard is built and carries no cream', ctx.cfg, function () {
+    var layout = IS9WD_dash_();
+    var sheet = IS9WD_sheet_('DASHBOARD');
+    var problems = [];
+    if (sheet.getMaxRows() !== layout.endRow) {
+      problems.push('it holds ' + sheet.getMaxRows() + ' rows and the layout declares ' +
+        layout.endRow);
+    }
+    if (sheet.getMaxColumns() !== layout.lastCol) {
+      problems.push('it holds ' + sheet.getMaxColumns() + ' columns and the layout ' +
+        'declares ' + layout.lastCol);
+    }
+    var cream = 0;
+    var creamAt = '';
+    var fills = sheet.getRange(1, 1, layout.endRow, layout.lastCol).getBackgrounds();
+    for (var r = 0; r < fills.length; r++) {
+      for (var c = 0; c < fills[r].length; c++) {
+        if (IS9WD_trim_(fills[r][c]).toLowerCase() !== IS9WD_CLR.CREAM.toLowerCase()) {
+          continue;
+        }
+        cream++;
+        if (creamAt === '') creamAt = IS9WD_a1_(r + 1, c + 1, 1, 1);
+      }
+    }
+    if (cream) {
+      problems.push(cream + ' cells are cream, the first at ' + creamAt +
+        ', on a tab nobody types into');
+    }
+    // A card must fill its own grid cell, or three cards in one row of the grid do not
+    // line up at the bottom, which is the single thing that makes a grid look unfinished.
+    for (var k = 0; k < layout.cards.length; k++) {
+      var card = layout.cards[k];
+      var row = layout.rowsOfThree[card.gridRow];
+      if (card.blockLastRow !== row.lastRow) {
+        problems.push(card.key + ' ends at row ' + card.blockLastRow + ' and its row of ' +
+          'three ends at ' + row.lastRow);
+      }
+    }
+    if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
+    return layout.cards.length + ' cards in ' + layout.rowsOfThree.length +
+      ' rows of three, reaching ' + IS9WD_a1_(layout.endRow, layout.lastCol, 1, 1) +
+      ', and not one cream cell on it.';
   });
 
   IS9WD_stRun_(suite, 'No frozen column on any tab', ctx.cfg, function () {

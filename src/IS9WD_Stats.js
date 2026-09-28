@@ -1820,6 +1820,35 @@ function IS9WD_statsBlock_(sheet, layout, bandRow, title, help, headers, firstRo
   IS9WD_statsTints_(sheet, firstRow, rows, cols, at);
   IS9WD_setDataHeights_(sheet, firstRow, rows);
   IS9WD_clearBanding_(body);
+  IS9WD_statsInnerRules_(sheet, bandRow, firstRow, rows, at, cols, headers);
+}
+
+// A TABLE READS AS A TABLE BECAUSE ITS RULES ARE DRAWN, NOT BECAUSE GRIDLINES SHOW THROUGH.
+// Ethan asked for gridlines on 2026-09-28 and the workbook already had them switched on, so
+// this looked done and was not: Sheets draws a gridline only on an UNFILLED cell, and every
+// cell of every card is filled #F8FBFD by the card painter. So the gridline he switched on
+// is invisible on precisely the tabs he was looking at, and a nine column table inside a
+// card reads as a wall of text.
+//
+// Dotted #58756a inside the table, both directions, and one solid rule under the header so
+// the header parts from the body. Dotted rather than solid because a solid inner grid on a
+// fourteen row card competes with the card's own border for the eye, and the card's border
+// is the thing that has to win.
+//
+// Restricted to the LABELLED columns rather than the whole card width: a card is usually
+// wider than its table, and ruling the empty run to the right of a table would draw a grid
+// over nothing and make the table look like it had lost its data.
+function IS9WD_statsInnerRules_(sheet, bandRow, firstRow, rows, firstCol, cols, headers) {
+  var labelled = cols ? cols.length : (headers ? headers.length : 0);
+  if (labelled < 1 || rows < 1) return;
+  sheet.getRange(firstRow, firstCol, rows, labelled).setBorder(
+    null, null, null, null, true, true,
+    IS9WD_ROLE.CARD_BORDER, SpreadsheetApp.BorderStyle.DOTTED);
+  if (headers) {
+    sheet.getRange(bandRow + 2, firstCol, 1, labelled).setBorder(
+      null, null, true, null, null, null,
+      IS9WD_ROLE.CARD_BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  }
 }
 
 // Font colour and weight per column, which IS9WD_applyColumnStyles_ deliberately does
@@ -2314,4 +2343,248 @@ function IS9WD_otRules_(sheet, layout) {
       '=' + IS9WD_statsCell_(at, b.noticeRow) + '<>""', flag));
   }
   return rules;
+}
+
+// ============================================================================
+//  00 | DASHBOARD  (the front door, built 2026-09-28)
+// ============================================================================
+
+// Built here rather than in a file of its own, because this module already owns the two
+// other card grid tabs and every painter the dashboard needs: the grid geometry, the card,
+// the band, the hint row, the gap, the end band and the row heights. A third copy of those
+// in a fourth file is three chances for the three tabs to stop looking alike.
+//
+// The whole tab is formulas over named ranges that already exist. Nothing is recomputed,
+// so this tab cannot disagree with the tab it summarises, and the seven readiness gates in
+// particular are mirrored from 04 | Statistics rather than evaluated a third time.
+function IS9WD_dashResize_(cfg) {
+  var layout = IS9WD_dash_();
+  var sheet = IS9WD_sheet_('DASHBOARD');
+
+  IS9WD_ensureGrid_(sheet, layout.endRow, layout.lastCol);
+  IS9WD_dashWipe_(sheet, layout);
+  var names = IS9WD_dashPointNames_(sheet, layout);
+  IS9WD_dashPaintAll_(sheet, layout);
+  var written = IS9WD_dashWriteAll_(sheet, layout, cfg);
+  // Trimmed last, for the reason 04 | Statistics learned the hard way: trimming first
+  // leaves a window in which a later step that grows the grid inherits the format of the
+  // last built row, because an inserted row copies the row above it.
+  IS9WD_dashTrim_(sheet, layout);
+  return {
+    namesPointed: names, cards: layout.cards.length, rows: written,
+    lastRow: layout.endRow, maxRows: sheet.getMaxRows(),
+    maxCols: sheet.getMaxColumns()
+  };
+}
+
+function IS9WD_dashPointNames_(sheet, layout) {
+  var want = IS9WD_dashNames_(layout);
+  for (var i = 0; i < want.length; i++) {
+    IS9WD_setNamed_(want[i].name, sheet.getRange(want[i].a1));
+  }
+  return want.length;
+}
+
+function IS9WD_dashWipe_(sheet, layout) {
+  var rows = Math.min(Math.max(layout.endRow, sheet.getLastRow()), sheet.getMaxRows());
+  var cols = Math.min(Math.max(layout.lastCol, sheet.getLastColumn()),
+    sheet.getMaxColumns());
+  var all = sheet.getRange(1, 1, rows, cols);
+  all.clear();
+  // clear() does not clear a border, so a card drawn by an earlier layout would leave its
+  // outline behind on a tab whose cards have moved.
+  all.setBorder(false, false, false, false, false, false);
+  all.clearNote();
+}
+
+function IS9WD_dashTrim_(sheet, layout) {
+  IS9WD_clearPastEnd_(sheet, layout.endRow, layout.lastCol);
+  var extraRows = sheet.getMaxRows() - layout.endRow;
+  if (extraRows > 0) sheet.deleteRows(layout.endRow + 1, extraRows);
+  var extraCols = sheet.getMaxColumns() - layout.lastCol;
+  if (extraCols > 0) sheet.deleteColumns(layout.lastCol + 1, extraCols);
+}
+
+// THE CARD IS PAINTED OVER ITS WHOLE GRID CELL, not over the rows it happens to fill. A
+// card with five rows sitting beside one with eight would otherwise leave a hole in the
+// row of three, and three cards that do not line up at the bottom is the single thing that
+// makes a grid look unfinished.
+function IS9WD_dashPaintAll_(sheet, layout) {
+  IS9WD_paintBanner_(sheet, layout.bannerRow, 1, layout.lastCol, IS9WD_DASH_BANNER);
+  IS9WD_paintHelp_(sheet, layout.helpRow, 1, layout.lastCol, IS9WD_DASH_HELP);
+  sheet.setRowHeight(3, IS9WD_ROW_H.SPACER);
+  sheet.getRange(3, 1, 1, layout.lastCol).setBackground(null);
+
+  for (var c = 0; c < layout.cards.length; c++) {
+    var card = layout.cards[c];
+    IS9WD_paintCard_(sheet, card.bandRow, card.blockLastRow, card.firstCol, card.lastCol);
+    IS9WD_paintCardBand_(sheet, card.bandRow, card.firstCol, card.lastCol,
+      card.spec.title);
+    IS9WD_paintHint_(sheet, card.hintRow, card.firstCol, card.lastCol, card.spec.help);
+    IS9WD_dashPaintBody_(sheet, card);
+  }
+
+  // A gap carries nothing: no value, no fill, no border. That is the only thing that makes
+  // three cards read as three cards rather than as one banded table.
+  for (var g = 0; g < layout.gapCols.length; g++) {
+    // The width comes from IS9WD_WIDTH.DASHBOARD like every other column on the tab, so
+    // the gap is declared in one place rather than set twice from two numbers.
+    IS9WD_clearGap_(sheet, 1, layout.endRow, layout.gapCols[g], layout.gapCols[g]);
+  }
+  for (var r = 0; r < layout.gapRows.length; r++) {
+    IS9WD_clearGap_(sheet, layout.gapRows[r], layout.gapRows[r], 1, layout.lastCol);
+    sheet.setRowHeight(layout.gapRows[r], IS9WD_ROW_H.SPACER);
+  }
+  IS9WD_statsEndBand_(sheet, layout.endRow, layout.lastCol);
+  IS9WD_dashChrome_(sheet, layout);
+}
+
+// The label column, the value column, and the four the value overflows into. The value is
+// LEFT aligned rather than right, because most of them are sentences and a right aligned
+// sentence that overflows runs the wrong way, off the left edge of its own card.
+//
+// A TABLE READS AS A TABLE BECAUSE ITS RULES ARE DRAWN. Sheets shows a gridline only on an
+// unfilled cell, and every cell of a card is filled #F8FBFD, so a card with no drawn rules
+// is a wall of text no matter what the gridline setting says. Dotted #58756a inside the
+// card, horizontals between the rows and one vertical after the label column, is what
+// Ethan asked for when he asked for gridlines.
+function IS9WD_dashPaintBody_(sheet, card) {
+  var rows = card.lastRow - card.firstRow + 1;
+  var width = card.lastCol - card.firstCol + 1;
+  if (rows < 1) return;
+
+  var body = sheet.getRange(card.firstRow, card.firstCol, rows, width);
+  IS9WD_style_(body, {
+    size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG, bg: IS9WD_ROLE.CARD_BODY_BG,
+    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.OVER, format: IS9WD_FMT.TEXT
+  });
+  IS9WD_clearBanding_(body);
+
+  var labels = sheet.getRange(card.firstRow, card.firstCol, rows, 1);
+  IS9WD_style_(labels, {
+    size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.HINT_FG, bg: IS9WD_ROLE.CARD_BODY_BG,
+    align: IS9WD_ALIGN.LEFT, wrap: IS9WD_WRAP.CLIP, format: IS9WD_FMT.TEXT
+  });
+
+  var values = sheet.getRange(card.firstRow, card.firstCol + IS9WD_DASH_VALUE_COL - 1,
+    rows, width - 1);
+  values.setFontWeight('bold');
+
+  body.setBorder(null, null, null, null, false, true, IS9WD_ROLE.CARD_BORDER,
+    SpreadsheetApp.BorderStyle.DOTTED);
+  labels.setBorder(null, null, null, true, false, true, IS9WD_ROLE.CARD_BORDER,
+    SpreadsheetApp.BorderStyle.DOTTED);
+  IS9WD_setDataHeights_(sheet, card.firstRow, rows);
+}
+
+function IS9WD_dashChrome_(sheet, layout) {
+  IS9WD_setWidths_(sheet, 'DASHBOARD');
+  sheet.showColumns(1, layout.lastCol);
+  sheet.showRows(1, layout.endRow);
+  IS9WD_freezeTab_(sheet, 'DASHBOARD');
+  sheet.setTabColor(IS9WD_TAB_COLOR.DASHBOARD);
+  sheet.getRange(1, 1, layout.endRow, layout.lastCol).setFontFamily(IS9WD_FONT);
+}
+
+// The values, the number formats and the one conditional rule the tab has.
+function IS9WD_dashWriteAll_(sheet, layout, cfg) {
+  var written = 0;
+  var rules = [];
+  for (var c = 0; c < layout.cards.length; c++) {
+    var card = layout.cards[c];
+    var rows = card.spec.jobs ? IS9WD_dashJobRows_(cfg) : card.spec.rows;
+    var labels = [];
+    var values = [];
+    for (var r = 0; r < rows.length; r++) {
+      labels.push([rows[r].label]);
+      values.push([rows[r].formula]);
+      var kind = IS9WD_dashKindStyle_(rows[r].kind);
+      var cell = sheet.getRange(card.firstRow + r, card.firstCol + 1);
+      cell.setNumberFormat(kind.format);
+      cell.setHorizontalAlignment(kind.align);
+      if (rows[r].flag) {
+        rules.push(IS9WD_dashFlagRule_(sheet, card.firstRow + r, card.firstCol + 1,
+          card.lastCol, rows[r].flag));
+      }
+      written++;
+    }
+    if (!rows.length) continue;
+    sheet.getRange(card.firstRow, card.firstCol, rows.length, 1).setValues(labels);
+    sheet.getRange(card.firstRow, card.firstCol + 1, rows.length, 1)
+      .setFormulas(values);
+  }
+  // The first rule on the tab catches a broken lookup, before every other rule, so it wins
+  // on any cell it touches. !ERR is the literal this workbook renders rather than letting
+  // an error value leak into a sentence.
+  rules.unshift(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=A1="!ERR"')
+    .setFontColor(IS9WD_ROLE.FLAG_FG).setBold(true)
+    .setRanges([sheet.getRange(1, 1, layout.endRow, layout.lastCol)])
+    .build());
+  sheet.setConditionalFormatRules(rules);
+  return written;
+}
+
+// Bold #724485 on the paper white, never on cream, which is the workbook's one blocking
+// treatment. A calm value gets no treatment at all.
+function IS9WD_dashFlagRule_(sheet, row, firstCol, lastCol, formula) {
+  return SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied(formula)
+    .setFontColor(IS9WD_ROLE.FLAG_FG).setBold(true)
+    .setRanges([sheet.getRange(row, firstCol, 1, lastCol - firstCol + 1)])
+    .build();
+}
+
+// The five job rows, read by INDEX over the schedule block because the schedule has no per
+// column named range. Built at write time rather than declared, so a schedule that grows a
+// row grows this card with it.
+function IS9WD_dashJobRows_(cfg) {
+  var out = [];
+  var conf = cfg || null;
+  var rows = conf && conf.schedule && conf.schedule.rows ? conf.schedule.rows : [];
+  for (var i = 0; i < IS9WD_DASH_JOB_ROWS; i++) {
+    var label = rows[i] ? IS9WD_dashJobLabel_(rows[i].jobKey) : 'Job ' + (i + 1);
+    var n = i + 1;
+    out.push({
+      label: label,
+      formula: '=IFERROR(IF(INDEX(IS9WD_SCHEDULE,' + n + ',6)=TRUE,"on","off")&"' +
+        IS9WD_SEP + '"&IF(INDEX(IS9WD_SCHEDULE,' + n + ',8)="","never run",' +
+        'TEXT(INDEX(IS9WD_SCHEDULE,' + n + ',8),"MMM d HH:mm"))&' +
+        'IF(INDEX(IS9WD_SCHEDULE,' + n + ',9)="","","' + IS9WD_SEP + '"&' +
+        'INDEX(IS9WD_SCHEDULE,' + n + ',9)),"!ERR")',
+      kind: 'text',
+      flag: '=IFERROR(ISNUMBER(SEARCH("fail",INDEX(IS9WD_SCHEDULE,' + n + ',9))),FALSE)'
+    });
+  }
+  return out;
+}
+
+// A job key is a machine word. The dashboard is the one tab a person reads first, so it
+// gets a sentence fragment instead.
+function IS9WD_dashJobLabel_(jobKey) {
+  var key = IS9WD_trim_(jobKey).toUpperCase();
+  var map = {
+    MONDAY: 'Monday assignment emails',
+    DIGEST: 'Daily digest emails',
+    BRIEF: 'Your Sunday brief',
+    ARCHIVE: 'Archive the week',
+    HEARTBEAT: 'Hourly heartbeat'
+  };
+  return map[key] || (IS9WD_trim_(jobKey) === '' ? 'Unnamed job' : IS9WD_trim_(jobKey));
+}
+
+// ONE REGISTRY, so no tab picks a number format or an alignment by hand. A count is an
+// integer and right aligned; a date is the workbook's date key and right aligned; a rate is
+// a whole percent and right aligned; text is left aligned. That is the house rule, and it
+// is here rather than in six call sites because six call sites is six chances to disagree.
+var IS9WD_KIND_FMT_ = {
+  count: { format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT },
+  rate: { format: IS9WD_FMT.PCT, align: IS9WD_ALIGN.RIGHT },
+  date: { format: IS9WD_FMT.DATE_KEY, align: IS9WD_ALIGN.RIGHT },
+  text: { format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.LEFT }
+};
+
+function IS9WD_dashKindStyle_(kind) {
+  var want = IS9WD_trim_(kind).toLowerCase();
+  return IS9WD_KIND_FMT_[want] || IS9WD_KIND_FMT_.text;
 }
