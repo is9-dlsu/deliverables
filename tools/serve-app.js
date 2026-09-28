@@ -72,8 +72,23 @@ http.createServer((req, res) => {
   let file = req.url.split('?')[0].split('#')[0];
   if (file === '/' || file === '') file = '/index.html';
   if (file === '/endpoint.js') {
+    // THE REAL ENDPOINT WINS WHEN IT EXISTS. app/endpoint.js is gitignored and holds the live
+    // /exec address, so when it is present this server hands it straight over and the page
+    // talks to the actual workbook. That is how a tick gets tested end to end without anyone
+    // pasting a token into a chat window: the token stays in the officer's own browser, in the
+    // URL fragment, and never reaches this process at all.
+    //
+    // With no endpoint.js the fake below is used instead, which is offline development mode
+    // and touches nothing in Drive.
+    const real = path.join(ROOT, 'endpoint.js');
     res.writeHead(200, { 'Content-Type': 'text/javascript' });
-    res.end("window.IS9WD_ENDPOINT = 'http://localhost:" + PORT + "/exec';");
+    if (fs.existsSync(real)) {
+      console.log('serving the LIVE endpoint from app/endpoint.js');
+      res.end(fs.readFileSync(real));
+    } else {
+      console.log('serving the FAKE endpoint on this server');
+      res.end("window.IS9WD_ENDPOINT = 'http://localhost:" + PORT + "/exec';");
+    }
     return;
   }
   const full = path.join(ROOT, file);
