@@ -543,9 +543,44 @@ function IS9WD_itemObject_(line, row) {
 // the last. Half the cells of the old single read on an empty sheet, and a fraction on one
 // with a few dozen rows.
 var IS9WD_ITEMS_KEY_ = 'IS9WD_ITEM_ROWS_v1';
-var IS9WD_ITEMS_TTL_ = 20;
+var IS9WD_ITEMS_TTL_ = 600;
 var IS9WD_ITEMS_LIVE_ = false;
 var IS9WD_ITEMS_HIT_ = false;
+
+// THE LAST USED ROW IS REMEMBERED TOO, for six hours, so the live read can cover the rows in
+// use plus a slack of fifty instead of all two thousand. The slack is checked: if anything sits
+// in it, somebody typed past the memory and the full scan runs instead. The edit hook lifts the
+// memory when a person types below it; every script write drops it, so the next live read is
+// a full scan that sets it again. A row can only be missed by a write that neither the hook
+// nor the script saw, and the six hour expiry bounds even that.
+var IS9WD_ITEMS_HINT_KEY_ = 'IS9WD_ITEM_LAST_ROW_v1';
+var IS9WD_ITEMS_HINT_TTL_ = 21600;
+var IS9WD_ITEMS_SLACK_ = 50;
+var IS9WD_ITEMS_SCAN_ = '';
+
+function IS9WD_itemsHint_() {
+  try {
+    return IS9WD_posInt_(CacheService.getScriptCache().get(IS9WD_ITEMS_HINT_KEY_));
+  } catch (err) {
+    return null;
+  }
+}
+
+function IS9WD_itemsHintSet_(row) {
+  try {
+    CacheService.getScriptCache().put(IS9WD_ITEMS_HINT_KEY_, String(row), IS9WD_ITEMS_HINT_TTL_);
+  } catch (err) {
+    Logger.log('IS9WD: the last used row was not remembered: ' + err);
+  }
+}
+
+// Lift, never lower: the hook sees one edit at a time and the rows below it are still there.
+function IS9WD_itemsHintLift_(row) {
+  var have = IS9WD_itemsHint_();
+  var want = IS9WD_posInt_(row);
+  if (want === null) return;
+  if (have === null || want > have) IS9WD_itemsHintSet_(want);
+}
 
 function IS9WD_itemsLines_() {
   IS9WD_ITEMS_HIT_ = false;
@@ -567,14 +602,43 @@ function IS9WD_itemsLines_() {
   var first = IS9WD_ITEMS.firstRow;
   var rows = IS9WD_ITEMS.lastRow - first + 1;
   var lastTyped = IS9WD_itemColIndex_('Created at') - IS9WD_ITEMS.firstCol;
+  var out = [];
+  var r;
+  var c;
+
+  // THE SMALL READ, when the last used row is remembered: one call over the rows in use plus
+  // the slack, all seventeen columns, and the slack must be empty or the full scan runs.
+  var hint = IS9WD_itemsHint_();
+  if (hint !== null && hint >= first && hint + IS9WD_ITEMS_SLACK_ < IS9WD_ITEMS.lastRow) {
+    var span = hint - first + 1 + IS9WD_ITEMS_SLACK_;
+    var quick = sheet.getRange(first, IS9WD_ITEMS.firstCol, span, IS9WD_ITEMS.lastCol).getValues();
+    var clean = true;
+    for (r = span - IS9WD_ITEMS_SLACK_; r < span && clean; r++) {
+      for (c = 0; c <= lastTyped; c++) {
+        if (IS9WD_filled_(quick[r][c])) { clean = false; break; }
+      }
+    }
+    if (clean) {
+      for (r = 0; r < span; r++) {
+        for (c = 0; c <= lastTyped; c++) {
+          if (IS9WD_filled_(quick[r][c])) { out.push({ row: first + r, line: quick[r] }); break; }
+        }
+      }
+      IS9WD_ITEMS_SCAN_ = 'small';
+      if (out.length) IS9WD_itemsHintSet_(out[out.length - 1].row);
+      return IS9WD_itemsRemember_(out);
+    }
+  }
+
+  // THE FULL SCAN: the nine typed and stamped columns for every row, which is what decides
+  // whether a row is used, then A to Q for the span from the first used row to the last.
   var head = sheet.getRange(first, IS9WD_ITEMS.firstCol, rows, lastTyped + 1).getValues();
   var used = [];
-  for (var r = 0; r < head.length; r++) {
-    for (var c = 0; c <= lastTyped; c++) {
+  for (r = 0; r < head.length; r++) {
+    for (c = 0; c <= lastTyped; c++) {
       if (IS9WD_filled_(head[r][c])) { used.push(r); break; }
     }
   }
-  var out = [];
   if (used.length) {
     var lo = used[0];
     var hi = used[used.length - 1];
@@ -584,6 +648,12 @@ function IS9WD_itemsLines_() {
       out.push({ row: first + used[u], line: block[used[u] - lo] });
     }
   }
+  IS9WD_ITEMS_SCAN_ = 'full';
+  IS9WD_itemsHintSet_(out.length ? out[out.length - 1].row : first);
+  return IS9WD_itemsRemember_(out);
+}
+
+function IS9WD_itemsRemember_(out) {
   if (!IS9WD_ITEMS_LIVE_) {
     try {
       var text = JSON.stringify(IS9WD_packDates_(out));
@@ -597,9 +667,14 @@ function IS9WD_itemsLines_() {
   return out;
 }
 
-function IS9WD_itemsCacheReset_() {
+// keepHint is the edit hook's case: a person typed, the rows are stale, but the last used row
+// only ever went up and the hook lifts it separately. A script write drops both, so the next
+// live read is a full scan that sets the row again.
+function IS9WD_itemsCacheReset_(keepHint) {
   try {
-    CacheService.getScriptCache().remove(IS9WD_ITEMS_KEY_);
+    var cache = CacheService.getScriptCache();
+    cache.remove(IS9WD_ITEMS_KEY_);
+    if (keepHint !== true) cache.remove(IS9WD_ITEMS_HINT_KEY_);
   } catch (err) {
     Logger.log('IS9WD: the item rows were not cleared: ' + err);
   }

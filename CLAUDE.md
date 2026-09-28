@@ -15,7 +15,7 @@ Build detail: `docs/BUILD-REFERENCE.md`. Read it when implementing. It is not au
 * Setup must be idempotent and must never wipe Ethan-entered items, tokens, archive rows or log rows.
 * Nothing keys on a status label. Statuses live in the Configuration status list, and code reads the derived `Active` flag.
 * The `01 | Canva Feed` string formats in SPEC.md section 4 are a contract. Do not change them without Ethan's approval, because a weekly Canva update depends on them. Proposed changes go in the reference's Appendix A2 with an interim behaviour, never applied silently.
-* Every function ends in `_` except `doGet`, `doPost`, `onOpen`, the RPC entry point and the menu handlers, because `google.script.run` exposes everything else.
+* Every function ends in `_` except `doGet`, `doPost`, `onOpen`, `onEdit`, the trigger handler `IS9WD_hourlyDispatch`, the RPC entry point and the menu handlers, because `google.script.run` exposes everything else and Apps Script calls those by name.
 * No change to `appsscript.json` oauthScopes without re-authorizing from the editor, then cutting a new version and repointing the deployment. An anonymous caller can never answer an authorization prompt.
 * Push with `clasp --user dlsu push -f` and confirm the pushed file count. A non-TTY shell silently skips a push when the manifest changed.
 * No em dashes in any user-facing text.

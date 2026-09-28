@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 7;
+var IS9WD_API_VERSION_ = 8;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -415,7 +415,7 @@ function IS9WD_apiPing_(req) {
       settingsMs: t1 - t0,
       settings: IS9WD_SNAP_HIT_ === true ? 'memory' : 'live',
       itemsMs: itemsMs,
-      items: IS9WD_ITEMS_HIT_ === true ? 'memory' : 'live',
+      items: IS9WD_ITEMS_HIT_ === true ? 'memory' : 'live ' + (IS9WD_ITEMS_SCAN_ || 'scan'),
       coords: IS9WD_COORDS_HIT_ === true ? 'memory' : 'resolved live',
       names: IS9WD_COORDS_ ? Object.keys(IS9WD_COORDS_).length : 0
     };

@@ -4030,7 +4030,7 @@ function IS9WD_namedDuplicates_() {
 // which is how a grown sign-off store stays inside the snapshot without asking the sheet how
 // tall it is; on a cold memory it asks.
 var IS9WD_SNAP_KEY_ = 'IS9WD_SETTINGS_SNAP_v1';
-var IS9WD_SNAP_TTL_ = 30;
+var IS9WD_SNAP_TTL_ = 300;
 var IS9WD_SNAP_HIT_ = false;
 
 function IS9WD_cfgSnapshot_(force) {
@@ -4100,6 +4100,34 @@ function IS9WD_snapToCache_(snap) {
     CacheService.getScriptCache().put(IS9WD_SNAP_KEY_, text, IS9WD_SNAP_TTL_);
   } catch (err) {
     Logger.log('IS9WD: the settings snapshot was not remembered: ' + err);
+  }
+}
+
+/**
+ * THE EDIT HOOK. A simple trigger: Sheets calls it for every edit a person makes in the
+ * workbook, with no installation and no authorization, and it may use the cache. It does one
+ * thing: it forgets whatever memory the edit made stale, so a row typed on the deliverables tab
+ * is on a phone at the next open and a switch flipped on Configuration is read at the next
+ * request, and the memories can therefore last minutes rather than seconds. On the deliverables
+ * tab it also lifts the remembered last used row, so a row typed far down is not missed by
+ * the small read. Script writes do not fire this; they clear the memories themselves.
+ *
+ * No trailing underscore: Apps Script calls it by this exact name, like onOpen.
+ */
+function onEdit(e) {
+  try {
+    var range = e && e.range ? e.range : null;
+    if (!range) return;
+    var name = range.getSheet().getName();
+    if (name === IS9WD_TAB.ITEMS) {
+      if (typeof IS9WD_itemsCacheReset_ === 'function') IS9WD_itemsCacheReset_(true);
+      if (typeof IS9WD_itemsHintLift_ === 'function') IS9WD_itemsHintLift_(range.getLastRow());
+    } else if (name === IS9WD_TAB.CONFIG || name === IS9WD_TAB.ENGINE) {
+      IS9WD_snapReset_();
+    }
+  } catch (err) {
+    // A simple trigger that throws shows the person an error bar for a memory they never
+    // knew existed. The memory expires on its own.
   }
 }
 
