@@ -1301,7 +1301,7 @@ function IS9WD_stTabOrder_(suite, ctx) {
       ', and not one cream cell on it.';
   });
 
-  IS9WD_stRun_(suite, 'No frozen column on any tab', ctx.cfg, function () {
+  IS9WD_stRun_(suite, 'Nothing is frozen on any tab', ctx.cfg, function () {
     var problems = [];
     for (var i = 0; i < IS9WD_TAB_ORDER.length; i++) {
       var key = IS9WD_TAB_ORDER[i];
@@ -1319,8 +1319,8 @@ function IS9WD_stTabOrder_(suite, ctx) {
       }
     }
     if (problems.length) return IS9WD_stFail_(IS9WD_stList_(problems));
-    return 'No tab freezes a column, and every tab freezes the header rows the layout ' +
-      'asks for.';
+    return 'Nothing is frozen anywhere, rows or columns, on any of the ' +
+      IS9WD_TAB_ORDER.length + ' tabs.';
   });
 }
 
@@ -2251,12 +2251,20 @@ function IS9WD_stGrid_(suite, ctx) {
         }
       }
 
-      // A separator carries no fill: the one thing about the paint a sheet can be asked.
+      // A SEPARATOR CARRIES NO FILL BETWEEN THE CARDS, which is the one thing about the
+      // paint a sheet can be asked. It is asserted between the first card row and the row
+      // above the end band, and deliberately NOT across the tab's own chrome: the banner,
+      // the help line and the end band are the tab speaking rather than a card, they run
+      // the tab's full width, and punching the separators out of them cut the green bar
+      // into three pieces with two white notches in it. Asserting row 1 is what made this
+      // check fail on a workbook whose header was finally correct.
       var cols = Math.min(read.cols, L.lastCol);
+      var firstCardRow = L.gridRows && L.gridRows.length ? L.gridRows[0].firstRow : 1;
+      var lastCardRow = L.endRow - 1;
       for (var gc = 0; gc < L.gapCols.length; gc++) {
         var at = L.gapCols[gc];
         if (at > cols) continue;
-        for (var r = 1; r <= L.endRow; r++) {
+        for (var r = firstCardRow; r <= lastCardRow; r++) {
           if (IS9WD_stPainted_(read.backgrounds[r - 1][at - 1])) {
             problems.push('the separator column ' + IS9WD_colLetter_(at) + ' is painted ' +
               read.backgrounds[r - 1][at - 1] + ' on row ' + r);

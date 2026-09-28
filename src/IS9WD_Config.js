@@ -409,22 +409,30 @@ var IS9WD_HIDE_COLS = {
 //
 // Frozen rows: the two new tabs freeze enough to keep their own banner on screen,
 // so a tab that runs to row 229 always says what it is.
+// NOTHING IS FROZEN ON ANY TAB, ROWS OR COLUMNS. Ethan ruled on 2026-09-28, extending his
+// 2026-09-27 ruling on columns to rows as well.
+//
+// The cost is named rather than quietly skipped, because it is real: on 03 | Deliverables the
+// column headers and the plain English hint row scroll away at about row 30, so a reader far
+// down the table sees seventeen unlabelled columns; on 06 | Archive and 07 | Log the same;
+// and on the three card tabs the tab's own banner leaves the screen. What carries the weight
+// instead is that every block states itself where it sits: a card carries its own band and
+// its own header row beside its own data, and the data tab's five input columns are the five
+// cream ones, which is a signal that does not scroll.
+//
+// It stays a table rather than a set of zeroes so a later administration can reverse it in
+// one edit, and so the self test can assert the workbook matches whatever it says.
 var IS9WD_FREEZE = {
-  // Two: the banner and the one line that says what the tab is for. Nothing below them is
-  // a header, because a dashboard card carries its own band.
-  DASHBOARD: { rows: 2, cols: 0 },
-  CONFIG: { rows: 2, cols: 0 },
-  FEED: { rows: 1, cols: 0 },
-  // Four now, not three: row 4 on the data tab is the plain English hint row that says
-  // what to type into each column, and a hint that scrolls away on row 40 is a hint that
-  // helps nobody.
-  ITEMS: { rows: 4, cols: 0 },
-  STATS: { rows: 2, cols: 0 },
-  TABLES: { rows: 3, cols: 0 },
-  ARCHIVE: { rows: 3, cols: 0 },
-  LOG: { rows: 3, cols: 0 },
-  ENGINE: { rows: 2, cols: 0 },
-  VIEWS: { rows: 2, cols: 0 }
+  DASHBOARD: { rows: 0, cols: 0 },
+  CONFIG: { rows: 0, cols: 0 },
+  FEED: { rows: 0, cols: 0 },
+  ITEMS: { rows: 0, cols: 0 },
+  STATS: { rows: 0, cols: 0 },
+  TABLES: { rows: 0, cols: 0 },
+  ARCHIVE: { rows: 0, cols: 0 },
+  LOG: { rows: 0, cols: 0 },
+  ENGINE: { rows: 0, cols: 0 },
+  VIEWS: { rows: 0, cols: 0 }
 };
 
 // ============================================================================

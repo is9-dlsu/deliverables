@@ -1737,10 +1737,21 @@ function IS9WD_statsPaintAll_(sheet, layout) {
 // Every separator: the one empty column between two cards, top to bottom, and the one empty
 // row between two stacked rows of cards, left to right. A gap that carries a fill or a
 // border is not a gap, so both lose both.
+// A SEPARATOR IS CLEARED BETWEEN THE CARDS, NOT ACROSS THE TAB'S OWN CHROME. The banner,
+// the help line and the end band are the tab speaking, not a card, and they run its whole
+// width, so punching the two separator columns out of them cut the green bar into three
+// pieces with two white notches in it. That is what Ethan saw on 2026-09-28 and it was
+// mine: the gap pass ran from row 1.
+//
+// The rule it was serving still holds and is unchanged: between the first card row and the
+// row above the end band, a separator carries no value, no fill and no border, because that
+// is the only thing that makes three cards read as three cards.
 function IS9WD_statsGaps_(sheet, layout) {
   var f = layout;
+  var firstGapRow = f.helpRow + 1;
+  var lastGapRow = f.endRow - 1;
   for (var c = 0; c < f.gapCols.length; c++) {
-    IS9WD_clearGap_(sheet, 1, f.endRow, f.gapCols[c], f.gapCols[c]);
+    IS9WD_clearGap_(sheet, firstGapRow, lastGapRow, f.gapCols[c], f.gapCols[c]);
   }
   for (var r = 0; r < f.spacerRows.length; r++) {
     IS9WD_clearGap_(sheet, f.spacerRows[r], f.spacerRows[r], 1, f.lastCol);
@@ -2286,10 +2297,14 @@ function IS9WD_otPaintAll_(sheet, layout) {
   sheet.setTabColor(IS9WD_TAB_COLOR.TABLES);
 }
 
+// Between the cards only, for the reason IS9WD_statsGaps_ gives above. The summary row
+// counts as chrome here: it is the tab speaking, so it keeps its fill across the full width.
 function IS9WD_otGaps_(sheet, layout) {
   var o = layout;
+  var firstGapRow = o.summaryRow + 1;
+  var lastGapRow = o.endRow - 1;
   for (var c = 0; c < o.gapCols.length; c++) {
-    IS9WD_clearGap_(sheet, 1, o.endRow, o.gapCols[c], o.gapCols[c]);
+    IS9WD_clearGap_(sheet, firstGapRow, lastGapRow, o.gapCols[c], o.gapCols[c]);
   }
   for (var r = 0; r < o.spacerRows.length; r++) {
     IS9WD_clearGap_(sheet, o.spacerRows[r], o.spacerRows[r], 1, o.lastCol);
@@ -2460,9 +2475,11 @@ function IS9WD_dashPaintAll_(sheet, layout) {
   // band, for the reason the two other card tabs learned: the end band runs the tab's own
   // width and therefore crosses both separator columns.
   for (var g = 0; g < layout.gapCols.length; g++) {
-    // The width comes from IS9WD_WIDTH.DASHBOARD like every other column on the tab, so
-    // the gap is declared in one place rather than set twice from two numbers.
-    IS9WD_clearGap_(sheet, 1, layout.endRow, layout.gapCols[g], layout.gapCols[g]);
+    // Between the cards only, never across the banner, the help line or the end band: the
+    // tab's chrome runs its full width and a separator punched through it reads as a broken
+    // bar. The width comes from IS9WD_WIDTH.DASHBOARD like every other column on the tab.
+    IS9WD_clearGap_(sheet, layout.helpRow + 1, layout.endRow - 1,
+      layout.gapCols[g], layout.gapCols[g]);
   }
   for (var r = 0; r < layout.gapRows.length; r++) {
     IS9WD_clearGap_(sheet, layout.gapRows[r], layout.gapRows[r], 1, layout.lastCol);
