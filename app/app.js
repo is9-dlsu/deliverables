@@ -104,7 +104,7 @@ function Notice({ kind, title, detail, onRetry }) {
 
 // A whole item. The row is the tap target, not a small checkbox: a 44 px minimum is the
 // difference between ticking your task and ticking the one under it on a phone.
-function Item({ item, busy, undoLeft, onToggle }) {
+function Item({ item, busy, undoLeft, onToggle, showCommittee }) {
   const done = item.active === false;
   const overdue = item.overdue === true && !done;
   // `fresh` marks the item ticked on this screen inside its undo window: the only one whose
@@ -124,6 +124,7 @@ function Item({ item, busy, undoLeft, onToggle }) {
           <span class="title">${item.title}</span>
           ${item.remark ? html`<span class="remark">${item.remark}</span>` : null}
           <span class="meta">
+            ${showCommittee && item.committee ? html`<span class="office">${item.committee}</span>` : null}
             <span class="due">${item.deadlineLong || item.deadlineText || ''}</span>
             ${overdue ? html`<span class="tag">Overdue</span>` : null}
             ${item.flag ? html`<span class="tag flag">${item.flag}</span>` : null}
@@ -145,6 +146,60 @@ function Item({ item, busy, undoLeft, onToggle }) {
 }
 
 // ---------------------------------------------------------------------------
+// The sign-off, admin only
+// ---------------------------------------------------------------------------
+
+// A person as the picker shows them: the name as typed, then the position; a row with no
+// name yet shows its office instead, so the picker never has a blank line.
+function personLabel(p) {
+  const who = p.name || p.committee || p.key;
+  return p.position ? who + ', ' + p.position : who;
+}
+
+// The key of the person whose name is on the stored row, so the picker opens on what is
+// set rather than on blanks. The store keeps names, not keys, because a name is what prints.
+function keyForName(people, name) {
+  if (!name) return '';
+  const hit = (people || []).filter((p) => p.name === name)[0];
+  return hit ? hit.key : '';
+}
+
+// SPEC section 3: prepared by and checked by change every week, so they are set here, from a
+// picker over the fourteen, and Ready for Canva reads NO until this week's pair is set.
+function SignoffCard({ state, prepared, checked, busy, note, onPrepared, onChecked, onSave }) {
+  const so = state.signoff || {};
+  const people = state.people || [];
+  const ready = prepared !== '' && checked !== '' && !busy;
+  return html`
+    <section class="signoff" aria-labelledby="signoff-title">
+      <h2 class="signoff-title" id="signoff-title">Sign-off for this week</h2>
+      <p class=${'signoff-state' + (so.set ? '' : ' hold')}>
+        ${so.set
+          ? 'Set: prepared by ' + so.preparedName + ', checked by ' + so.checkedName + '.'
+          : 'Not set. Ready for Canva reads NO until it is.'}
+      </p>
+      <label class="field">
+        <span>Prepared by</span>
+        <select value=${prepared} disabled=${busy} onChange=${(e) => onPrepared(e.target.value)}>
+          <option value="">Choose a person</option>
+          ${people.map((p) => html`<option key=${p.key} value=${p.key}>${personLabel(p)}</option>`)}
+        </select>
+      </label>
+      <label class="field">
+        <span>Checked by</span>
+        <select value=${checked} disabled=${busy} onChange=${(e) => onChecked(e.target.value)}>
+          <option value="">Choose a person</option>
+          ${people.map((p) => html`<option key=${p.key} value=${p.key}>${personLabel(p)}</option>`)}
+        </select>
+      </label>
+      <button type="button" class="save" disabled=${!ready} onClick=${onSave}>
+        ${busy ? 'Saving...' : (so.set ? 'Update sign-off' : 'Set sign-off')}
+      </button>
+      ${note ? html`<p class="signoff-note" role="status" aria-live="polite">${note}</p>` : null}
+    </section>`;
+}
+
+// ---------------------------------------------------------------------------
 // The screen
 // ---------------------------------------------------------------------------
 
@@ -155,6 +210,42 @@ function App() {
   const [busyId, setBusyId] = useState('');
   const [tick, setTick] = useState(0);
   const tickedAt = useRef({});
+  const [prepared, setPrepared] = useState('');
+  const [checked, setChecked] = useState('');
+  const [signBusy, setSignBusy] = useState(false);
+  const [signNote, setSignNote] = useState('');
+
+  // The picker opens on whatever is stored for the week, and follows the server's answer
+  // after a save rather than what was clicked, so a rejected save never looks accepted.
+  useEffect(() => {
+    if (!state || !state.signoff) return;
+    setPrepared(keyForName(state.people, state.signoff.preparedName));
+    setChecked(keyForName(state.people, state.signoff.checkedName));
+  }, [state]);
+
+  async function saveSignoff() {
+    if (signBusy || !state || !state.people) return;
+    const a = state.people.filter((p) => p.key === prepared)[0];
+    const b = state.people.filter((p) => p.key === checked)[0];
+    if (!a || !b) return;
+    setSignBusy(true);
+    setSignNote('');
+    setError(null);
+    const env = await call('setSignoff', token, {
+      weekStart: state.week.start,
+      preparedName: a.name || a.committee,
+      preparedPosition: a.position,
+      checkedName: b.name || b.committee,
+      checkedPosition: b.position,
+    }, { requestId: newRequestId() });
+    setSignBusy(false);
+    if (env.ok) {
+      setState(env.data);
+      setSignNote('Saved. The carousel feed reads it now.');
+      return;
+    }
+    setSignNote(env.error && env.error.message ? env.error.message : 'It was not saved.');
+  }
 
   const load = useCallback(async () => {
     setError(null);
@@ -267,6 +358,17 @@ function App() {
       <div class="body">
         ${error ? html`<${Notice} kind="warn" title=${headline(error)} detail=${error.message} />` : null}
 
+        ${state.role === 'admin' && state.people ? html`
+          <${SignoffCard}
+            state=${state}
+            prepared=${prepared}
+            checked=${checked}
+            busy=${signBusy}
+            note=${signNote}
+            onPrepared=${setPrepared}
+            onChecked=${setChecked}
+            onSave=${saveSignoff} />` : null}
+
         ${items.length === 0 ? html`
           <div class="empty">
             <p class="empty-title">Nothing on your list this week.</p>
@@ -282,6 +384,7 @@ function App() {
                 item=${item}
                 busy=${busyId === item.id}
                 undoLeft=${undoLeftFor(item)}
+                showCommittee=${state.role === 'admin'}
                 onToggle=${toggle} />`)}
           </ul>
         `}

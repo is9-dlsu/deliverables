@@ -15,20 +15,34 @@ const PORT = 8123;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.md': 'text/plain' };
 
+// The admin link, for driving the sign-off picker without a deployment. Shaped like a token
+// and never issued; it is in the leak scan's allow list for that reason.
+const ADMIN_TOKEN = 'zzzzzzzzzzzzzzzzzzzzzzzzzz';
+const people = [
+  { key: 'K10', name: 'Sample President', position: 'President', committee: 'Office of the President' },
+  { key: 'K01', name: 'Sample Officer', position: 'Vice President', committee: 'Partnerships' },
+  { key: 'K05', name: '', position: 'Vice President', committee: 'Finance' },
+];
+let signoff = { weekStart: '2026-09-28', set: false, preparedName: '', preparedPosition: '',
+  checkedName: '', checkedPosition: '', setAt: '' };
+
 let items = [
-  { id: 'D-0001', title: 'Confirm speaker for Debt Traps Exposed', remark: 'Send final name to Publication',
+  { id: 'D-0001', committee: 'Partnerships', title: 'Confirm speaker for Debt Traps Exposed', remark: 'Send final name to Publication',
     deadline: '2026-09-25', deadlineText: 'Overdue: Fri, Sep 25', deadlineLong: 'Friday, September 25, 2026', status: 'Open', active: true, overdue: true, flag: '' },
-  { id: 'D-0002', title: 'Send Homecoming sponsorship deck', remark: '',
+  { id: 'D-0002', committee: 'Partnerships', title: 'Send Homecoming sponsorship deck', remark: '',
     deadline: '2026-09-28', deadlineText: 'Due Mon, Sep 28', deadlineLong: 'Monday, September 28, 2026', status: 'Open', active: true, overdue: false, flag: '' },
-  { id: 'D-0003', title: 'Follow up on 4 pending sponsor replies', remark: '',
+  { id: 'D-0003', committee: 'Finance', title: 'Follow up on 4 pending sponsor replies', remark: '',
     deadline: '2026-09-29', deadlineText: 'Due Tue, Sep 29', deadlineLong: 'Tuesday, September 29, 2026', status: 'Accomplished', active: false, overdue: false, flag: '' },
-  { id: 'D-0004', title: 'Draft MOA for Homecoming venue partner', remark: 'Attach venue quotation',
+  { id: 'D-0004', committee: 'Partnerships', title: 'Draft MOA for Homecoming venue partner', remark: 'Attach venue quotation',
     deadline: '2026-10-01', deadlineText: 'Due Thu, Oct 1', deadlineLong: 'Thursday, October 1, 2026', status: 'Open', active: true, overdue: false, flag: 'Needs a deadline' }
 ];
 
-function state() {
+function state(role) {
+  const admin = role === 'admin';
   return {
-    role: 'member', appOn: true, undoSeconds: 60,
+    role: admin ? 'admin' : 'member', appOn: true, undoSeconds: 60,
+    people: admin ? people : undefined,
+    signoff: admin ? signoff : undefined,
     statuses: [
       { name: 'Open', terminal: false, hex: '#e9ebd4', textHex: '#1C2120' },
       { name: 'Accomplished', terminal: true, hex: '#085040', textHex: '#F8FBFD' }
@@ -50,8 +64,15 @@ http.createServer((req, res) => {
       let sent = {};
       try { sent = JSON.parse(body); } catch (e) { sent = {}; }
       const now = new Date().toISOString();
+      const role = sent.token === ADMIN_TOKEN ? 'admin' : 'member';
       let env;
-      if (sent.action === 'setStatus') {
+      if (sent.action === 'setSignoff') {
+        const p = sent.payload || {};
+        signoff = { weekStart: p.weekStart, set: true, preparedName: p.preparedName,
+          preparedPosition: p.preparedPosition, checkedName: p.checkedName,
+          checkedPosition: p.checkedPosition, setAt: now };
+        env = { v: 1, ok: true, action: 'setSignoff', serverTime: now, data: state(role) };
+      } else if (sent.action === 'setStatus') {
         const it = items.filter((i) => i.id === sent.payload.id)[0];
         if (it) {
           it.status = sent.payload.status;
@@ -59,9 +80,9 @@ http.createServer((req, res) => {
           if (it.active) it.overdue = it.deadlineText.indexOf('Overdue') === 0;
           else it.overdue = false;
         }
-        env = { v: 1, ok: true, action: 'setStatus', serverTime: now, data: state() };
+        env = { v: 1, ok: true, action: 'setStatus', serverTime: now, data: state(role) };
       } else if (sent.action === 'state') {
-        env = { v: 1, ok: true, action: 'state', serverTime: now, data: state() };
+        env = { v: 1, ok: true, action: 'state', serverTime: now, data: state(role) };
       } else {
         env = { v: 1, ok: true, action: 'ping', serverTime: now, data: { appOn: true, transport: 'fetch' } };
       }

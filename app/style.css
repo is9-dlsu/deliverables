@@ -380,6 +380,78 @@ body::after {
   color: var(--sage);
 }
 
+/* ---------- the sign-off, admin only ---------- */
+
+/* A section, not a box: two hairlines and the same left axis as the list. The heading is in
+   the serif because it is the one other title on the page, and the state line under it
+   carries the exception colour only while the sign-off is missing. */
+.signoff {
+  margin: 20px 0 4px;
+  padding: 18px 0 22px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.signoff-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.signoff-state { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--sage); }
+.signoff-state.hold { color: var(--strong); font-weight: 600; }
+
+.field { display: block; margin: 0 0 12px; }
+.field > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+/* The native select, drawn as the page draws everything else: a hairline, a soft corner and
+   one chevron in sage. 16 px so iOS does not zoom the page when it opens. */
+.field select {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 40px 0 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='%2358756a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  font: inherit;
+  font-size: 16px;
+  color: var(--green);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.field select:disabled { color: var(--sage); }
+
+.save {
+  min-height: var(--tap);
+  padding: 0 22px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--green);
+  color: var(--paper);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* Disabled is a colour that still reads, never a fade. */
+.save:disabled { background: var(--rule-strong); color: var(--paper); cursor: default; }
+.signoff-note { margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--sage); }
+
+/* The office on an admin row, first on the meta line, so fourteen lists read as one. */
+.office { font-weight: 600; color: var(--green); }
+
 /* ---------- states ---------- */
 
 .wait {

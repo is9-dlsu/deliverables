@@ -516,6 +516,41 @@ function IS9WD_apiSetSignoff_(plan, req) {
   return IS9WD_envelopeOk_('setSignoff', IS9WD_apiState_(plan));
 }
 
+/**
+ * THE SIGN-OFF STORE WRITER. One row per week on _Engine: the week's Monday, prepared by name
+ * and position, checked by name and position, and when it was set. A week that already has a
+ * row is overwritten in place, because correcting a sign-off is the ordinary case; a new week
+ * takes the first free row. The store is append only and last on its tab, and Build or repair
+ * grows it when fewer than four rows are free, so a full store is a workbook nobody has
+ * repaired in a year, and it says so rather than writing past its own end.
+ */
+function IS9WD_signoffWrite_(payload) {
+  var p = payload || {};
+  var store = IS9WD_named_('IS9WD_SIGNOFF');
+  var values = store.getValues();
+  var want = IS9WD_day_(IS9WD_toDate_(p.weekStart));
+  var at = -1;
+  var free = -1;
+  for (var i = 0; i < values.length; i++) {
+    if (IS9WD_day_(values[i][0]) === want) { at = i; break; }
+    if (free < 0 && IS9WD_blank_(values[i][0])) free = i;
+  }
+  if (at < 0) at = free;
+  if (at < 0) {
+    throw new Error('The weekly sign-off store is full. Run IS9 Deliverables > Build or ' +
+      'repair workbook to extend it, then set the sign-off again.');
+  }
+  store.offset(at, 0, 1, 6).setValues([[
+    IS9WD_toDate_(p.weekStart),
+    IS9WD_normalizeText(p.preparedName), IS9WD_normalizeText(p.preparedPosition),
+    IS9WD_normalizeText(p.checkedName), IS9WD_normalizeText(p.checkedPosition),
+    IS9WD_nowManila_()
+  ]]);
+  SpreadsheetApp.flush();
+  IS9WD_configReset_();
+  return store.getRow() + at;
+}
+
 // ============================================================================
 //  STATE  (what the app draws)
 // ============================================================================
@@ -540,7 +575,7 @@ function IS9WD_apiState_(plan) {
       textHex: rows[s].chipTextHex || ''
     });
   }
-  return {
+  var state = {
     role: plan.role,
     appOn: cfg.switches ? cfg.switches.appOn !== false : true,
     statuses: statuses,
@@ -564,6 +599,33 @@ function IS9WD_apiState_(plan) {
     },
     items: IS9WD_apiItems_(items)
   };
+  // THE ADMIN VIEW ALONE carries the fourteen people and this week's sign-off, because the
+  // sign-off is set from a picker over them and nobody else may set it. A member response
+  // still names nobody but its own officer.
+  if (plan.role === 'admin') {
+    var people = [];
+    var order = cfg.directory ? cfg.directory.inHierarchy : [];
+    for (var p = 0; p < order.length; p++) {
+      people.push({
+        key: order[p].key,
+        name: order[p].fullName,
+        position: order[p].position,
+        committee: order[p].committee
+      });
+    }
+    var so = cfg.signoff && cfg.signoff.current ? cfg.signoff.current : {};
+    state.people = people;
+    state.signoff = {
+      weekStart: IS9WD_dateKey_(cfg.weeks ? cfg.weeks.weekStart : null),
+      set: so.set === true,
+      preparedName: IS9WD_txt_(so.preparedName),
+      preparedPosition: IS9WD_txt_(so.preparedPosition),
+      checkedName: IS9WD_txt_(so.checkedName),
+      checkedPosition: IS9WD_txt_(so.checkedPosition),
+      setAt: IS9WD_txt_(so.setAt)
+    };
+  }
+  return state;
 }
 
 // One reader, so the refusal message and the number the app counts down from can never
@@ -580,6 +642,8 @@ function IS9WD_apiItems_(items) {
     if (it.title === '') continue;
     out.push({
       id: it.id,
+      // A member's items all carry their own office; the admin list needs it to tell rows apart.
+      committee: it.committee,
       title: it.title,
       remark: it.remark,
       deadline: IS9WD_dateKey_(it.deadline),
