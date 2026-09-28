@@ -531,18 +531,90 @@ function IS9WD_itemObject_(line, row) {
   return item;
 }
 
+// THE USED ROWS ARE REMEMBERED FOR TWENTY SECONDS. Reading all 2,000 rows by 17 columns cost
+// about 1.2 seconds per request, and most requests are officers opening a list that has not
+// changed since the last one. The used rows, and only those, are kept in the script cache
+// with their row numbers, dates encoded. Every write the endpoint makes reads live and clears
+// them, the ID sweep clears them, and every settings reset clears them, so a hand edit on the
+// Sheet is the only change that can wait, and it waits at most twenty seconds.
+//
+// THE LIVE READ IS TWO CALLS, not one: the nine typed and stamped columns for every row, which
+// is what decides whether a row is used, then A to Q for the span from the first used row to
+// the last. Half the cells of the old single read on an empty sheet, and a fraction on one
+// with a few dozen rows.
+var IS9WD_ITEMS_KEY_ = 'IS9WD_ITEM_ROWS_v1';
+var IS9WD_ITEMS_TTL_ = 20;
+var IS9WD_ITEMS_LIVE_ = false;
+var IS9WD_ITEMS_HIT_ = false;
+
+function IS9WD_itemsLines_() {
+  IS9WD_ITEMS_HIT_ = false;
+  if (!IS9WD_ITEMS_LIVE_) {
+    try {
+      var held = CacheService.getScriptCache().get(IS9WD_ITEMS_KEY_);
+      if (held) {
+        var kept = IS9WD_unpackJson_(held);
+        if (kept && typeof kept.length === 'number') {
+          IS9WD_ITEMS_HIT_ = true;
+          return kept;
+        }
+      }
+    } catch (err) {
+      // Read live below.
+    }
+  }
+  var sheet = IS9WD_sheet_('ITEMS');
+  var first = IS9WD_ITEMS.firstRow;
+  var rows = IS9WD_ITEMS.lastRow - first + 1;
+  var lastTyped = IS9WD_itemColIndex_('Created at') - IS9WD_ITEMS.firstCol;
+  var head = sheet.getRange(first, IS9WD_ITEMS.firstCol, rows, lastTyped + 1).getValues();
+  var used = [];
+  for (var r = 0; r < head.length; r++) {
+    for (var c = 0; c <= lastTyped; c++) {
+      if (IS9WD_filled_(head[r][c])) { used.push(r); break; }
+    }
+  }
+  var out = [];
+  if (used.length) {
+    var lo = used[0];
+    var hi = used[used.length - 1];
+    var block = sheet.getRange(first + lo, IS9WD_ITEMS.firstCol, hi - lo + 1, IS9WD_ITEMS.lastCol)
+      .getValues();
+    for (var u = 0; u < used.length; u++) {
+      out.push({ row: first + used[u], line: block[used[u] - lo] });
+    }
+  }
+  if (!IS9WD_ITEMS_LIVE_) {
+    try {
+      var text = JSON.stringify(IS9WD_packDates_(out));
+      if (text.length <= 90000) {
+        CacheService.getScriptCache().put(IS9WD_ITEMS_KEY_, text, IS9WD_ITEMS_TTL_);
+      }
+    } catch (err) {
+      Logger.log('IS9WD: the item rows were not remembered: ' + err);
+    }
+  }
+  return out;
+}
+
+function IS9WD_itemsCacheReset_() {
+  try {
+    CacheService.getScriptCache().remove(IS9WD_ITEMS_KEY_);
+  } catch (err) {
+    Logger.log('IS9WD: the item rows were not cleared: ' + err);
+  }
+}
+
 // Every used row as an object, plus the two row counts the Sunday brief prints.
 // `usedRows` counts a row with anything at all in A to I, so a half cleared row is
 // visible rather than silently invisible; `idRows` counts non blank IDs and is what
 // the Diagnostics `Rows used of 2000` cell reports.
 function IS9WD_readItems_(opt) {
   var o = opt || {};
-  var sheet = IS9WD_sheet_('ITEMS');
   var first = IS9WD_ITEMS.firstRow;
   var rows = IS9WD_ITEMS.lastRow - first + 1;
-  var values = sheet.getRange(first, IS9WD_ITEMS.firstCol, rows, IS9WD_ITEMS.lastCol).getValues();
+  var entries = IS9WD_itemsLines_();
 
-  var lastTyped = IS9WD_itemColIndex_('Created at') - IS9WD_ITEMS.firstCol;
   var out = [];
   var byId = {};
   var byCommittee = {};
@@ -550,16 +622,11 @@ function IS9WD_readItems_(opt) {
   var idRows = 0;
   var lastUsedRow = 0;
 
-  for (var r = 0; r < values.length; r++) {
-    var line = values[r];
-    var used = false;
-    for (var c = 0; c <= lastTyped; c++) {
-      if (IS9WD_filled_(line[c])) { used = true; break; }
-    }
-    if (!used) continue;
+  for (var r = 0; r < entries.length; r++) {
+    var line = entries[r].line;
     usedRows++;
-    lastUsedRow = first + r;
-    var item = IS9WD_itemObject_(line, first + r);
+    lastUsedRow = entries[r].row;
+    var item = IS9WD_itemObject_(line, entries[r].row);
     if (item.id !== '') idRows++;
     if (o.activeOnly === true && !item.active) continue;
     if (o.committee && IS9WD_trim_(o.committee).toLowerCase() !== item.committee.toLowerCase()) continue;
@@ -705,6 +772,8 @@ function IS9WD_itemsBackfill_(cfg) {
     }
     done.push(change);
   }
+  // The rows changed under the remembered copy.
+  if (done.length) IS9WD_itemsCacheReset_();
   return done;
 }
 

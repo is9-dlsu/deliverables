@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 6;
+var IS9WD_API_VERSION_ = 7;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -413,7 +413,9 @@ function IS9WD_apiPing_(req) {
     }
     out.probe = {
       settingsMs: t1 - t0,
+      settings: IS9WD_SNAP_HIT_ === true ? 'memory' : 'live',
       itemsMs: itemsMs,
+      items: IS9WD_ITEMS_HIT_ === true ? 'memory' : 'live',
       coords: IS9WD_COORDS_HIT_ === true ? 'memory' : 'resolved live',
       names: IS9WD_COORDS_ ? Object.keys(IS9WD_COORDS_).length : 0
     };
@@ -440,12 +442,18 @@ function IS9WD_apiWrite_(plan, req, ctx) {
     return IS9WD_envelopeErr_(plan.action, 'LOCKED', 'Someone else is saving right now.');
   }
   try {
+    // A WRITE READS LIVE, before and after: the row it is about to change must be the row on
+    // the sheet, and the state it returns must show the change. The remembered rows are
+    // cleared going in and coming out, so the next request starts fresh.
+    IS9WD_ITEMS_LIVE_ = true;
+    IS9WD_itemsCacheReset_();
     var out = IS9WD_apiPerform_(plan, req, ctx);
     if (out.ok && req.requestId !== '') {
       IS9WD_apiReplayRecord_(ctx.hash, req.requestId, out);
     }
     return out;
   } finally {
+    IS9WD_itemsCacheReset_();
     lock.releaseLock();
   }
 }

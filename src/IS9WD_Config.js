@@ -3171,7 +3171,69 @@ function IS9WD_ss_() {
 // Developer metadata first, then the exact name. Renaming 02 | Deliverables in the
 // tab bar would otherwise make the next repair build an empty twin under the old
 // name and leave 2,000 real rows on a sheet nothing reads (section 3).
+// THE RESOLVED TAB NAME IS REMEMBERED. The metadata finder below is four round trips per
+// tab and a request touches three tabs, so it ran a dozen times before one value was read.
+// The name it resolves to is kept for six hours in the script cache and for the execution in
+// memory; a lookup by that name is one round trip. A tab renamed by hand misses the name and
+// falls through to the finder, which is exactly what the finder exists for.
+var IS9WD_TABS_KEY_ = 'IS9WD_TAB_NAMES_v1';
+var IS9WD_TABS_TTL_ = 21600;
+var IS9WD_TABS_ = null;
+var IS9WD_SHEETS_ = {};
+
+function IS9WD_tabNames_() {
+  if (IS9WD_TABS_) return IS9WD_TABS_;
+  var map = null;
+  try {
+    var held = CacheService.getScriptCache().get(IS9WD_TABS_KEY_);
+    if (held) map = JSON.parse(held);
+  } catch (err) {
+    map = null;
+  }
+  IS9WD_TABS_ = map && typeof map === 'object' ? map : {};
+  return IS9WD_TABS_;
+}
+
+function IS9WD_tabNamesRemember_(key, name) {
+  var map = IS9WD_tabNames_();
+  if (map[key] === name) return;
+  map[key] = name;
+  try {
+    CacheService.getScriptCache().put(IS9WD_TABS_KEY_, JSON.stringify(map), IS9WD_TABS_TTL_);
+  } catch (err) {
+    Logger.log('IS9WD: the tab names were not remembered: ' + err);
+  }
+}
+
+function IS9WD_tabNamesReset_() {
+  IS9WD_TABS_ = null;
+  IS9WD_SHEETS_ = {};
+  try {
+    CacheService.getScriptCache().remove(IS9WD_TABS_KEY_);
+  } catch (err) {
+    Logger.log('IS9WD: the tab names were not cleared: ' + err);
+  }
+}
+
 function IS9WD_sheetOrNull_(tabKey) {
+  var key = IS9WD_trim_(tabKey).toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(IS9WD_SHEETS_, key)) return IS9WD_SHEETS_[key];
+  var remembered = IS9WD_tabNames_()[key];
+  if (remembered) {
+    var quick = IS9WD_ss_().getSheetByName(remembered);
+    if (quick) {
+      IS9WD_SHEETS_[key] = quick;
+      return quick;
+    }
+  }
+  var sheet = IS9WD_sheetResolve_(key);
+  IS9WD_SHEETS_[key] = sheet;
+  if (sheet) IS9WD_tabNamesRemember_(key, sheet.getName());
+  return sheet;
+}
+
+// Developer metadata first, then the exact name: the slow, authoritative resolution.
+function IS9WD_sheetResolve_(tabKey) {
   var key = IS9WD_trim_(tabKey).toUpperCase();
   var name = IS9WD_TAB[key];
   if (!name) throw new Error('Unknown tab key "' + tabKey + '".');
@@ -3913,6 +3975,10 @@ var IS9WD_CONFIG_CACHE_ = null;
 function IS9WD_configReset_() {
   IS9WD_CONFIG_CACHE_ = null;
   IS9WD_namedIndexReset_();
+  // A settings write or a build: the remembered snapshot and the remembered item rows are
+  // both suspect. The name coordinates are not; only a re-pointed name clears those.
+  IS9WD_snapReset_();
+  if (typeof IS9WD_itemsCacheReset_ === 'function') IS9WD_itemsCacheReset_();
 }
 
 // One bulk fetch of every named range, so resolving sixty names costs one call.
@@ -3952,31 +4018,122 @@ function IS9WD_namedDuplicates_() {
 // snapshot covers both: two bulk reads for every setting in the workbook rather than
 // sixty. A named range that points at neither is still an error, and it is the same error
 // it always was, because it still means a block moved somewhere nothing expects.
-function IS9WD_cfgSnapshot_() {
+// THE SNAPSHOT IS REMEMBERED FOR THIRTY SECONDS. Two full tab reads cost about two seconds
+// from a web execution, and the settings change on the order of once a week. So the values
+// of the two settings tabs are kept in the script cache for thirty seconds, dates encoded so
+// they come back as dates, and every write the script makes to the settings clears them
+// through IS9WD_configReset_. A hand edit on the Sheet is seen by the app within half a
+// minute; every menu path and the dispatcher pass force=true and always read live.
+//
+// THE LIVE READ IS TWO CALLS PER TAB, the sheet and the values. Its height is the larger of
+// the layout's declared last row and the last row any remembered name reaches on that tab,
+// which is how a grown sign-off store stays inside the snapshot without asking the sheet how
+// tall it is; on a cold memory it asks.
+var IS9WD_SNAP_KEY_ = 'IS9WD_SETTINGS_SNAP_v1';
+var IS9WD_SNAP_TTL_ = 30;
+var IS9WD_SNAP_HIT_ = false;
+
+function IS9WD_cfgSnapshot_(force) {
+  IS9WD_SNAP_HIT_ = false;
+  if (!force) {
+    var held = IS9WD_snapFromCache_();
+    if (held) {
+      IS9WD_SNAP_HIT_ = true;
+      return held;
+    }
+  }
   var sheets = {};
   var order = [];
+  var coords = IS9WD_coords_();
   for (var i = 0; i < IS9WD_SETTINGS_TABS.length; i++) {
     var tabKey = IS9WD_SETTINGS_TABS[i].tabKey;
     var holder = IS9WD_SETTINGS_TABS[i].holder;
     var sheet = IS9WD_sheet_(tabKey);
+    var name = IS9WD_TAB[tabKey];
     var last = holder.STORE ? holder.STORE.lastRow : 0;
-    var rows = Math.max(sheet.getLastRow(), last, holder.HELP_ROW);
-    var cols = Math.max(sheet.getLastColumn(), holder.LAST_COL);
-    var name = sheet.getName();
+    var rows = Math.max(last, holder.HELP_ROW);
+    var cols = holder.LAST_COL;
+    var reach = 0;
+    for (var k in coords) {
+      if (!Object.prototype.hasOwnProperty.call(coords, k) || !coords[k]) continue;
+      if (coords[k].s !== name) continue;
+      reach++;
+      if (coords[k].r + coords[k].h - 1 > rows) rows = coords[k].r + coords[k].h - 1;
+      if (coords[k].c + coords[k].w - 1 > cols) cols = coords[k].c + coords[k].w - 1;
+    }
+    if (reach === 0) {
+      rows = Math.max(rows, sheet.getLastRow());
+      cols = Math.max(cols, sheet.getLastColumn());
+    }
     sheets[name] = {
-      tabKey: tabKey, sheet: sheet, name: name, rows: rows, cols: cols,
+      tabKey: tabKey, name: name, rows: rows, cols: cols,
       values: sheet.getRange(1, 1, rows, cols).getValues()
     };
     order.push(name);
   }
-  return {
+  var snap = {
     sheets: sheets,
     order: order,
     // The Configuration tab stays the snapshot's own identity, because that is the tab
     // every error message names and the tab a reader would go and look at.
-    sheet: sheets[order[0]].sheet,
     name: order[0]
   };
+  IS9WD_snapToCache_(snap);
+  return snap;
+}
+
+function IS9WD_snapFromCache_() {
+  try {
+    var held = CacheService.getScriptCache().get(IS9WD_SNAP_KEY_);
+    if (!held) return null;
+    var snap = IS9WD_unpackJson_(held);
+    return snap && snap.sheets && snap.order ? snap : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function IS9WD_snapToCache_(snap) {
+  try {
+    var text = JSON.stringify(IS9WD_packDates_(snap));
+    if (text.length > 90000) return;
+    CacheService.getScriptCache().put(IS9WD_SNAP_KEY_, text, IS9WD_SNAP_TTL_);
+  } catch (err) {
+    Logger.log('IS9WD: the settings snapshot was not remembered: ' + err);
+  }
+}
+
+function IS9WD_snapReset_() {
+  try {
+    CacheService.getScriptCache().remove(IS9WD_SNAP_KEY_);
+  } catch (err) {
+    Logger.log('IS9WD: the settings snapshot was not cleared: ' + err);
+  }
+}
+
+// JSON.stringify turns a Date into a string before any replacer sees it, so dates are
+// packed by hand into {"$d": ms} and unpacked by a reviver. Cell values are strings, numbers,
+// booleans and dates, and nothing else needs care.
+function IS9WD_packDates_(value) {
+  if (value instanceof Date) return { $d: value.getTime() };
+  if (value === null || typeof value !== 'object') return value;
+  if (typeof value.length === 'number' && typeof value !== 'string') {
+    var list = [];
+    for (var i = 0; i < value.length; i++) list.push(IS9WD_packDates_(value[i]));
+    return list;
+  }
+  var out = {};
+  for (var k in value) {
+    if (Object.prototype.hasOwnProperty.call(value, k)) out[k] = IS9WD_packDates_(value[k]);
+  }
+  return out;
+}
+
+function IS9WD_unpackJson_(text) {
+  return JSON.parse(text, function (key, v) {
+    return v && typeof v === 'object' && Object.prototype.hasOwnProperty.call(v, '$d')
+      ? new Date(v.$d) : v;
+  });
 }
 
 // { row, col, rows, cols, values }. A name that resolves off the snapshot, which is
@@ -4283,7 +4440,7 @@ function IS9WD_readSignoff_(snap, weekStart) {
 
 function IS9WD_readConfig_(force) {
   if (!force && IS9WD_CONFIG_CACHE_) return IS9WD_CONFIG_CACHE_;
-  var snap = IS9WD_cfgSnapshot_();
+  var snap = IS9WD_cfgSnapshot_(force === true);
   var weeks = IS9WD_readWeeks_(snap);
   var cfg = {
     weeks: weeks,
