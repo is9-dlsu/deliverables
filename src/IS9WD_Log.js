@@ -106,11 +106,12 @@ function IS9WD_logRow_(row) {
       r.ok === false ? IS9WD_logText_(r.result || 'FAIL') : IS9WD_logText_(r.result || 'OK')
     ]];
     var first = IS9WD_logNextRow_(sheet);
-    IS9WD_ensureGrid_(sheet, first, IS9WD_LOG.lastCol);
-    var block = sheet.getRange(first, IS9WD_LOG.firstCol, 1, IS9WD_LOG.lastCol);
-    block.setValues(values);
-    IS9WD_style_(block, { size: IS9WD_SIZE.BODY, fg: IS9WD_ROLE.BODY_FG });
-    IS9WD_applyColumnStyles_(sheet, first, 1, IS9WD_LOG.firstCol, IS9WD_LOG.columns);
+    // ONE CALL PER ROW. The per row font and column styling was nine more round trips on
+    // every tick, on a hidden tab nobody reads in a hurry; the tab's own font is set sheet
+    // wide by the build, and a failure still gets its purple. The grid is checked every
+    // twenty five rows, which is well inside the room the build leaves.
+    if (first % 25 === 0) IS9WD_ensureGrid_(sheet, first + 25, IS9WD_LOG.lastCol);
+    sheet.getRange(first, IS9WD_LOG.firstCol, 1, IS9WD_LOG.lastCol).setValues(values);
     if (r.ok === false) {
       sheet.getRange(first, IS9WD_LOG.lastCol).setFontColor(IS9WD_ROLE.FLAG_FG)
         .setFontWeight('bold');

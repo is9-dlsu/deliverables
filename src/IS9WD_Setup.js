@@ -1752,6 +1752,8 @@ function IS9WD_setupAppendLog_(sheet, lines, ok, action) {
     sheet.getRange(first, IS9WD_LOG.lastCol, rows.length, 1)
       .setFontColor(IS9WD_ROLE.FLAG_FG).setFontWeight('bold');
   }
+  // The remembered next log row is behind these rows now.
+  IS9WD_logForget_();
 }
 
 // Auto fit decides the height and this raises anything shorter than the floor, so a wrapped
