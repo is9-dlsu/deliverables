@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 10;
+var IS9WD_API_VERSION_ = 11;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -558,8 +558,14 @@ function IS9WD_apiSetStatus_(plan, req, ctx) {
  * the failure this design refuses (3).
  */
 function IS9WD_apiSetSignoff_(plan, req) {
-  var bad = IS9WD_validateSignoff_(req.payload);
-  if (bad) return IS9WD_envelopeErr_('setSignoff', 'VALIDATION', bad);
+  // The validator answers {ok, field, message} and {ok: true} on success. Testing the object
+  // itself for truth refused every sign-off ever sent from the page, with the success object
+  // as the message, which the page printed as [object Object].
+  var verdict = IS9WD_validateSignoff_(req.payload);
+  if (!verdict || verdict.ok !== true) {
+    return IS9WD_envelopeErr_('setSignoff', 'VALIDATION',
+      verdict && verdict.message ? verdict.message : 'The sign-off did not validate.');
+  }
   var impl = IS9WD_apiImpl_('IS9WD_signoffWrite_');
   if (!impl) {
     return IS9WD_envelopeErr_('setSignoff', 'SERVER_ERROR',
