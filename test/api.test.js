@@ -347,9 +347,11 @@ console.log('\n10. Adding a deliverable from the page, end to end with the edges
     directory: { rows: DIR, byKey: { K01: DIR[0] }, inHierarchy: DIR },
     statuses: { rows: [{ name: 'Open', terminal: false }, { name: 'Accomplished', terminal: true }], defaultStatus: 'Open' },
   });
-  box.IS9WD_readItems_ = () => ({ rows: [], nextFreeRow: 12, usedRows: 0, capacity: 2000 });
+  box.IS9WD_readItems_ = () => ({ rows: [], byId: {}, nextFreeRow: 12, usedRows: 0, capacity: 2000 });
   box.IS9WD_nextItemId_ = () => 'D-0042';
   box.IS9WD_itemColIndex_ = (header) => (header === 'ID' ? 1 : 1);
+  box.IS9WD_itemObject_ = (line, row) => ({ row, id: line[0], committee: line[1], title: line[2], deadline: line[3],
+    remark: line[4], status: line[5], statusAt: line[6], statusBy: line[7], createdAt: line[8], check: '', active: true });
   box.IS9WD_sheet_ = () => ({ getRange: (r, c, h, w) => ({ setValues: (v) => { written.push({ r, c, h, w, v: v[0] }); } }) });
   box.SpreadsheetApp = { flush: () => {} };
   box.IS9WD_itemsCacheReset_ = () => {};
@@ -370,6 +372,8 @@ console.log('\n10. Adding a deliverable from the page, end to end with the edges
     ['D-0042', 'Partnerships', 'Call the venue', true, 'Before noon', 'Open', '', '', true]);
   check('the officer is emailed at once, that office only', [notices.length, notices[0].only, notices[0].source], [1, 'Partnerships', 'App']);
   check('the answer says so', [ok.data.lastAdd.id, ok.data.lastAdd.notified], ['D-0042', 1]);
+  check('the notice and the state were built from the copy in hand, the new row included, with no second read',
+    [notices[0].items && notices[0].items.rows.length, notices[0].items && notices[0].items.rows[0].id, notices[0].items && notices[0].items.rows[0].active], [1, 'D-0042', true]);
 
   const bad = box.IS9WD_apiAddItem_(plan, { payload: { committee: 'Nobody', title: 'x', deadline: '2026-10-02' } });
   check('an unknown office is refused with its own sentence', [bad.ok, bad.error.message], [false, 'Committee is not in the directory.']);

@@ -505,7 +505,7 @@ function App() {
         kind="stop"
         title=${headline(error)}
         detail=${error.message}
-        onRetry=${error.code === 'OFFLINE' ? load : null} />
+        onRetry=${error.code === 'OFFLINE' || error.code === 'DOWNGRADED' ? load : null} />
     <//>`;
   }
   if (!state) return html`<${Shell}><${Spinner} /><//>`;
@@ -644,7 +644,7 @@ function headline(error) {
     case 'LOCKED': return 'Somebody else is saving';
     case 'UNDO_EXPIRED': return 'Past the undo window';
     case 'NOT_FOUND': return 'That task is not on your list';
-    case 'DOWNGRADED': return 'This browser changed the request';
+    case 'DOWNGRADED': return 'The sheet was too slow to answer';
     case 'VALIDATION': return 'That could not be saved';
     default: return 'Something went wrong';
   }

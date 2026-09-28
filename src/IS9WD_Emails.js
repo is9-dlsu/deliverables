@@ -1224,7 +1224,9 @@ function IS9WD_mailBatch_(opt, job) {
     return out;
   }
 
-  var items = IS9WD_readItems_();
+  // opt.items is a copy already in hand, from an execution that just wrote a row and must
+  // not read the sheet again before it has recalculated.
+  var items = o.items || IS9WD_readItems_();
   var recipients = job.recipients ? job.recipients(cfg, items, ctx)
     : IS9WD_recipientsFor(job.jobKey, cfg.directory.rows, items.rows, ctx.effectiveToday);
   // opt.only narrows a batch to one office: the page adding a deliverable emails that officer

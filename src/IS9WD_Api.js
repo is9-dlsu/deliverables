@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 12;
+var IS9WD_API_VERSION_ = 13;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -550,7 +550,13 @@ function IS9WD_apiSetStatus_(plan, req, ctx) {
     detail: IS9WD_trim_(item.status) + ' to ' + entry.name, ok: true
   });
 
-  return IS9WD_envelopeOk_('setStatus', IS9WD_apiState_(plan));
+  // The change, applied to the copy already in hand: exactly what the sheet's own derived
+  // Active column will say once it has recalculated, without waiting for it.
+  item.status = entry.name;
+  item.active = entry.terminal !== true;
+  item.statusAt = now;
+  item.statusBy = plan.name || plan.key;
+  return IS9WD_envelopeOk_('setStatus', IS9WD_apiState_(plan, items));
 }
 
 /**
@@ -572,13 +578,14 @@ function IS9WD_apiSetSignoff_(plan, req) {
     return IS9WD_envelopeErr_('setSignoff', 'SERVER_ERROR',
       'The sign-off store is not built yet.');
   }
+  var known = IS9WD_readItems_();
   impl(req.payload);
   IS9WD_logRow_({
     source: IS9WD_LOG_SOURCE_APP_, actor: IS9WD_apiActor_(plan), action: 'setSignoff',
     detail: IS9WD_trim_(req.payload.preparedName) + ' and ' +
       IS9WD_trim_(req.payload.checkedName), ok: true
   });
-  return IS9WD_envelopeOk_('setSignoff', IS9WD_apiState_(plan));
+  return IS9WD_envelopeOk_('setSignoff', IS9WD_apiState_(plan, known));
 }
 
 /**
@@ -611,6 +618,18 @@ function IS9WD_apiAddItem_(plan, req) {
   IS9WD_sheet_('ITEMS').getRange(row, IS9WD_itemColIndex_('ID'), 1, line.length).setValues([line]);
   SpreadsheetApp.flush();
   IS9WD_itemsCacheReset_();
+  // The new row, as the reader would build it once the sheet has recalculated: the typed
+  // cells as written, active from the status list, nothing derived yet.
+  var full = line.slice();
+  while (full.length < IS9WD_ITEMS.lastCol - IS9WD_ITEMS.firstCol + 1) full.push('');
+  var made = IS9WD_itemObject_(full, row);
+  made.active = IS9WD_isActive(made.status, cfg.statuses.rows);
+  made.typed = true;
+  items.rows.push(made);
+  if (items.byId) items.byId[made.id] = made;
+  items.usedRows = (items.usedRows || 0) + 1;
+  items.lastUsedRow = row;
+  items.nextFreeRow = row + 1;
   IS9WD_logRow_({
     source: IS9WD_LOG_SOURCE_APP_, actor: IS9WD_apiActor_(plan), action: 'addItem',
     committee: entry.committee, id: id, detail: 'row ' + row, ok: true
@@ -624,14 +643,14 @@ function IS9WD_apiAddItem_(plan, req) {
   try {
     var notice = IS9WD_apiImpl_('IS9WD_sendNewAssignments_');
     if (notice) {
-      var out = notice({ cfg: cfg, source: IS9WD_LOG_SOURCE_APP_, only: entry.committee });
+      var out = notice({ cfg: cfg, source: IS9WD_LOG_SOURCE_APP_, only: entry.committee, items: items });
       notified = out && out.sent ? out.sent : 0;
       line = out && out.lines && out.lines.length ? out.lines[out.lines.length - 1] : '';
     }
   } catch (err) {
     line = 'The email was not sent: ' + IS9WD_txt_(err && err.message ? err.message : err);
   }
-  var state = IS9WD_apiState_(plan);
+  var state = IS9WD_apiState_(plan, items);
   state.lastAdd = { id: id, notified: notified, line: line };
   return IS9WD_envelopeOk_('addItem', state);
 }
@@ -713,12 +732,27 @@ function IS9WD_signoffWrite_(payload) {
 // A MEMBER RESPONSE CARRIES NO OTHER COMMITTEE'S ANYTHING: no name, no count, no token, not
 // even a key. So a leaked payload discloses that one committee's week and nothing else, which
 // is the accepted risk in SPEC section 6 kept to its stated size.
-function IS9WD_apiState_(plan) {
+// NO READ AFTER A WRITE. Every getValues after a write in the same execution waits for
+// Sheets to recalculate everything the write made dirty, which on this workbook is two
+// thousand rows of derived formulas, the feed and the views: ten seconds a time, measured.
+// So a write answers from the items it read BEFORE writing, with its own change applied in
+// memory (`known`), and the next open reads fresh. Only a plain read reads here.
+function IS9WD_apiState_(plan, known) {
   // Not forced: the context read the settings a moment ago in this same execution, and the
   // one write that changes them, the sign-off, resets the cache itself.
   var cfg = IS9WD_readConfig_();
   var mine = plan.role === 'admin' ? null : IS9WD_trim_(plan.committee);
-  var items = IS9WD_readItems_(mine ? { committee: mine } : {});
+  var items;
+  if (known) {
+    var all = IS9WD_itemList_(known);
+    var kept = [];
+    for (var k = 0; k < all.length; k++) {
+      if (!mine || IS9WD_trim_(all[k].committee).toLowerCase() === mine.toLowerCase()) kept.push(all[k]);
+    }
+    items = { rows: kept };
+  } else {
+    items = IS9WD_readItems_(mine ? { committee: mine } : {});
+  }
   // The status list is the app's whole vocabulary: it never hardcodes Open or Accomplished,
   // it draws whatever this list holds, which is what makes renaming a status one edit on
   // 01 | Configuration rather than a code change (3).

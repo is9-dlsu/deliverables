@@ -52,7 +52,22 @@ export function newRequestId() {
  * A network failure is returned as an OFFLINE envelope shaped exactly like a server error, so
  * the screen has one kind of thing to render rather than two.
  */
+// A READ IS RETRIED ONCE when the endpoint bounced it. The bounce (the GET handler answering
+// a POST) has been seen when an execution ran far too long: a request that landed while
+// Build or repair had Sheets recalculating took 41 seconds and came back downgraded. The
+// second attempt, a few seconds later, lands on a warm execution. A write is never retried
+// here, because it carries a request id and the page decides that.
 export async function call(action, token, payload, opts) {
+  const first = await callOnce(action, token, payload, opts);
+  if (first.ok || action === 'ping') return first;
+  const code = first.error && first.error.code;
+  const isWrite = ['setStatus', 'setSignoff', 'addItem'].indexOf(action) !== -1;
+  if (isWrite || (code !== 'DOWNGRADED' && code !== 'OFFLINE')) return first;
+  await new Promise((r) => setTimeout(r, 2500));
+  return callOnce(action, token, payload, opts);
+}
+
+async function callOnce(action, token, payload, opts) {
   const options = opts || {};
   if (!endpointReady()) {
     return offline('This page has not been connected to the sheet yet. Tell Ethan.');
@@ -92,7 +107,7 @@ export async function call(action, token, payload, opts) {
         return {
           v: 1, ok: false, action, serverTime: env.serverTime || '',
           error: { code: 'DOWNGRADED',
-            message: 'Open this link in a private window, or on your phone.' },
+            message: 'It usually answers on the next try. If it keeps happening, open the link in a private window.' },
         };
       }
       return env;
