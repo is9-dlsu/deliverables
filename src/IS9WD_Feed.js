@@ -77,7 +77,8 @@ var IS9WD_FEED_BLOCK_HELP_ = [
   'One row per publishing committee, in carousel order, with the page it starts on.',
   'One row per physical master page. Only the Used rows are exported, in Position order.',
   'The headline, the VP line and the tagline for every master page, used or not.',
-  'Ten slot rows per master page. Visible FALSE means hide the frame, never delete it.',
+  'One slot row per frame on the master page, fifteen a page. Visible FALSE means hide the ' +
+  'frame, never delete it.',
   'Every flagged row in the workbook, page then slot. Report these before touching Canva.',
   'A read that does not reach this row is a truncated read, and the weekly run stops.'
 ];

@@ -87,6 +87,27 @@ function IS9WD_dispatch_() {
     return { lines: lines, ran: 0, skipped: 0, failed: failed };
   }
 
+  // A TODAY OVERRIDE PAUSES EVERY JOB. The override is the lever Ethan sets to look at a future
+  // Sunday, and nothing forces him to clear it, so a live workbook with a stale override must
+  // stop rather than mail a past week to thirteen people. It is said in the pass's own lines,
+  // on the automation status report, and once a day by mail; the ID sweep is paused with it,
+  // which is what Sync deliverables to the app is for.
+  if (cfg.weeks && cfg.weeks.todayOverrideSet === true) {
+    say('a Today override is set on ' + IS9WD_TAB.CONFIG + ', so every job is paused until ' +
+      'it is cleared');
+    IS9WD_autoHeartbeat_(now, me);
+    try {
+      var warn = IS9WD_apiImpl_('IS9WD_jobAlert_');
+      if (warn) {
+        warn('DISPATCHER_OVERRIDE', new Error('The Today override on ' + IS9WD_TAB.CONFIG +
+          ' is set, so the hourly pass sends nothing until it is cleared.'), []);
+      }
+    } catch (err) {
+      Logger.log('IS9WD: the override alert was not sent: ' + err);
+    }
+    return { lines: lines, ran: 0, skipped: 0, failed: failed };
+  }
+
   // THE ID SWEEP, BEFORE ANY EMAIL. A row Ethan typed has no ID until something mints one,
   // and the officers page ticks by ID, so an unswept row is a task an officer can see and
   // cannot tick. It also carries the blocking "Missing ID" flag, which holds Ready for Canva
