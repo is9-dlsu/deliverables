@@ -8,3 +8,18 @@ noreply@anthropic.com
 # and the lookup. Neither is a token any link was ever issued with.
 zyxwvtsrqpnmkjhgfedcba9876
 zzzzzzzzzzzzzzzzzzzzzzzzzz
+
+# The endpoint test's fixtures in test/api.test.js. Deliberately shaped like tokens,
+# because the whole point is to exercise the format check. None was ever issued: the
+# member and admin links live only in Script Properties on Ethan's workbook.
+k3m8q2v7rzp4wx9hn6tdyj5c1b
+z9y8x7w6v5t4s3r2q1p0nmkjhg
+h2g3f4d5s6a7z8x9c0v1b2n3m4
+a2b3c4d5e6f7g8h9j2k3m4n5p6
+iiiiiiiiiiiiiiiiiiiiiiiiii
+
+# The alphabet coverage fixtures in test/core.test.js: one is the 32 symbol alphabet
+# itself and one is its first 26 characters, both there to prove IS9WD_newToken maps
+# every symbol. Neither was ever issued to anyone.
+abcdefghjkmnpqrstvwxyz0123
+0123456789abcdefghjkmnpqrs
