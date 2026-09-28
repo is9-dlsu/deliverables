@@ -184,6 +184,7 @@ function IS9WD_buildViewsLocked_() {
     say('views helpers sized: ' + report.views.directoryRows + ' officer rows, last row ' +
       report.views.lastRow);
   }
+  var viewsRepointed = IS9WD_NAMED_REPOINTED_;
   report.stats = IS9WD_setupCall_('IS9WD_statsResize_', [cfg], say,
     'the statistics tab was not built: IS9WD_Stats.js is not in this project yet');
   if (report.stats) {
@@ -210,10 +211,37 @@ function IS9WD_buildViewsLocked_() {
     say('dashboard built: ' + report.dash.cards + ' cards, ' + report.dash.rows +
       ' rows, last row ' + report.dash.lastRow);
   }
+
+  // THE ONE CASE THE NAME GUARD DOES NOT CLOSE, and it is the same bug in a smaller window.
+  //
+  // IS9WD_setNamed_ now leaves a name alone when it already points exactly where it should, so
+  // an ordinary build re-points nothing and destroys nothing. But when a layout GENUINELY
+  // moves, a trend weeks change, a tab renumber, a column width, those names are correctly
+  // dropped and re-created, and that still happens AFTER `_Views` has written the eight
+  // officer helpers that name them. On that one build the helpers are destroyed again, and
+  // they would heal only on the next one: Ethan would see six failures exactly once, on the
+  // build that was supposed to apply his change, which is the worst moment to be lied to.
+  //
+  // So when a later tab moved a name, the helpers are written once more, now that the last
+  // name has settled. This is provably self terminating: on the second pass every views name
+  // matches exactly, IS9WD_namedIsExactly_ returns true, nothing is dropped, the counter does
+  // not grow, and there is no third pass. It costs nothing on an ordinary build, where the
+  // counter has not moved at all.
+  // Held before the rewrite, because the rewrite re-reads the configuration and that resets
+  // the counter. Without this the log reported 0 re-pointed on the very build that re-pointed
+  // six, which is the one build where the number is worth reading.
+  var repointedTotal = IS9WD_NAMED_REPOINTED_;
+  if (IS9WD_NAMED_REPOINTED_ > viewsRepointed) {
+    say('a later tab moved ' + (IS9WD_NAMED_REPOINTED_ - viewsRepointed) +
+      ' named range(s) after the views helpers were written, so they are written again');
+    report.views = IS9WD_setupCall_('IS9WD_viewsResize_', [cfg], say,
+      'the views helpers were not rewritten after the names moved') || report.views;
+    repointedTotal = Math.max(repointedTotal, IS9WD_NAMED_REPOINTED_);
+  }
+
   // Re-pointed is the number that matters, not the total. Deleting a name rewrites the text
   // of every formula using it, so on a workbook whose layout has not moved this must be 0.
-  say('named ranges pointed: ' + report.namesSet + ', re-pointed: ' +
-    IS9WD_NAMED_REPOINTED_);
+  say('named ranges pointed: ' + report.namesSet + ', re-pointed: ' + repointedTotal);
   return report;
 }
 
@@ -372,6 +400,7 @@ function IS9WD_buildOrRepairLocked_() {
       report.views.trendWeeks + ' trend weeks, ' + report.views.jobRows +
       ' job rows, last row ' + report.views.lastRow);
   }
+  var viewsRepointed = IS9WD_NAMED_REPOINTED_;
   report.stats = IS9WD_setupCall_('IS9WD_statsResize_', [cfg], say,
     'the statistics tab was not built: IS9WD_Stats.js is not in this project yet');
   if (report.stats) {
@@ -398,6 +427,34 @@ function IS9WD_buildOrRepairLocked_() {
     report.namesSet += IS9WD_int_(report.dash.namesPointed) || 0;
     say('dashboard built: ' + report.dash.cards + ' cards, ' + report.dash.rows +
       ' rows, last row ' + report.dash.lastRow);
+  }
+
+
+  // THE ONE CASE THE NAME GUARD DOES NOT CLOSE, and it is the same bug in a smaller window.
+  //
+  // IS9WD_setNamed_ now leaves a name alone when it already points exactly where it should, so
+  // an ordinary build re-points nothing and destroys nothing. But when a layout GENUINELY
+  // moves, a trend weeks change, a tab renumber, a column width, those names are correctly
+  // dropped and re-created, and that still happens AFTER `_Views` has written the eight
+  // officer helpers that name them. On that one build the helpers are destroyed again, and
+  // they would heal only on the next one: Ethan would see six failures exactly once, on the
+  // build that was supposed to apply his change, which is the worst moment to be lied to.
+  //
+  // So when a later tab moved a name, the helpers are written once more, now that the last
+  // name has settled. This is provably self terminating: on the second pass every views name
+  // matches exactly, IS9WD_namedIsExactly_ returns true, nothing is dropped, the counter does
+  // not grow, and there is no third pass. It costs nothing on an ordinary build, where the
+  // counter has not moved at all.
+  // Held before the rewrite, because the rewrite re-reads the configuration and that resets
+  // the counter. Without this the log reported 0 re-pointed on the very build that re-pointed
+  // six, which is the one build where the number is worth reading.
+  var repointedTotal = IS9WD_NAMED_REPOINTED_;
+  if (IS9WD_NAMED_REPOINTED_ > viewsRepointed) {
+    say('a later tab moved ' + (IS9WD_NAMED_REPOINTED_ - viewsRepointed) +
+      ' named range(s) after the views helpers were written, so they are written again');
+    report.views = IS9WD_setupCall_('IS9WD_viewsResize_', [cfg], say,
+      'the views helpers were not rewritten after the names moved') || report.views;
+    repointedTotal = Math.max(repointedTotal, IS9WD_NAMED_REPOINTED_);
   }
 
   IS9WD_setupBackfillDirectory_(sheets.CONFIG, sheets.ENGINE, say);
@@ -434,7 +491,7 @@ function IS9WD_buildOrRepairLocked_() {
   say('named ranges: ' + report.namesSet + ' set of ' + audit.expected +
     ' expected, ' + audit.missing.length + ' missing, ' +
     report.namesDropped.length + ' retired dropped, ' +
-    IS9WD_NAMED_REPOINTED_ + ' re-pointed');
+    repointedTotal + ' re-pointed');
 
   // The one check that can tell idempotent from intended.
   var diff = IS9WD_setupCompare_(before, IS9WD_setupSnapshot_());
