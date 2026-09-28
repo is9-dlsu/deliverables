@@ -12,3 +12,11 @@ app/dist/
 
 # The live /exec address. Public repo: SPEC section 3 keeps every URL that matters out of it.
 app/endpoint.js
+# Every endpoint file except the committed placeholder. The pattern is broad on purpose:
+# a .bak of it leaked into a commit on 2026-09-28 because the ignore rule named one exact
+# filename and the scanner skipped the extension.
+app/endpoint*.js
+!app/endpoint.example.js
+*.bak
+*.orig
+*.tmp

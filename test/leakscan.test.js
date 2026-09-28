@@ -30,7 +30,18 @@ const ALLOW_FILE = path.join(__dirname, 'leakscan-allow.txt');
 
 const SCAN_DIRS = ['src', 'app', 'test', 'tools', 'docs', 'canva'];
 const SCAN_FILES = ['SPEC.md', 'CLAUDE.md', 'README.md', '.clasp.json', 'package.json'];
-const SCAN_EXT = ['.js', '.json', '.md', '.html', '.css', '.ts', '.tsx', '.txt', '.yml'];
+// SCAN EVERYTHING, SKIP ONLY WHAT CANNOT BE READ. This was an allowlist of extensions until
+// 2026-09-28, and on that day a file named app/endpoint.live.js.bak carried the live /exec
+// address into a commit. The scan read it as extension ".bak", which was not on the list, and
+// waved it through. The ignore rule missed it for the same shape of reason: it named one exact
+// filename.
+//
+// An allowlist of extensions is the wrong default for a leak scan. The cost of scanning a file
+// that turns out to be uninteresting is nothing; the cost of skipping one is the thing this
+// file exists to prevent. So the list below is the only thing NOT read, and it holds formats
+// whose bytes are not text.
+const SKIP_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.svg', '.pdf',
+  '.woff', '.woff2', '.ttf', '.otf', '.eot', '.zip', '.gz', '.mp4', '.mov', '.xlsx'];
 const SKIP_DIRS = ['node_modules', '.git', 'dist', '.claude'];
 
 // Each rule is a shape plus why it matters, and the why is printed with the hit, because a
@@ -79,7 +90,7 @@ function walk(dir, out) {
     if (entry.isDirectory()) {
       if (SKIP_DIRS.indexOf(entry.name) >= 0) continue;
       walk(full, out);
-    } else if (SCAN_EXT.indexOf(path.extname(entry.name)) >= 0) {
+    } else if (SKIP_EXT.indexOf(path.extname(entry.name).toLowerCase()) < 0) {
       out.push(full);
     }
   }
@@ -130,8 +141,8 @@ const files = process.argv.length > 2 ? process.argv.slice(2) : targets();
 const hits = [];
 
 for (const file of files) {
-  const ext = path.extname(file);
-  if (SCAN_EXT.indexOf(ext) < 0) continue;
+  const ext = path.extname(file).toLowerCase();
+  if (SKIP_EXT.indexOf(ext) >= 0) continue;
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');

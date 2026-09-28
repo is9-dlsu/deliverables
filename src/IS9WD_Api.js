@@ -549,6 +549,9 @@ function IS9WD_apiState_(plan) {
       number: IS9WD_two_(cfg.weeks ? cfg.weeks.weekNumber : null),
       start: IS9WD_dateKey_(cfg.weeks ? cfg.weeks.weekStart : null),
       end: IS9WD_dateKey_(cfg.weeks ? cfg.weeks.weekEnd : null),
+      // What the page prints. The machine keys above stay for anything that sorts or compares.
+      startLong: IS9WD_longDate(cfg.weeks ? cfg.weeks.weekStart : null),
+      endLong: IS9WD_longDate(cfg.weeks ? cfg.weeks.weekEnd : null),
       inTerm: cfg.weeks ? cfg.weeks.inTerm !== false : true,
       ayLabel: IS9WD_txt_(cfg.weeks ? cfg.weeks.ayLabel : ''),
       cutoffText: IS9WD_txt_(cfg.weeks ? cfg.weeks.cutoffText : '')
@@ -580,7 +583,13 @@ function IS9WD_apiItems_(items) {
       title: it.title,
       remark: it.remark,
       deadline: IS9WD_dateKey_(it.deadline),
+      // TWO DEADLINE STRINGS, DELIBERATELY. deadlineText is the Canva wording, frozen by SPEC
+      // section 4, and the page used to show it. Ethan asked on 2026-09-28 for dates a person
+      // reads, so the page shows deadlineLong instead and the carousel keeps its contract.
+      // Both are sent: the short one stays because an admin view may want to see exactly what
+      // the slide will print.
       deadlineText: IS9WD_deadlineText(it.deadline, IS9WD_todayManila_()),
+      deadlineLong: IS9WD_longDateDay(it.deadline),
       status: it.status,
       active: it.active === true,
       // OVERDUE IS COMPUTED HERE, not in the page. The app has the officer's phone clock,

@@ -17,13 +17,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 let items = [
   { id: 'D-0001', title: 'Confirm speaker for Debt Traps Exposed', remark: 'Send final name to Publication',
-    deadline: '2026-09-25', deadlineText: 'Overdue: Fri, Sep 25', status: 'Open', active: true, overdue: true, flag: '' },
+    deadline: '2026-09-25', deadlineText: 'Overdue: Fri, Sep 25', deadlineLong: 'Friday, September 25, 2026', status: 'Open', active: true, overdue: true, flag: '' },
   { id: 'D-0002', title: 'Send Homecoming sponsorship deck', remark: '',
-    deadline: '2026-09-28', deadlineText: 'Due Mon, Sep 28', status: 'Open', active: true, overdue: false, flag: '' },
+    deadline: '2026-09-28', deadlineText: 'Due Mon, Sep 28', deadlineLong: 'Monday, September 28, 2026', status: 'Open', active: true, overdue: false, flag: '' },
   { id: 'D-0003', title: 'Follow up on 4 pending sponsor replies', remark: '',
-    deadline: '2026-09-29', deadlineText: 'Due Tue, Sep 29', status: 'Accomplished', active: false, overdue: false, flag: '' },
+    deadline: '2026-09-29', deadlineText: 'Due Tue, Sep 29', deadlineLong: 'Tuesday, September 29, 2026', status: 'Accomplished', active: false, overdue: false, flag: '' },
   { id: 'D-0004', title: 'Draft MOA for Homecoming venue partner', remark: 'Attach venue quotation',
-    deadline: '2026-10-01', deadlineText: 'Due Thu, Oct 1', status: 'Open', active: true, overdue: false, flag: 'Needs a deadline' }
+    deadline: '2026-10-01', deadlineText: 'Due Thu, Oct 1', deadlineLong: 'Thursday, October 1, 2026', status: 'Open', active: true, overdue: false, flag: 'Needs a deadline' }
 ];
 
 function state() {
@@ -34,6 +34,7 @@ function state() {
       { name: 'Accomplished', terminal: true, hex: '#085040', textHex: '#F8FBFD' }
     ],
     week: { number: '04', start: '2026-09-28', end: '2026-10-04', inTerm: true,
+      startLong: 'September 28, 2026', endLong: 'October 4, 2026',
       ayLabel: 'A.Y. 2026 - 2027', cutoffText: 'Saturday 8 PM before the week starts' },
     committee: { key: 'K01', name: 'Partnerships', headline: 'PARTNERSHIPS',
       vpLine: 'JUAN DELA CRUZ  |  VICE PRESIDENT' },

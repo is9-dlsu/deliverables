@@ -69,7 +69,7 @@ function Item({ item, busy, undoLeft, onToggle }) {
           <span class="title">${item.title}</span>
           ${item.remark ? html`<span class="remark">${item.remark}</span>` : null}
           <span class="meta">
-            <span class="due">${item.deadlineText || ''}</span>
+            <span class="due">${item.deadlineLong || item.deadlineText || ''}</span>
             ${overdue ? html`<span class="tag">Overdue</span>` : null}
             ${item.flag ? html`<span class="tag flag">${item.flag}</span>` : null}
           </span>
@@ -188,7 +188,9 @@ function App() {
         <p class="who">${state.committee ? state.committee.headline : ''}</p>
         <p class="week">
           Week ${state.week.number}
-          ${state.week.start ? ' · ' + state.week.start + ' to ' + state.week.end : ''}
+          ${state.week.startLong
+            ? ' · ' + state.week.startLong + ' to ' + state.week.endLong
+            : ''}
         </p>
       </header>
 

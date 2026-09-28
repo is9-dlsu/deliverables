@@ -36,7 +36,22 @@
 // the feed strings have to match it whatever locale a runtime believes it is in.
 var IS9WD_MONTHS_ = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// THE LONG MONTHS EXIST FOR THE OFFICERS PAGE AND FOR NOTHING ELSE. Ethan asked on
+// 2026-09-28 for dates a person reads rather than digits: September 29, 2026.
+//
+// They are a SEPARATE list from the short ones on purpose. IS9WD_MONTHS_ feeds the Canva
+// strings, and every one of those is frozen by SPEC section 4: the week line, the legends
+// and the deadline text are read off a carousel by hundreds of people and cannot move
+// without Ethan's approval. Reformatting the short month to please a phone screen would
+// have silently rewritten the carousel too.
+var IS9WD_MONTHS_LONG_ = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
 var IS9WD_DAYS_ = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Long weekdays, for the officers page only, beside the long months and for the same reason.
+var IS9WD_DAYS_LONG_ = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
+  'Saturday'];
 
 // The four urgency window names are structural: the feed formulas name them and the
 // Configuration hex table is matched on them (reference 4.2).
@@ -214,6 +229,22 @@ function IS9WD_mmmD_(v) {
   var d = IS9WD_toDate_(v);
   if (!d) return '';
   return IS9WD_MONTHS_[d.getMonth()] + ' ' + d.getDate();
+}
+
+// `Month d, yyyy` as a person says it aloud: September 29, 2026. The officers page uses this
+// everywhere it shows a date. It never reaches the feed, an email subject or a Canva string.
+function IS9WD_longDate(v) {
+  var d = IS9WD_toDate_(v);
+  if (!d) return '';
+  return IS9WD_MONTHS_LONG_[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+// The same date with the weekday in front, for a deadline where the day of the week is the
+// part that actually changes behaviour: Monday, September 29, 2026.
+function IS9WD_longDateDay(v) {
+  var d = IS9WD_toDate_(v);
+  if (!d) return '';
+  return IS9WD_DAYS_LONG_[d.getDay()] + ', ' + IS9WD_longDate(d);
 }
 
 function IS9WD_stamp_(v) {
