@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 11;
+var IS9WD_API_VERSION_ = 12;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -488,6 +488,7 @@ function IS9WD_apiWith_(ctx, extra) {
 function IS9WD_apiPerform_(plan, req, ctx) {
   if (plan.action === 'setStatus') return IS9WD_apiSetStatus_(plan, req, ctx);
   if (plan.action === 'setSignoff') return IS9WD_apiSetSignoff_(plan, req);
+  if (plan.action === 'addItem') return IS9WD_apiAddItem_(plan, req);
   return IS9WD_envelopeErr_(plan.action, 'VALIDATION',
     'That action is not built yet. Ask the President.');
 }
@@ -581,6 +582,96 @@ function IS9WD_apiSetSignoff_(plan, req) {
 }
 
 /**
+ * ADD A DELIVERABLE FROM THE PAGE, admin only (the route already refuses everyone else). The
+ * same row Ethan would type on the tab, written the same way: A to F as the payload says,
+ * the Configuration default status, Created at now, and an ID minted from the same counter
+ * the sweep uses. The derived columns are formulas already on every row, so the row is live
+ * the moment it is written, and the next hourly pass or Sync announces it.
+ */
+function IS9WD_apiAddItem_(plan, req) {
+  var cfg = IS9WD_readConfig_();
+  var p = req.payload || {};
+  var verdict = IS9WD_validateItem(p, cfg.directory.rows, cfg.statuses.rows);
+  if (!verdict || verdict.ok !== true) {
+    return IS9WD_envelopeErr_('addItem', 'VALIDATION',
+      verdict && verdict.message ? verdict.message : 'The deliverable did not validate.');
+  }
+  var items = IS9WD_readItems_();
+  var row = items.nextFreeRow;
+  if (!row || row > IS9WD_ITEMS.lastRow) {
+    return IS9WD_envelopeErr_('addItem', 'SERVER_ERROR',
+      'The deliverables tab is full. Run Build or repair workbook.');
+  }
+  var entry = IS9WD_dirByCommittee_(p.committee, cfg.directory.rows);
+  var id = IS9WD_nextItemId_();
+  var line = [
+    id, entry.committee, IS9WD_normalizeText(p.title), IS9WD_toDate_(p.deadline),
+    IS9WD_normalizeText(p.remark), IS9WD_trim_(cfg.statuses.defaultStatus), '', '', IS9WD_nowManila_()
+  ];
+  IS9WD_sheet_('ITEMS').getRange(row, IS9WD_itemColIndex_('ID'), 1, line.length).setValues([line]);
+  SpreadsheetApp.flush();
+  IS9WD_itemsCacheReset_();
+  IS9WD_logRow_({
+    source: IS9WD_LOG_SOURCE_APP_, actor: IS9WD_apiActor_(plan), action: 'addItem',
+    committee: entry.committee, id: id, detail: 'row ' + row, ok: true
+  });
+  // THE OFFICER IS EMAILED BEFORE THE PAGE HEARS BACK. Ethan ruled on 2026-09-29 that a
+  // deliverable encoded from the page is announced at once, not at the next hourly pass. The
+  // notice batch is narrowed to this one office, sends whatever that officer has not been
+  // told about, and stamps it; a failure to send never fails the add, it is reported instead.
+  var notified = 0;
+  var line = '';
+  try {
+    var notice = IS9WD_apiImpl_('IS9WD_sendNewAssignments_');
+    if (notice) {
+      var out = notice({ cfg: cfg, source: IS9WD_LOG_SOURCE_APP_, only: entry.committee });
+      notified = out && out.sent ? out.sent : 0;
+      line = out && out.lines && out.lines.length ? out.lines[out.lines.length - 1] : '';
+    }
+  } catch (err) {
+    line = 'The email was not sent: ' + IS9WD_txt_(err && err.message ? err.message : err);
+  }
+  var state = IS9WD_apiState_(plan);
+  state.lastAdd = { id: id, notified: notified, line: line };
+  return IS9WD_envelopeOk_('addItem', state);
+}
+
+/**
+ * THE SIGN-OFF CARRIES FORWARD. Ethan ruled on 2026-09-29 that the weekly sign-off is not a
+ * chore: the pair on the carousel changes rarely, so when the current week has no row and an
+ * earlier week does, the latest earlier pair is written for this week and the gate clears. It
+ * is changed from the page whenever it should differ. The gate therefore holds only on a
+ * workbook where nobody has ever set it. Returns the row it carried from, or null.
+ */
+function IS9WD_signoffCarry_(cfg) {
+  var so = cfg && cfg.signoff ? cfg.signoff : null;
+  if (!so || (so.current && so.current.set === true)) return null;
+  var ws = IS9WD_day_(cfg.weeks ? cfg.weeks.weekStart : null);
+  if (ws === null) return null;
+  var best = null;
+  var rows = so.rows || [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var d = IS9WD_day_(r.weekStart);
+    if (d === null || d >= ws) continue;
+    if (IS9WD_blank_(r.preparedName) || IS9WD_blank_(r.preparedPosition) ||
+      IS9WD_blank_(r.checkedName) || IS9WD_blank_(r.checkedPosition)) continue;
+    if (!best || d > IS9WD_day_(best.weekStart)) best = r;
+  }
+  if (!best) return null;
+  IS9WD_signoffWrite_({
+    weekStart: cfg.weeks.weekStart,
+    preparedName: best.preparedName, preparedPosition: best.preparedPosition,
+    checkedName: best.checkedName, checkedPosition: best.checkedPosition
+  });
+  IS9WD_logRow_({
+    source: IS9WD_LOG_SOURCE_TRIGGER_, actor: 'Trigger', action: 'signoffCarry',
+    detail: 'carried forward from the week of ' + IS9WD_formatDate(best.weekStart), ok: true
+  });
+  return best;
+}
+
+/**
  * THE SIGN-OFF STORE WRITER. One row per week on _Engine: the week's Monday, prepared by name
  * and position, checked by name and position, and when it was set. A week that already has a
  * row is overwritten in place, because correcting a sign-off is the ordinary case; a new week
@@ -667,7 +758,8 @@ function IS9WD_apiState_(plan) {
     // here left every officer page empty from Phase 4 until 2026-09-28, because the loop
     // over it never ran and nothing else noticed: the probe read 3 titled rows while the
     // page said nothing was on the list.
-    items: IS9WD_apiItems_(IS9WD_itemList_(items))
+    // Deadline first, then ID, on every page: the order the carousel and the emails use.
+    items: IS9WD_apiItems_(IS9WD_sortActive(IS9WD_itemList_(items)))
   };
   // THE ADMIN VIEW ALONE carries the fourteen people and this week's sign-off, because the
   // sign-off is set from a picker over them and nobody else may set it. A member response
@@ -684,6 +776,12 @@ function IS9WD_apiState_(plan) {
       });
     }
     var so = cfg.signoff && cfg.signoff.current ? cfg.signoff.current : {};
+    // The admin's own office, so the page can put his own list first and everyone else's
+    // behind a picker.
+    var adminKey = IS9WD_trim_(IS9WD_CFG.DIRECTORY.adminKey).toUpperCase();
+    var me = cfg.directory && cfg.directory.byKey ? cfg.directory.byKey[adminKey] : null;
+    state.mine = me ? { key: me.key, committee: me.committee, name: me.fullName, position: me.position }
+      : { key: adminKey, committee: '', name: '', position: '' };
     state.people = people;
     state.signoff = {
       weekStart: IS9WD_dateKey_(cfg.weeks ? cfg.weeks.weekStart : null),

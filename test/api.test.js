@@ -329,5 +329,59 @@ console.log('\n9. The sign-off endpoint, end to end with the edges stubbed (3)')
   check('nothing was written for the refused ones', written.length, 1);
 }
 
+// ---------------------------------------------------------------------------
+console.log('\n10. Adding a deliverable from the page, end to end with the edges stubbed');
+{
+  const box = { console, Date, Math, JSON, String, Number, Array, Object, RegExp, Error,
+    isNaN, parseInt, parseFloat, Logger: { log: () => {} } };
+  box.globalThis = box;
+  vm.createContext(box);
+  vm.runInContext(fs.readFileSync(CORE, 'utf8'), box);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src', 'IS9WD_Config.js'), 'utf8'), box);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src', 'IS9WD_Api.js'), 'utf8'), box);
+  const written = [];
+  const logged = [];
+  const notices = [];
+  const DIR = [{ key: 'K01', committee: 'Partnerships', fullName: 'Sample Officer', position: 'Vice President', email: 'X', publishes: true, hierarchy: 2 }];
+  box.IS9WD_readConfig_ = () => ({
+    directory: { rows: DIR, byKey: { K01: DIR[0] }, inHierarchy: DIR },
+    statuses: { rows: [{ name: 'Open', terminal: false }, { name: 'Accomplished', terminal: true }], defaultStatus: 'Open' },
+  });
+  box.IS9WD_readItems_ = () => ({ rows: [], nextFreeRow: 12, usedRows: 0, capacity: 2000 });
+  box.IS9WD_nextItemId_ = () => 'D-0042';
+  box.IS9WD_itemColIndex_ = (header) => (header === 'ID' ? 1 : 1);
+  box.IS9WD_sheet_ = () => ({ getRange: (r, c, h, w) => ({ setValues: (v) => { written.push({ r, c, h, w, v: v[0] }); } }) });
+  box.SpreadsheetApp = { flush: () => {} };
+  box.IS9WD_itemsCacheReset_ = () => {};
+  box.IS9WD_nowManila_ = () => new Date(2026, 8, 29, 10, 0, 0);
+  box.IS9WD_logRow_ = (r) => { logged.push(r); return true; };
+  box.IS9WD_apiActor_ = () => 'Admin link';
+  box.IS9WD_apiState_ = () => ({ role: 'admin', items: [] });
+  box.IS9WD_sendNewAssignments_ = (o) => { notices.push(o); return { sent: 1, lines: ['New assignment notices: 1 sent.'] }; };
+  box.IS9WD_LOG_SOURCE_APP_ = 'App';
+  box.Utilities = { formatDate: () => '2026-09-29T10:00:00+08:00' };
+  const plan = { role: 'admin', action: 'addItem', key: 'ADMIN', committee: '' };
+
+  const ok = box.IS9WD_apiAddItem_(plan, { payload: { committee: 'Partnerships', title: 'Call the venue', deadline: '2026-10-02', remark: 'Before noon' } });
+  check('a valid deliverable is accepted', [ok.ok, written.length, logged.length], [true, 1, 1]);
+  check('it is written on the next free row from column A, nine cells', [written[0].r, written[0].c, written[0].w], [12, 1, 9]);
+  check('the row holds the id, the office as the directory spells it, the title, a real date, the remark, the default status and a created stamp',
+    [written[0].v[0], written[0].v[1], written[0].v[2], written[0].v[3] instanceof Date, written[0].v[4], written[0].v[5], written[0].v[6], written[0].v[7], written[0].v[8] instanceof Date],
+    ['D-0042', 'Partnerships', 'Call the venue', true, 'Before noon', 'Open', '', '', true]);
+  check('the officer is emailed at once, that office only', [notices.length, notices[0].only, notices[0].source], [1, 'Partnerships', 'App']);
+  check('the answer says so', [ok.data.lastAdd.id, ok.data.lastAdd.notified], ['D-0042', 1]);
+
+  const bad = box.IS9WD_apiAddItem_(plan, { payload: { committee: 'Nobody', title: 'x', deadline: '2026-10-02' } });
+  check('an unknown office is refused with its own sentence', [bad.ok, bad.error.message], [false, 'Committee is not in the directory.']);
+  const noDate = box.IS9WD_apiAddItem_(plan, { payload: { committee: 'Partnerships', title: 'x', deadline: '' } });
+  check('a missing deadline is refused', [noDate.ok, noDate.error.message], [false, 'Deadline is required.']);
+  check('nothing was written for the refused ones', written.length, 1);
+
+  box.IS9WD_readItems_ = () => ({ rows: [], nextFreeRow: 2005, usedRows: 2000, capacity: 2000 });
+  const full = box.IS9WD_apiAddItem_(plan, { payload: { committee: 'Partnerships', title: 'x', deadline: '2026-10-02' } });
+  check('a full tab is refused in words', [full.ok, full.error.code], [false, 'SERVER_ERROR']);
+}
+
+
 console.log('\n' + pass + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

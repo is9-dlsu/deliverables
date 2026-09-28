@@ -115,6 +115,10 @@ function IS9WD_dispatch_() {
   // whose rows can actually be acted on.
   var swept = IS9WD_autoSweepIds_(cfg, say);
 
+  // THE SIGN-OFF CARRIES FORWARD before anything reads it, so the Sunday brief in this same
+  // pass describes a week whose gate is already clear.
+  cfg = IS9WD_autoCarrySignoff_(cfg, say);
+
   // NEW ITEMS ARE ANNOUNCED WITHIN THE HOUR, ON ANY DAY, right after the sweep has given them
   // IDs. Not a schedule row: the stamps on the rows are its memory, so it runs every pass and
   // sends only what nobody has been told about. It obeys the Monday email switch, because a
@@ -177,6 +181,23 @@ function IS9WD_autoRunJob_(row, cfg, say, failed) {
     IS9WD_autoRecord_(key, IS9WD_dateKey_(IS9WD_nowManila_()), 'failed: ' + err, false);
     IS9WD_autoFail_(key, err, say);
     return false;
+  }
+}
+
+// The carry forward, guarded the same way. It re-reads the settings after a write so the
+// rest of the pass sees the row it just made.
+function IS9WD_autoCarrySignoff_(cfg, say) {
+  var fn = IS9WD_apiImpl_('IS9WD_signoffCarry_');
+  if (!fn) return cfg;
+  try {
+    var from = fn(cfg);
+    if (!from) return cfg;
+    say('sign-off carried forward from the week of ' + IS9WD_formatDate(from.weekStart));
+    return IS9WD_readConfig_(true);
+  } catch (err) {
+    say('sign-off carry forward failed: ' + err);
+    IS9WD_autoFail_('SIGNOFF_CARRY', err, say);
+    return cfg;
   }
 }
 
@@ -265,11 +286,18 @@ function IS9WD_syncToApp_() {
   // a brand new row as inactive and unranked.
   SpreadsheetApp.flush();
   IS9WD_configReset_();
+  cfg = IS9WD_autoCarrySignoff_(cfg, say);
+  // THE NOTICES GO NOW, not at the next hourly pass: Sync is the one click that means "push
+  // this to the officers", so it does everything the hourly pass would, at once.
+  var noticed = IS9WD_autoNotify_(cfg, say);
   var items = IS9WD_readItems_();
   var dir = cfg.directory.inHierarchy;
   var hidden = [];
   var total = 0;
   lines.push(ids > 0 ? ids + ' row(s) were given an ID.' : 'Every row already had an ID.');
+  lines.push(noticed > 0 ? noticed + ' officer(s) were emailed about rows that were new to them' +
+    (cfg.switches.testMode ? ', all to your own address because test mode is on' : '') + '.'
+    : 'Nobody needed a notice: every row had already been sent to its officer.');
   lines.push('');
   lines.push('What each page shows now, as the app reads it:');
   for (var i = 0; i < dir.length; i++) {

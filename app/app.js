@@ -1,5 +1,8 @@
-// The officers' page. One screen, one action: tick an item off, or untick it inside the
-// undo window. Nobody signs in, nobody sees anyone else's list, and there is nothing to learn.
+// The officers' page. One screen, one action for an officer: tick an item off, or untick it
+// inside the undo window. Nobody signs in, nobody sees anyone else's list, and there is
+// nothing to learn. The President's link is the same page with a second segment: his own list
+// first, then every officer behind a picker, with the numbers, a way to add a deliverable, and
+// a way to reopen one.
 //
 // THE TOKEN IS IN THE URL FRAGMENT, not the query string: a fragment is never sent to a
 // server, so it cannot reach an access log. IT STAYS IN THE ADDRESS. An earlier version
@@ -114,7 +117,7 @@ function Notice({ kind, title, detail, onRetry }) {
 
 // A whole item. The row is the tap target, not a small checkbox: a 44 px minimum is the
 // difference between ticking your task and ticking the one under it on a phone.
-function Item({ item, busy, undoLeft, onToggle, showCommittee }) {
+function Item({ item, busy, undoLeft, onToggle, showCommittee, admin }) {
   const done = item.active === false;
   const overdue = item.overdue === true && !done;
   // `fresh` marks the item ticked on this screen inside its undo window: the only one whose
@@ -150,14 +153,75 @@ function Item({ item, busy, undoLeft, onToggle, showCommittee }) {
           onClick=${() => onToggle(item)}>
           Undo (${undoLeft}s)
         </button>` : null}
-      ${!busy && done && undoLeft === 0 ? html`
-        <span class="locked">Ticked off. Ask the President to reopen it.</span>` : null}
+      ${!busy && done && undoLeft === 0 ? (admin
+        ? html`<button type="button" class="undo" onClick=${() => onToggle(item)}>Reopen</button>`
+        : html`<span class="locked">Ticked off. Ask the President to reopen it.</span>`) : null}
     </li>`;
 }
 
+// A LIST WITH ITS DONE ROWS FOLDED. What is still open is what the page is for; what is
+// done stays one tap away, except a row ticked on this screen inside its undo window, which
+// stays in place so the undo is where the thumb already is. The order is the server's:
+// deadline first, then ID.
+function ItemList({ items, busyId, undoLeftFor, onToggle, showCommittee, admin, foldKey, folds, setFolds }) {
+  const open = items.filter((i) => i.active !== false);
+  const done = items.filter((i) => i.active === false);
+  const pinned = done.filter((i) => undoLeftFor(i) > 0);
+  const folded = done.filter((i) => undoLeftFor(i) === 0);
+  const shown = folds[foldKey] === true;
+  const rows = open.concat(pinned).concat(shown ? folded : []);
+  return html`
+    <ul class="list">
+      ${rows.map((item) => html`
+        <${Item}
+          key=${item.id}
+          item=${item}
+          busy=${busyId === item.id}
+          undoLeft=${undoLeftFor(item)}
+          showCommittee=${showCommittee}
+          admin=${admin}
+          onToggle=${onToggle} />`)}
+    </ul>
+    ${folded.length ? html`
+      <button type="button" class="fold" aria-expanded=${shown}
+        onClick=${() => setFolds(Object.assign({}, folds, { [foldKey]: !shown }))}>
+        ${shown ? 'Hide' : 'Show'} ${folded.length} done
+      </button>` : null}`;
+}
+
 // ---------------------------------------------------------------------------
-// The sign-off, admin only
+// The President's desk: the numbers, the picker, the form
 // ---------------------------------------------------------------------------
+
+// Counts a person reads at a glance. Overdue is the server's word (Manila, effective today);
+// due this week compares the machine dates the server also sends.
+function tally(items, week) {
+  const start = week && week.start ? week.start : '';
+  const end = week && week.end ? week.end : '';
+  let open = 0; let done = 0; let overdue = 0; let thisWeek = 0;
+  for (const it of items) {
+    if (it.active === false) { done++; continue; }
+    open++;
+    if (it.overdue) overdue++;
+    if (start && end && it.deadline && it.deadline >= start && it.deadline <= end) thisWeek++;
+  }
+  return { open, done, overdue, thisWeek, total: open + done };
+}
+
+function Tiles({ t }) {
+  const tile = (n, label, hot) => html`
+    <div class=${'tile' + (hot && n > 0 ? ' hot' : '')}>
+      <span class="tile-n">${n}</span>
+      <span class="tile-l">${label}</span>
+    </div>`;
+  return html`
+    <div class="tiles" role="group" aria-label="Counts">
+      ${tile(t.open, 'Open', false)}
+      ${tile(t.thisWeek, 'Due this week', false)}
+      ${tile(t.overdue, 'Overdue', true)}
+      ${tile(t.done, 'Done', false)}
+    </div>`;
+}
 
 // A person as the picker shows them: the name as typed, then the position; a row with no
 // name yet shows its office instead, so the picker never has a blank line.
@@ -174,37 +238,116 @@ function keyForName(people, name) {
   return hit ? hit.key : '';
 }
 
-// SPEC section 3: prepared by and checked by change every week, so they are set here, from a
-// picker over the fourteen, and Ready for Canva reads NO until this week's pair is set.
+// Every officer on one screen, with three numbers each, and a tap opens that officer.
+function Overview({ people, items, week, onPick }) {
+  return html`
+    <ul class="overview">
+      ${people.map((p) => {
+        const t = tally(items.filter((i) => i.committee === p.committee), week);
+        return html`
+          <li key=${p.key}>
+            <button type="button" class="ov-row" onClick=${() => onPick(p.key)}>
+              <span class="ov-who">
+                <span class="ov-office">${p.committee}</span>
+                ${p.name ? html`<span class="ov-name">${p.name}</span>` : null}
+              </span>
+              <span class="ov-nums">
+                <span class="ov-n"><b>${t.open}</b> open</span>
+                <span class=${'ov-n' + (t.overdue ? ' hot' : '')}><b>${t.overdue}</b> overdue</span>
+                <span class="ov-n"><b>${t.done}</b> done</span>
+              </span>
+            </button>
+          </li>`;
+      })}
+    </ul>`;
+}
+
+// ADD A DELIVERABLE, from the page. The same row the President would type on the tab: the
+// office, the title, the deadline, a remark. The server mints the ID and the defaults, and
+// emails the officer before it answers.
+function AddForm({ people, committee, busy, note, onSave }) {
+  const [office, setOffice] = useState(committee || '');
+  const [title, setTitle] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [remark, setRemark] = useState('');
+  useEffect(() => { setOffice(committee || ''); }, [committee]);
+  const ready = office !== '' && title.trim() !== '' && deadline !== '' && !busy;
+  const submit = (e) => {
+    e.preventDefault();
+    if (!ready) return;
+    onSave({ committee: office, title: title.trim(), deadline, remark: remark.trim() }, () => {
+      setTitle(''); setRemark(''); setDeadline('');
+    });
+  };
+  return html`
+    <form class="add" onSubmit=${submit}>
+      <h3 class="add-title">Add a deliverable</h3>
+      <label class="field">
+        <span>For</span>
+        <select value=${office} disabled=${busy} onChange=${(e) => setOffice(e.target.value)}>
+          <option value="">Choose a committee or office</option>
+          ${people.map((p) => html`<option key=${p.key} value=${p.committee}>${p.committee}</option>`)}
+        </select>
+      </label>
+      <label class="field">
+        <span>Task</span>
+        <input type="text" maxlength="40" value=${title} disabled=${busy}
+          placeholder="Up to 40 characters" onInput=${(e) => setTitle(e.target.value)} />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Deadline</span>
+          <input type="date" value=${deadline} disabled=${busy} onInput=${(e) => setDeadline(e.target.value)} />
+        </label>
+        <label class="field">
+          <span>Remark</span>
+          <input type="text" maxlength="30" value=${remark} disabled=${busy}
+            placeholder="Optional, up to 30" onInput=${(e) => setRemark(e.target.value)} />
+        </label>
+      </div>
+      <button type="submit" class="save" disabled=${!ready}>${busy ? 'Saving and emailing...' : 'Add and notify'}</button>
+      ${note ? html`<p class="signoff-note" role="status" aria-live="polite">${note}</p>` : null}
+    </form>`;
+}
+
+// THE SIGN-OFF, collapsed to one line once it is set. It is the pair printed on the
+// carousel's title page; the hourly pass carries last week's pair forward, so this is for the
+// week it should differ. It shows its form only when nothing has ever been set.
 function SignoffCard({ state, prepared, checked, busy, note, onPrepared, onChecked, onSave }) {
   const so = state.signoff || {};
   const people = state.people || [];
+  const [editing, setEditing] = useState(false);
   const ready = prepared !== '' && checked !== '' && !busy;
+  const form = html`
+    <label class="field">
+      <span>Prepared by</span>
+      <select value=${prepared} disabled=${busy} onChange=${(e) => onPrepared(e.target.value)}>
+        <option value="">Choose a person</option>
+        ${people.map((p) => html`<option key=${p.key} value=${p.key}>${personLabel(p)}</option>`)}
+      </select>
+    </label>
+    <label class="field">
+      <span>Checked by</span>
+      <select value=${checked} disabled=${busy} onChange=${(e) => onChecked(e.target.value)}>
+        <option value="">Choose a person</option>
+        ${people.map((p) => html`<option key=${p.key} value=${p.key}>${personLabel(p)}</option>`)}
+      </select>
+    </label>
+    <button type="button" class="save" disabled=${!ready} onClick=${() => { onSave(); setEditing(false); }}>
+      ${busy ? 'Saving...' : (so.set ? 'Update sign-off' : 'Set sign-off')}
+    </button>`;
   return html`
     <section class="signoff" id="signoff" aria-labelledby="signoff-title">
-      <h2 class="signoff-title" id="signoff-title">Sign-off for this week</h2>
-      <p class=${'signoff-state' + (so.set ? '' : ' hold')}>
-        ${so.set
-          ? 'Set: prepared by ' + so.preparedName + ', checked by ' + so.checkedName + '.'
-          : 'Not set. Ready for Canva reads NO until it is.'}
-      </p>
-      <label class="field">
-        <span>Prepared by</span>
-        <select value=${prepared} disabled=${busy} onChange=${(e) => onPrepared(e.target.value)}>
-          <option value="">Choose a person</option>
-          ${people.map((p) => html`<option key=${p.key} value=${p.key}>${personLabel(p)}</option>`)}
-        </select>
-      </label>
-      <label class="field">
-        <span>Checked by</span>
-        <select value=${checked} disabled=${busy} onChange=${(e) => onChecked(e.target.value)}>
-          <option value="">Choose a person</option>
-          ${people.map((p) => html`<option key=${p.key} value=${p.key}>${personLabel(p)}</option>`)}
-        </select>
-      </label>
-      <button type="button" class="save" disabled=${!ready} onClick=${onSave}>
-        ${busy ? 'Saving...' : (so.set ? 'Update sign-off' : 'Set sign-off')}
-      </button>
+      <h2 class="signoff-title" id="signoff-title">Carousel sign-off</h2>
+      ${so.set ? html`
+        <p class="signoff-state">
+          Prepared by ${so.preparedName}, checked by ${so.checkedName}. It carries forward each week.
+          ${' '}<button type="button" class="link-btn" onClick=${() => setEditing(!editing)}>${editing ? 'Keep it' : 'Change'}</button>
+        </p>
+        ${editing ? form : null}`
+        : html`
+        <p class="signoff-state hold">Not set. Ready for Canva reads NO until it is set once; after that it carries forward.</p>
+        ${form}`}
       ${note ? html`<p class="signoff-note" role="status" aria-live="polite">${note}</p>` : null}
     </section>`;
 }
@@ -224,43 +367,10 @@ function App() {
   const [checked, setChecked] = useState('');
   const [signBusy, setSignBusy] = useState(false);
   const [signNote, setSignNote] = useState('');
-
-  // The picker opens on whatever is stored for the week, and follows the server's answer
-  // after a save rather than what was clicked, so a rejected save never looks accepted. It
-  // follows the STORED pair only: keyed on the two stored names rather than on the whole
-  // state, because every tick refreshes the state, and a refresh that wiped a half made
-  // choice is how the first save from this page silently did nothing.
-  const storedPrepared = state && state.signoff ? state.signoff.preparedName : '';
-  const storedChecked = state && state.signoff ? state.signoff.checkedName : '';
-  useEffect(() => {
-    if (!state || !state.signoff) return;
-    setPrepared(keyForName(state.people, storedPrepared));
-    setChecked(keyForName(state.people, storedChecked));
-  }, [storedPrepared, storedChecked]);
-
-  async function saveSignoff() {
-    if (signBusy || !state || !state.people) return;
-    const a = state.people.filter((p) => p.key === prepared)[0];
-    const b = state.people.filter((p) => p.key === checked)[0];
-    if (!a || !b) return;
-    setSignBusy(true);
-    setSignNote('');
-    setError(null);
-    const env = await call('setSignoff', token, {
-      weekStart: state.week.start,
-      preparedName: a.name || a.committee,
-      preparedPosition: a.position,
-      checkedName: b.name || b.committee,
-      checkedPosition: b.position,
-    }, { requestId: newRequestId() });
-    setSignBusy(false);
-    if (env.ok) {
-      setState(env.data);
-      setSignNote('Saved. The carousel feed reads it now.');
-      return;
-    }
-    setSignNote(env.error && env.error.message ? env.error.message : 'It was not saved.');
-  }
+  const [picked, setPicked] = useState('');
+  const [folds, setFolds] = useState({});
+  const [addBusy, setAddBusy] = useState(false);
+  const [addNote, setAddNote] = useState('');
 
   const load = useCallback(async () => {
     setError(null);
@@ -291,6 +401,19 @@ function App() {
     const id = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(id);
   }, [state]);
+
+  // The picker opens on whatever is stored for the week, and follows the server's answer
+  // after a save rather than what was clicked, so a rejected save never looks accepted. It
+  // follows the STORED pair only: keyed on the two stored names rather than on the whole
+  // state, because every tick refreshes the state, and a refresh that wiped a half made
+  // choice is how the first save from this page silently did nothing.
+  const storedPrepared = state && state.signoff ? state.signoff.preparedName : '';
+  const storedChecked = state && state.signoff ? state.signoff.checkedName : '';
+  useEffect(() => {
+    if (!state || !state.signoff) return;
+    setPrepared(keyForName(state.people, storedPrepared));
+    setChecked(keyForName(state.people, storedChecked));
+  }, [storedPrepared, storedChecked]);
 
   const undoSeconds = state && state.undoSeconds ? state.undoSeconds : 60;
 
@@ -334,6 +457,48 @@ function App() {
     setError(env.error);
   }
 
+  async function saveSignoff() {
+    if (signBusy || !state || !state.people) return;
+    const a = state.people.filter((p) => p.key === prepared)[0];
+    const b = state.people.filter((p) => p.key === checked)[0];
+    if (!a || !b) return;
+    setSignBusy(true);
+    setSignNote('');
+    setError(null);
+    const env = await call('setSignoff', token, {
+      weekStart: state.week.start,
+      preparedName: a.name || a.committee,
+      preparedPosition: a.position,
+      checkedName: b.name || b.committee,
+      checkedPosition: b.position,
+    }, { requestId: newRequestId() });
+    setSignBusy(false);
+    if (env.ok) {
+      setState(env.data);
+      setSignNote('Saved. The carousel feed reads it now.');
+      return;
+    }
+    setSignNote(env.error && env.error.message ? env.error.message : 'It was not saved.');
+  }
+
+  async function addItem(payload, onDone) {
+    if (addBusy) return;
+    setAddBusy(true);
+    setAddNote('');
+    setError(null);
+    const env = await call('addItem', token, payload, { requestId: newRequestId() });
+    setAddBusy(false);
+    if (env.ok) {
+      setState(env.data);
+      const last = env.data && env.data.lastAdd ? env.data.lastAdd : null;
+      setAddNote(last && last.notified > 0 ? 'Added and emailed.'
+        : 'Added. ' + (last && last.line ? last.line : 'The officer sees it at their next open.'));
+      if (onDone) onDone();
+      return;
+    }
+    setAddNote(env.error && env.error.message ? env.error.message : 'It was not added.');
+  }
+
   if (error && !state) {
     return html`<${Shell}>
       <${Notice}
@@ -345,13 +510,21 @@ function App() {
   }
   if (!state) return html`<${Shell}><${Spinner} /><//>`;
 
+  const admin = state.role === 'admin';
   const items = state.items || [];
-  const left = items.filter((i) => i.active !== false).length;
+  const mineOffice = admin && state.mine ? state.mine.committee : '';
+  const myItems = admin ? items.filter((i) => i.committee === mineOffice) : items;
+  const people = admin ? (state.people || []).filter((p) => p.key !== (state.mine || {}).key) : [];
+  const everyone = admin ? people.concat(state.mine && state.mine.committee ? [state.mine] : []) : [];
+  const pickedPerson = people.filter((p) => p.key === picked)[0] || null;
+  const pickedItems = pickedPerson ? items.filter((i) => i.committee === pickedPerson.committee) : [];
+  const all = tally(items, state.week);
+  const mineTally = tally(myItems, state.week);
+  const left = admin ? all.open : items.filter((i) => i.active !== false).length;
   const done = items.length - left;
   // The office name as typed, not the uppercase headline: the serif reads as a title in title
   // case and as a shout in capitals. The headline stays what the carousel prints.
-  // The admin link carries no office, and an empty heading is read aloud as exactly that.
-  const who = state.role === 'admin' ? 'All officers'
+  const who = admin ? ((state.mine && state.mine.committee) || 'All officers')
     : (state.committee ? (state.committee.name || state.committee.headline) : '');
 
   const head = html`
@@ -361,6 +534,7 @@ function App() {
       <p class="week">
         Week ${weekNo(state.week)}
         ${weekSpan(state.week) ? ' · ' + weekSpan(state.week) : ''}
+        ${admin ? ' · ' + all.open + ' open across ' + (state.people || []).length + ' officers' : ''}
       </p>
       ${items.length > 0 ? html`
         <div class="progress" aria-hidden="true">
@@ -368,18 +542,50 @@ function App() {
         </div>` : null}
     </header>`;
 
+  const listProps = { busyId, undoLeftFor, onToggle: toggle, admin, folds, setFolds };
+
   return html`
     <${Shell} head=${head}>
       <div class="body">
         ${error ? html`<${Notice} kind="warn" title=${headline(error)} detail=${error.message} />` : null}
 
-        ${state.role === 'admin' && state.signoff && !state.signoff.set ? html`
+        ${admin && state.signoff && !state.signoff.set ? html`
           <button type="button" class="pointer" onClick=${() => {
             const el = document.getElementById('signoff');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}>Sign-off not set for this week. Ready for Canva reads NO until it is. Set it below.</button>` : null}
+          }}>The carousel sign-off has never been set. Ready for Canva reads NO until it is. Set it below, once.</button>` : null}
 
-        ${items.length === 0 ? html`
+        ${admin ? html`
+          <section class="segment" aria-labelledby="mine-title">
+            <h2 class="segment-title" id="mine-title">Your deliverables</h2>
+            ${myItems.length === 0 ? html`
+              <p class="segment-empty">Nothing on your own list.</p>` : html`
+              <p class="count" role="status" aria-live="polite">${mineTally.open === 0 ? 'All done'
+                : mineTally.open + (mineTally.open === 1 ? ' task left' : ' tasks left')}</p>
+              <${ItemList} items=${myItems} foldKey="mine" ...${listProps} />`}
+          </section>
+
+          <section class="segment" aria-labelledby="officers-title">
+            <h2 class="segment-title" id="officers-title">Officers</h2>
+            <label class="field">
+              <span>Committee or office</span>
+              <select value=${picked} onChange=${(e) => setPicked(e.target.value)}>
+                <option value="">Everyone at a glance</option>
+                ${people.map((p) => html`<option key=${p.key} value=${p.key}>${p.committee}${p.name ? ', ' + p.name : ''}</option>`)}
+              </select>
+            </label>
+            ${pickedPerson ? html`
+              <p class="picked-who">${pickedPerson.name || pickedPerson.committee}${pickedPerson.position ? ', ' + pickedPerson.position : ''}</p>
+              <${Tiles} t=${tally(pickedItems, state.week)} />
+              ${pickedItems.length === 0 ? html`<p class="segment-empty">Nothing on this list yet.</p>`
+                : html`<${ItemList} items=${pickedItems} foldKey=${'k:' + picked} ...${listProps} />`}
+              <${AddForm} people=${everyone} committee=${pickedPerson.committee} busy=${addBusy} note=${addNote} onSave=${addItem} />`
+              : html`
+              <${Tiles} t=${tally(items.filter((i) => i.committee !== mineOffice), state.week)} />
+              <${Overview} people=${people} items=${items} week=${state.week} onPick=${setPicked} />
+              <${AddForm} people=${everyone} committee="" busy=${addBusy} note=${addNote} onSave=${addItem} />`}
+          </section>
+        ` : (items.length === 0 ? html`
           <div class="empty">
             <p class="empty-title">Nothing on your list this week.</p>
             <p class="empty-detail">The President adds items by Saturday evening.</p>
@@ -387,19 +593,10 @@ function App() {
         ` : html`
           <p class="count" role="status" aria-live="polite">${left === 0 ? 'All done for this week'
             : left + (left === 1 ? ' task left' : ' tasks left')}</p>
-          <ul class="list">
-            ${items.map((item) => html`
-              <${Item}
-                key=${item.id}
-                item=${item}
-                busy=${busyId === item.id}
-                undoLeft=${undoLeftFor(item)}
-                showCommittee=${state.role === 'admin'}
-                onToggle=${toggle} />`)}
-          </ul>
-        `}
+          <${ItemList} items=${items} foldKey="mine" showCommittee=${false} ...${listProps} />
+        `)}
 
-        ${state.role === 'admin' && state.people ? html`
+        ${admin && state.people ? html`
           <${SignoffCard}
             state=${state}
             prepared=${prepared}
@@ -412,7 +609,8 @@ function App() {
       </div>
 
       <footer class="foot">
-        <p>Ticking is yours for ${undoSeconds} seconds. After that, ask the President to reopen it.</p>
+        <p>${admin ? 'You can reopen any item, and add one for anyone; they are emailed as you add it. Officers see changes at their next open.'
+          : 'Ticking is yours for ' + undoSeconds + ' seconds. After that, ask the President to reopen it.'}</p>
       </footer>
     <//>`;
 }
@@ -447,6 +645,7 @@ function headline(error) {
     case 'UNDO_EXPIRED': return 'Past the undo window';
     case 'NOT_FOUND': return 'That task is not on your list';
     case 'DOWNGRADED': return 'This browser changed the request';
+    case 'VALIDATION': return 'That could not be saved';
     default: return 'Something went wrong';
   }
 }

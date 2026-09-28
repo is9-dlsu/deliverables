@@ -34,7 +34,11 @@ let items = [
   { id: 'D-0003', committee: 'Finance', title: 'Follow up on 4 pending sponsor replies', remark: '',
     deadline: '2026-09-29', deadlineText: 'Due Tue, Sep 29', deadlineLong: 'Tuesday, September 29, 2026', status: 'Accomplished', active: false, overdue: false, flag: '' },
   { id: 'D-0004', committee: 'Partnerships', title: 'Draft MOA for Homecoming venue partner', remark: 'Attach venue quotation',
-    deadline: '2026-10-01', deadlineText: 'Due Thu, Oct 1', deadlineLong: 'Thursday, October 1, 2026', status: 'Open', active: true, overdue: false, flag: 'Needs a deadline' }
+    deadline: '2026-10-01', deadlineText: 'Due Thu, Oct 1', deadlineLong: 'Thursday, October 1, 2026', status: 'Open', active: true, overdue: false, flag: 'Needs a deadline' },
+  { id: 'D-0005', committee: 'Office of the President', title: 'Sign the venue contract', remark: '',
+    deadline: '2026-09-30', deadlineText: 'Due Wed, Sep 30', deadlineLong: 'Wednesday, September 30, 2026', status: 'Open', active: true, overdue: false, flag: '' },
+  { id: 'D-0006', committee: 'Office of the President', title: 'Brief the adviser', remark: 'Ten minutes, before Friday',
+    deadline: '2026-09-26', deadlineText: 'Overdue: Sat, Sep 26', deadlineLong: 'Saturday, September 26, 2026', status: 'Accomplished', active: false, overdue: false, flag: '' }
 ];
 
 function state(role) {
@@ -43,6 +47,7 @@ function state(role) {
     role: admin ? 'admin' : 'member', appOn: true, undoSeconds: 60,
     people: admin ? people : undefined,
     signoff: admin ? signoff : undefined,
+    mine: admin ? { key: 'K10', committee: 'Office of the President', name: 'Sample President', position: 'President' } : undefined,
     statuses: [
       { name: 'Open', terminal: false, hex: '#e9ebd4', textHex: '#1C2120' },
       { name: 'Accomplished', terminal: true, hex: '#085040', textHex: '#F8FBFD' }
@@ -66,7 +71,16 @@ http.createServer((req, res) => {
       const now = new Date().toISOString();
       const role = sent.token === ADMIN_TOKEN ? 'admin' : 'member';
       let env;
-      if (sent.action === 'setSignoff') {
+      if (sent.action === 'addItem') {
+        const p = sent.payload || {};
+        const id = 'D-00' + (10 + items.length);
+        const dt = new Date(p.deadline + 'T00:00:00');
+        const long = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        items.push({ id, committee: p.committee, title: p.title, remark: p.remark || '', deadline: p.deadline,
+          deadlineText: 'Due ' + dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          deadlineLong: long, status: 'Open', active: true, overdue: false, flag: '' });
+        env = { v: 1, ok: true, action: 'addItem', serverTime: now, data: state(role) };
+      } else if (sent.action === 'setSignoff') {
         const p = sent.payload || {};
         signoff = { weekStart: p.weekStart, set: true, preparedName: p.preparedName,
           preparedPosition: p.preparedPosition, checkedName: p.checkedName,

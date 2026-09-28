@@ -380,6 +380,141 @@ body::after {
   color: var(--sage);
 }
 
+/* ---------- the President's desk ---------- */
+
+/* A segment is a section of the one sheet: a serif title and a hairline above, nothing else.
+   The first segment has no rule, because the sheet's own edge is its rule. */
+.segment { padding: 22px 0 6px; border-top: 1px solid var(--rule); }
+.segment:first-of-type { border-top: 0; padding-top: 18px; }
+.segment-title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.segment-empty { margin: 8px 0 12px; font-size: 14px; color: var(--sage); }
+.picked-who { margin: 2px 0 12px; font-size: 14px; color: var(--sage); }
+
+/* Four numbers, one line. The number in the serif at display size, the label as a caption.
+   Only overdue takes the exception colour, and only when it is above zero. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 6px 0 14px;
+}
+.tile {
+  padding: 12px 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.5);
+}
+.tile-n {
+  display: block;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.tile-l {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+.tile.hot .tile-n { color: var(--strong); }
+.tile.hot { border-color: var(--strong); }
+
+/* Everyone at a glance: one row per officer, three numbers, the whole row a button. */
+.overview { list-style: none; margin: 0; padding: 0; }
+.overview li { border-bottom: 1px solid var(--rule); }
+.overview li:last-child { border-bottom: 0; }
+.ov-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ov-who { display: flex; flex-direction: column; min-width: 0; }
+.ov-office { font-size: 15px; font-weight: 600; letter-spacing: -0.008em; }
+.ov-name { font-size: 12px; color: var(--sage); }
+.ov-nums { display: flex; gap: 12px; flex: 0 0 auto; font-size: 12px; color: var(--sage); font-variant-numeric: tabular-nums; }
+.ov-n b { font-weight: 700; color: var(--green); }
+.ov-n.hot b { color: var(--strong); }
+
+/* The fold: what is done stays one tap away. */
+.fold {
+  display: block;
+  margin: 4px 0 8px;
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sage);
+  cursor: pointer;
+}
+
+/* The add form: the same fields as the tab, in the page's own controls. */
+.add { margin: 22px 0 8px; padding-top: 18px; border-top: 1px dashed var(--rule-strong); }
+.add-title { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.6);
+  font: inherit;
+  font-size: 16px;
+  color: var(--green);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.field input::placeholder { color: var(--sage); opacity: 0.8; }
+.field input:disabled { color: var(--sage); }
+
+/* A button that reads as a word inside a sentence. */
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+@media (max-width: 400px) {
+  .tiles { gap: 6px; }
+  .tile-n { font-size: 22px; }
+  .ov-nums { gap: 8px; }
+}
+
 /* ---------- the sign-off, admin only ---------- */
 
 /* The one line pointer at the top of the admin page while the sign-off is missing: a

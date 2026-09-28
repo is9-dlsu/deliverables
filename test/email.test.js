@@ -546,6 +546,13 @@ console.log('\n8. The same day notice');
   check('live: exactly the fresh rows were stamped', stampedHere.slice().sort(), [21, 22]);
   check('live: no done key is written for a notice', Object.keys(sandbox.PropertiesService.getDocumentProperties().getProperties()).filter((k) => k.indexOf('NEW_ASSIGNMENTS') !== -1).length, 0);
 
+
+  sent.length = 0; stampedHere.length = 0;
+  out = fn('IS9WD_sendNewAssignments_')({ cfg: cfg2, source: 'App', only: 'Finance' });
+  check('narrowed to one office with nothing fresh, nothing is sent', [sent.length, has(out.lines[0], 'Nothing new to announce')], [0, true]);
+  out = fn('IS9WD_sendNewAssignments_')({ cfg: cfg2, source: 'App', only: 'partnerships' });
+  check('narrowed to one office, case blind, only that officer is sent', [sent.map((m) => m.to), stampedHere.slice().sort()], [['OFFICER_ADDRESS'], [21, 22]]);
+
   rows2[1].notifiedAt = d(2026, 9, 29); rows2[2].notifiedAt = d(2026, 9, 29); rows2[6].notifiedAt = d(2026, 9, 29);
   sent.length = 0;
   out = fn('IS9WD_sendNewAssignments_')({ cfg: cfg2, source: 'Trigger' });

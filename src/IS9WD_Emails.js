@@ -1227,6 +1227,16 @@ function IS9WD_mailBatch_(opt, job) {
   var items = IS9WD_readItems_();
   var recipients = job.recipients ? job.recipients(cfg, items, ctx)
     : IS9WD_recipientsFor(job.jobKey, cfg.directory.rows, items.rows, ctx.effectiveToday);
+  // opt.only narrows a batch to one office: the page adding a deliverable emails that officer
+  // and nobody else, in the same execution.
+  if (IS9WD_txt_(o.only) !== '') {
+    var want = IS9WD_trim_(o.only).toLowerCase();
+    var narrowed = [];
+    for (var q = 0; q < recipients.length; q++) {
+      if (IS9WD_trim_(recipients[q].committee).toLowerCase() === want) narrowed.push(recipients[q]);
+    }
+    recipients = narrowed;
+  }
   if (!recipients.length) {
     out.lines.push(job.quiet || (job.jobKey === IS9WD_JOB_DIGEST_
       ? 'Nothing is due tomorrow or overdue, so nothing was sent.'

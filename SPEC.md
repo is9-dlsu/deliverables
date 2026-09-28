@@ -52,7 +52,7 @@ Changing the publish set or a slide number is not a settings edit, it is a claim
 
 **Carousel pages are computed, not fixed.** A page is identified by its owner and part number, not by a page number that never moves. The master design holds 15 pages built once by hand, the title page then one page per officer in hierarchy order, and the weekly run edits text and exports the pages that week needs, which at one page per officer is all of them. Canva's connector can add a page but cannot duplicate one, and where an added page lands is undocumented, so nothing in the weekly run creates or deletes pages.
 
-**The sign-off is weekly, not a setting.** Prepared by and Checked by change every week, so Ethan sets them in the app each week, from a picker over the 14, and the Sheet keeps one row per week. `Ready for Canva` reads NO until this week's sign-off is set, because the alternative is quietly printing last week's names.
+**The sign-off is weekly, carried forward.** Prepared by and Checked by are set from a picker over the 14 on the admin page, and the Sheet keeps one row per week. Ethan ruled on 2026-09-29 that setting it every week is a chore for a pair that rarely changes, so the hourly pass and Sync write the latest earlier pair for a week that has none, and the picker is for the week it should differ. `Ready for Canva` therefore reads NO only on a workbook where nobody has ever set it; the earlier rule, that a missing week's row holds the gate so last week's names are never printed silently, is withdrawn by that ruling, and the brief still names the pair every Sunday.
 
 **Tokens live in Script Properties, never in a cell.** The Canva reader account has view access to the whole workbook, so a token in Configuration would be a token published to it.
 
