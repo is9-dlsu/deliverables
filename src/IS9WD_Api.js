@@ -583,6 +583,12 @@ function IS9WD_apiItems_(items) {
       deadlineText: IS9WD_deadlineText(it.deadline, IS9WD_todayManila_()),
       status: it.status,
       active: it.active === true,
+      // OVERDUE IS COMPUTED HERE, not in the page. The app has the officer's phone clock,
+      // which may be wrong, in another timezone, or deliberately changed; this is Asia/Manila
+      // from the workbook's own effective date. SPEC's human meaning of overdue is used, the
+      // deadline has passed and the item is still active, which is the one a person reads.
+      overdue: it.active === true && IS9WD_isDate_(it.deadline) &&
+        IS9WD_midnight_(it.deadline) < IS9WD_midnight_(IS9WD_todayManila_()),
       statusAt: IS9WD_isDate_(it.statusAt) ? IS9WD_stampText_(it.statusAt) : '',
       flag: it.check
     });

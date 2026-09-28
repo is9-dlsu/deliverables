@@ -9,3 +9,6 @@ node_modules/
 
 # Build output
 app/dist/
+
+# The live /exec address. Public repo: SPEC section 3 keeps every URL that matters out of it.
+app/endpoint.js

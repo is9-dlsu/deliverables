@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="robots" content="noindex, nofollow">
+<title>IS9 Weekly Deliverables</title>
+<link rel="stylesheet" href="./style.css">
+<!--
+  THE OFFICERS' PAGE. One screen, one action.
+
+  noindex is not decoration. The page is on a public GitHub Pages site, and while a link
+  without its token shows nothing but an error, there is no reason for a search engine to
+  hold a copy of it at all.
+
+  endpoint.js is loaded FIRST and is not in the repository. It is one line setting
+  window.IS9WD_ENDPOINT to the /exec address, written at publish time, because the repo is
+  public and SPEC section 3 says no URL that matters is ever committed. app/endpoint.example.js
+  is committed instead so the tree explains itself, and the page says so plainly when the value
+  is still the placeholder.
+
+  No font is loaded from anywhere. A system font stack means nothing about this page reaches a
+  third party, and it renders instantly on a phone on bad wifi.
+-->
+<script src="./endpoint.js" onerror="window.IS9WD_ENDPOINT=''"></script>
+</head>
+<body>
+<div id="app">
+  <main class="wrap">
+    <noscript>
+      <div class="notice stop">
+        <p class="notice-title">This page needs JavaScript</p>
+        <p class="notice-detail">Turn it on, or open the link in another browser.</p>
+      </div>
+    </noscript>
+    <div class="wait">Loading your list...</div>
+  </main>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

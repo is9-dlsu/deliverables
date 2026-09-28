@@ -1,0 +1,199 @@
+/*
+  The IS9 palette, and nothing outside it. Same eight colours as the workbook, same meanings,
+  so the page and the Sheet agree about what a colour says:
+
+    #085040 deep green   text, and a finished tick
+    #58756a sage         secondary text and hairlines
+    #5d4170 deep purple  the header band
+    #8a64a9 bright       a number worth the eye that is not a fault
+    #724485 strong       blocking or overdue, and never on cream
+    #e9ebd4 cream        means "yours to fill in", so it appears on nothing here
+    #F8FBFD paper        the page
+
+  375 px first. Every tap target is at least 44 px. No web font: a system stack renders
+  instantly on a phone with bad wifi and sends nothing to a third party.
+*/
+
+:root {
+  --green: #085040;
+  --sage: #58756a;
+  --purple: #5d4170;
+  --bright: #8a64a9;
+  --strong: #724485;
+  --paper: #F8FBFD;
+  --line: #dfe6e3;
+  --tap: 44px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--green);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 16px;               /* never below 16: iOS zooms the page on a smaller control */
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1rem 1rem calc(2rem + env(safe-area-inset-bottom));
+}
+
+/* ---------- header ---------- */
+
+.head {
+  background: var(--purple);
+  color: var(--paper);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  margin: 0 0 1rem;
+}
+.who { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; }
+.week { margin: 0.15rem 0 0; font-size: 0.85rem; opacity: 0.85; }
+
+.count { margin: 0 0 0.6rem; font-size: 0.9rem; color: var(--sage); }
+
+/* ---------- the list ---------- */
+
+.list { list-style: none; margin: 0; padding: 0; }
+
+.item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 0.6rem;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* The whole row is the button. A 20 px checkbox on a phone is how somebody ticks the task
+   below the one they meant. */
+.row {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.85rem;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  align-items: flex-start;
+}
+.row:disabled { cursor: progress; opacity: 0.55; }
+
+.box {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  border: 2px solid var(--sage);
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.text { flex: 1 1 auto; min-width: 0; }
+.title { display: block; font-weight: 600; }
+.remark { display: block; font-size: 0.85rem; color: var(--sage); margin-top: 0.1rem; }
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--sage);
+}
+
+.tag {
+  font-weight: 700;
+  color: var(--strong);
+  border: 1px solid var(--strong);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+}
+.tag.flag { color: var(--bright); border-color: var(--bright); }
+
+/* DONE IS NOT JUST A COLOUR. The tick mark, the filled box and the struck title all say it,
+   so it reads the same to a colour blind officer and in bright sun on a phone. */
+.item.done { background: #f3f7f5; }
+.item.done .box { background: var(--green); border-color: var(--green); }
+.item.done .title { text-decoration: line-through; color: var(--sage); }
+
+.item.overdue { border-color: var(--strong); }
+.item.busy { opacity: 0.6; }
+
+.undo {
+  display: block;
+  width: 100%;
+  min-height: var(--tap);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  color: var(--strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.locked {
+  display: block;
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--sage);
+}
+
+/* ---------- states ---------- */
+
+.wait { padding: 2rem 0; text-align: center; color: var(--sage); }
+
+.empty { padding: 2rem 0.5rem; text-align: center; }
+.empty-title { margin: 0; font-weight: 600; }
+.empty-detail { margin: 0.3rem 0 0; color: var(--sage); font-size: 0.9rem; }
+
+.notice {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--sage);
+  border-radius: 10px;
+  padding: 0.85rem;
+  margin: 0 0 1rem;
+  background: #fff;
+}
+.notice.stop { border-left-color: var(--strong); }
+.notice.warn { border-left-color: var(--bright); }
+.notice-title { margin: 0; font-weight: 700; }
+.notice-detail { margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--sage); }
+
+.retry {
+  margin-top: 0.7rem;
+  min-height: var(--tap);
+  padding: 0 1rem;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--green);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.foot { margin-top: 1.5rem; font-size: 0.8rem; color: var(--sage); }
+.foot p { margin: 0; }
+
+/* Focus must stay visible: some officers navigate with a keyboard, and the row is a button. */
+:focus-visible { outline: 3px solid var(--bright); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .item { transition: background-color 120ms ease, border-color 120ms ease; }
+}

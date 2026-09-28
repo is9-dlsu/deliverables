@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "officers-page",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve-app.js"],
+      "port": 8123
+    }
+  ]
+}
