@@ -334,7 +334,7 @@ var IS9WD_WIDTH = {
   FEED: [150, 240, 340, 240, 320, 260, 200, 150, 170, 140, 150, 200, 110,
     80, 80, 80, 80, 150, 150, 130, 130, 220],
   ITEMS: [90, 260, 380, 150, 300, 150, 160, 200, 160, 190, 90, 110, 80, 80,
-    110, 120, 110],
+    110, 120, 110, 160],
   // 03 | Statistics is a dashboard laid out three cards across, so its widths are three
   // twelve column sets with a narrow separator column between them. Each set is sized for
   // the WIDEST table that sits in that column of cards, and every set totals about the same
@@ -1561,7 +1561,9 @@ var IS9WD_ITEMS = {
   firstRow: 5,
   lastRow: 2004,
   firstCol: 1,
-  lastCol: 17,
+  // R is the one column after the derived block: a stamp the script writes when an officer
+  // has been told about the row. Added at the end so nothing on the tab moved (2026-09-29).
+  lastCol: 18,
   BANNER: IS9WD_TAB.ITEMS.toUpperCase(),
   // The banner takes the section band fill and the header row takes the column
   // header fill, on every tab, which is 2.5's palette rule and Ethan's instruction.
@@ -1619,7 +1621,17 @@ var IS9WD_ITEMS = {
     { header: 'Part', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.INT, wrap: IS9WD_WRAP.CLIP },
     { header: 'Slot on page', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.WRAP },
     { header: 'Master page', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.WRAP },
-    { header: 'Slot key', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP }
+    { header: 'Slot key', owner: IS9WD_OWN.SCRIPT, align: IS9WD_ALIGN.CENTER, format: IS9WD_FMT.TEXT, wrap: IS9WD_WRAP.CLIP },
+    // WHEN THE OFFICER WAS TOLD. Blank means nobody has been emailed about this row yet, so
+    // the hourly pass sends a New on your list notice and stamps it; the Monday email stamps
+    // everything it lists. Ethan can clear a cell to have a row announced again, and a row
+    // that is cleared by a retire or a delete loses its stamp with the rest.
+    {
+      header: 'Notified at', owner: IS9WD_OWN.CODE, align: IS9WD_ALIGN.RIGHT,
+      format: IS9WD_FMT.STAMP, wrap: IS9WD_WRAP.CLIP,
+      hint: 'Filled by the script when the officer has been emailed about this row. Clear it ' +
+        'to have the row announced again.'
+    }
   ]
 };
 
@@ -2850,12 +2862,12 @@ var IS9WD_STORE_COL_NAMES = {
   5: 'IS9WD_SIGNOFF_CHECKED_POSITION', 6: 'IS9WD_SIGNOFF_SET_AT'
 };
 
-// A to Q on the data tab, in column order.
+// A to R on the data tab, in column order.
 var IS9WD_DEL_COL_NAMES = ['IS9WD_DEL_ID', 'IS9WD_DEL_COMMITTEE', 'IS9WD_DEL_TITLE',
   'IS9WD_DEL_DEADLINE', 'IS9WD_DEL_REMARK', 'IS9WD_DEL_STATUS', 'IS9WD_DEL_STATUS_AT',
   'IS9WD_DEL_STATUS_BY', 'IS9WD_DEL_CREATED_AT', 'IS9WD_DEL_CHECK', 'IS9WD_DEL_ACTIVE',
   'IS9WD_DEL_PUBKEY', 'IS9WD_DEL_RANK', 'IS9WD_DEL_PART', 'IS9WD_DEL_SLOTONPAGE',
-  'IS9WD_DEL_PAGE', 'IS9WD_DEL_SLOTKEY'];
+  'IS9WD_DEL_PAGE', 'IS9WD_DEL_SLOTKEY', 'IS9WD_DEL_NOTIFIED_AT'];
 
 // Block A keys to the names the feed and the brief read them by. A.TOTAL carries no
 // name, because 4.9 points at that cell by address; everything else is named.

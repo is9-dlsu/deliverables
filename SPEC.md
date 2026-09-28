@@ -96,9 +96,12 @@ Double spaces around pipes, the middle dot, the uppercase, and the `1 TASK` sing
 | When | To | Sent only if |
 |---|---|---|
 | Monday 07:00 | each officer | they have active items |
+| Within the hour, any day | each officer | a row of theirs has been added that nobody has told them about |
 | Daily 18:00 | each officer | something of theirs is due tomorrow or overdue |
 | Sunday | Ethan | always: ready or not, what is overdue, what was accomplished, what needs attention |
 | On failure | Ethan | at most once per job per day, and the error is re-thrown so Google's own notice fires |
+
+**The system is not bound to the week.** Ethan ruled on 2026-09-29 that a deliverable can be assigned on any day. A row typed on a Wednesday is on its officer's phone at the next open, and the hourly pass sends that officer one `New on your list` email within the hour, listing only the rows nobody has told them about, then stamps those rows in `Notified at`, column R of `03 | Deliverables`. The Monday email stamps everything it lists, so a row is announced once and summarised weekly; clearing a stamp has the row announced again. The carousel stays weekly, because it is a publication and not a notification.
 
 The digest goes out in the EVENING, not the morning, and the workbook has always shipped 18:00 while this line said 07:00. Ethan ruled on 2026-09-28 that the evening is right and the line was wrong: a warning about tomorrow arrives while there is still an evening to act in, and an overdue item is not flagged on a morning when somebody is heading to class. One email per person per type, never one per item. A TEST mode sends everything to Ethan instead. The quota guard stops sending before the daily limit rather than half-sending a batch.
 

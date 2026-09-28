@@ -382,6 +382,8 @@ console.log('\n7. The batch skeleton, end to end with the edges stubbed');
   }) };
   const logged = [];
   const alerts = [];
+  const stamped = [];
+  sandbox.IS9WD_itemsStampNotified_ = (rows) => { rows.forEach((r) => stamped.push(r)); return rows.length; };
   const DIR = [
     { key: 'K10', committee: 'Office of the President', fullName: 'Sample President', position: 'President', email: 'PRESIDENT_ADDRESS', publishes: true, hierarchy: 1, revoked: false },
     { key: 'K01', committee: 'Partnerships', fullName: 'Sample Officer', position: 'Vice President', email: 'OFFICER_ADDRESS', publishes: true, hierarchy: 2, revoked: false },
@@ -450,6 +452,9 @@ console.log('\n7. The batch skeleton, end to end with the edges stubbed');
   check('live: the done key is written only for the send that succeeded',
     Object.keys(props).filter((k) => k.indexOf('IS9WD_DONE_MONDAY_ASSIGNMENTS_') === 0).map((k) => k.slice(-3)), ['K01']);
   check('live: the blank address is logged as skipped', logged.some((r) => r.result === 'SKIPPED' && r.committee === 'Events'), true);
+  // Four stamps on the fixture row: three from the test mode send above, which stamps too by
+  // design, and one from the live send that reached the good address.
+  check('the Monday sends stamped every row they listed, in test mode too', [stamped.length, stamped.every((r) => r === 10)], [4, true]);
   check('live: the failure is logged as a failure', logged.some((r) => r.ok === false && r.committee === 'Finance'), true);
 
   sandbox.MailApp.sendEmail = (msg) => { sent.push(msg); };
@@ -497,6 +502,60 @@ console.log('\n7. The batch skeleton, end to end with the edges stubbed');
   check('turning test mode off clears the mail job keys for today and leaves the archive alone',
     [cleared, Object.keys(props)], [['MONDAY_ASSIGNMENTS'], ['IS9WD_DONE_ARCHIVE_WEEK_' + sandbox.Utilities.formatDate(new Date(), '', 'yyyy-MM-dd')]]);
 }
+
+// ---------------------------------------------------------------------------
+console.log('\n8. The same day notice');
+{
+  const fresh = fn('IS9WD_freshItems_');
+  const rows2 = [
+    item('D-0101', 'Told already', d(2026, 10, 1), { committee: 'Partnerships', row: 20, notifiedAt: d(2026, 9, 28) }),
+    item('D-0102', 'New one', d(2026, 10, 2), { committee: 'Partnerships', row: 21 }),
+    item('D-0103', 'New two', d(2026, 9, 30), { committee: 'Partnerships', row: 22 }),
+    item('', 'No ID yet', d(2026, 10, 3), { committee: 'Partnerships', row: 23 }),
+    item('D-0104', 'Done one', d(2026, 9, 29), { committee: 'Partnerships', row: 24, active: false }),
+    item('D-0105', 'Finance told', d(2026, 10, 1), { committee: 'Finance', row: 30, notifiedAt: d(2026, 9, 28) }),
+    item('D-0106', 'Events new', d(2026, 10, 1), { committee: 'Events', row: 40 }),
+  ];
+  const mine = rows2.filter((i) => i.committee === 'Partnerships' && i.active);
+  check('fresh means active, titled, with an ID and never announced', fresh(mine).map((i) => i.id), ['D-0102', 'D-0103']);
+  check('subject singular and plural', [fn('IS9WD_noticeSubject_')(entryOf(), [rows2[1]]), fn('IS9WD_noticeSubject_')(entryOf(), fresh(mine))],
+    ['New on your list: Partnerships', '2 new on your list: Partnerships']);
+  const ctx = ctxOf();
+  const body = text(fn('IS9WD_noticeBlocks_')(ctx, entryOf(), fresh(mine), LINK));
+  check('the notice says how many were added', has(body, '2 deliverables were added to your list.'), true);
+  check('one item reads singular', has(text(fn('IS9WD_noticeBlocks_')(ctx, entryOf(), [rows2[1]], LINK)), 'One deliverable was added to your list.'), true);
+  check('the notice lists only the fresh rows', [has(body, 'New one'), has(body, 'New two'), has(body, 'Told already'), has(body, 'No ID yet')], [true, true, false, false]);
+  check('the notice carries one link and no sign-off', [count(body, BASE), has(body, 'Prepared by')], [1, false]);
+
+  // The batch, with the edges from section 7 still stubbed.
+  const stampedHere = [];
+  sandbox.IS9WD_itemsStampNotified_ = (rows) => { rows.forEach((r) => stampedHere.push(r)); return rows.length; };
+  sandbox.IS9WD_readItems_ = () => ({ rows: rows2, usedRows: rows2.length, capacity: 2000, byId: {} });
+  sandbox.MailApp.sendEmail = (msg) => { sent.push(msg); };
+  sent.length = 0;
+  const DIR2 = [
+    { key: 'K01', committee: 'Partnerships', fullName: 'Sample Officer', position: 'Vice President', email: 'OFFICER_ADDRESS', publishes: true, hierarchy: 2, revoked: false },
+    { key: 'K02', committee: 'Finance', fullName: 'Second Officer', position: 'Vice President', email: 'SECOND_ADDRESS', publishes: true, hierarchy: 3, revoked: false },
+    { key: 'K03', committee: 'Events', fullName: 'Third Officer', position: 'Vice President', email: '', publishes: true, hierarchy: 4, revoked: false },
+  ];
+  const cfg2 = cfgFixture({}); cfg2.directory = { rows: DIR2, inHierarchy: DIR2, byKey: {} }; cfg2.switches.mailMonday = true;
+  let out = fn('IS9WD_sendNewAssignments_')({ cfg: cfg2, source: 'Trigger' });
+  check('live: only the officer with unannounced rows is sent, the blank address is skipped',
+    [sent.map((m) => m.to), out.sent, out.skipped.length], [['OFFICER_ADDRESS'], 1, 1]);
+  check('live: the subject counts the fresh rows', sent[0].subject, '[IS9] 2 new on your list: Partnerships');
+  check('live: exactly the fresh rows were stamped', stampedHere.slice().sort(), [21, 22]);
+  check('live: no done key is written for a notice', Object.keys(sandbox.PropertiesService.getDocumentProperties().getProperties()).filter((k) => k.indexOf('NEW_ASSIGNMENTS') !== -1).length, 0);
+
+  rows2[1].notifiedAt = d(2026, 9, 29); rows2[2].notifiedAt = d(2026, 9, 29); rows2[6].notifiedAt = d(2026, 9, 29);
+  sent.length = 0;
+  out = fn('IS9WD_sendNewAssignments_')({ cfg: cfg2, source: 'Trigger' });
+  check('once stamped, nothing is announced again', [sent.length, has(out.lines[0], 'Nothing new to announce')], [0, true]);
+
+  const off = cfgFixture({}); off.directory = cfg2.directory; off.switches.mailMonday = false;
+  out = fn('IS9WD_sendNewAssignments_')({ cfg: off, source: 'Menu' });
+  check('the notice obeys the Monday email switch', has(out.lines[0], 'switched off'), true);
+}
+
 
 console.log('\n' + pass + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

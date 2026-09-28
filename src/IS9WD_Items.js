@@ -232,7 +232,7 @@ function IS9WD_itemsWriteDerived_(sheet, firstRow, numRows) {
 
 // Columns the machine writes read quieter than the five Ethan types into, which is
 // most of what makes 2,000 rows look composed rather than busy.
-var IS9WD_ITEM_QUIET_COLS = ['ID', 'Status at', 'Status by', 'Created at', 'Check'];
+var IS9WD_ITEM_QUIET_COLS = ['ID', 'Status at', 'Status by', 'Created at', 'Check', 'Notified at'];
 
 // Build or repair calls this. Configuration must already carry IS9WD_DIR_NAME and
 // IS9WD_STATUS_LIST, because the two dropdowns point at them; a missing name throws
@@ -488,7 +488,8 @@ var IS9WD_ITEM_FIELD = {
   'Part': 'part',
   'Slot on page': 'slotOnPage',
   'Master page': 'masterPage',
-  'Slot key': 'slotKey'
+  'Slot key': 'slotKey',
+  'Notified at': 'notifiedAt'
 };
 
 // One item, indexed out of one block read. `published` and `blocking` are derived
@@ -786,10 +787,43 @@ function IS9WD_itemCounts_(items, cfg) {
   return out;
 }
 
+/**
+ * THE OFFICER HAS BEEN TOLD about these rows: one stamp per row in R, then the memory is
+ * forgotten so the next read sees it. One row that fails to stamp does not cost the rest,
+ * and a row told twice is the smaller wrong. Returns how many were stamped.
+ */
+function IS9WD_itemsStampNotified_(rowNumbers) {
+  var list = rowNumbers && typeof rowNumbers.length === 'number' ? rowNumbers : [];
+  if (!list.length) return 0;
+  var sheet = IS9WD_sheet_('ITEMS');
+  var col = IS9WD_itemColIndex_('Notified at');
+  var now = IS9WD_nowManila_();
+  var done = 0;
+  for (var i = 0; i < list.length; i++) {
+    var row = IS9WD_posInt_(list[i]);
+    if (row === null || row < IS9WD_ITEMS.firstRow || row > IS9WD_ITEMS.lastRow) continue;
+    try {
+      sheet.getRange(row, col).setValue(now);
+      done++;
+    } catch (err) {
+      Logger.log('IS9WD: row ' + row + ' was not stamped as notified: ' + err);
+    }
+  }
+  if (done) IS9WD_itemsCacheReset_();
+  return done;
+}
+
 // Clears A to I and never deletes the row, because deleting one shrinks every named
 // range that contains it and silently drops the bottom rows out of every COUNTIFS,
 // MINIFS and MATCH the feed depends on (5.1). J to Q stay: they are formulas.
 function IS9WD_itemsClearRow_(sheet, row) {
+  // R is a stamp, not a formula, so it goes with the row: a new item typed into this row
+  // later would otherwise read as already announced and never be sent.
+  try {
+    (sheet || IS9WD_sheet_('ITEMS')).getRange(row, IS9WD_itemColIndex_('Notified at')).clearContent();
+  } catch (err) {
+    Logger.log('IS9WD: the Notified at stamp was not cleared on row ' + row + ': ' + err);
+  }
   var sh = sheet || IS9WD_sheet_('ITEMS');
   var cols = IS9WD_itemColIndex_('Created at') - IS9WD_ITEMS.firstCol + 1;
   sh.getRange(row, IS9WD_ITEMS.firstCol, 1, cols).clearContent();

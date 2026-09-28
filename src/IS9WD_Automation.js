@@ -115,6 +115,12 @@ function IS9WD_dispatch_() {
   // whose rows can actually be acted on.
   var swept = IS9WD_autoSweepIds_(cfg, say);
 
+  // NEW ITEMS ARE ANNOUNCED WITHIN THE HOUR, ON ANY DAY, right after the sweep has given them
+  // IDs. Not a schedule row: the stamps on the rows are its memory, so it runs every pass and
+  // sends only what nobody has been told about. It obeys the Monday email switch, because a
+  // same day notice is the same kind of message as the Monday list.
+  IS9WD_autoNotify_(cfg, say);
+
   var rows = cfg.schedule ? cfg.schedule.rows : [];
   var doneKeys = IS9WD_autoDoneKeys_();
   var ran = 0;
@@ -171,6 +177,24 @@ function IS9WD_autoRunJob_(row, cfg, say, failed) {
     IS9WD_autoRecord_(key, IS9WD_dateKey_(IS9WD_nowManila_()), 'failed: ' + err, false);
     IS9WD_autoFail_(key, err, say);
     return false;
+  }
+}
+
+// The same day notice, guarded like a job: a throw is mailed once a day and does not stop the
+// schedule behind it. The batch itself catches per recipient, so a throw here is a broken
+// read, not a bad address.
+function IS9WD_autoNotify_(cfg, say) {
+  var fn = IS9WD_apiImpl_('IS9WD_sendNewAssignments_');
+  if (!fn) return 0;
+  try {
+    var out = fn({ cfg: cfg, source: IS9WD_LOG_SOURCE_TRIGGER_ });
+    var note = out && out.lines && out.lines.length ? out.lines[out.lines.length - 1] : 'done';
+    say('new assignment notices: ' + note);
+    return out && out.sent ? out.sent : 0;
+  } catch (err) {
+    say('new assignment notices: failed, ' + err);
+    IS9WD_autoFail_('NEW_ASSIGNMENTS', err, say);
+    return 0;
   }
 }
 
@@ -378,6 +402,8 @@ function IS9WD_automationStatus_() {
     var cfg = IS9WD_readConfig_(true);
     out.push('Automation switch: ' + (cfg.switches.automationOn === false ? 'OFF' : 'on') +
       IS9WD_SEP + 'test mode: ' + (cfg.switches.testMode ? 'ON' : 'off'));
+    out.push('Same day notices: every hourly pass, any day, with the Monday email switch ' +
+      (cfg.switches.mailMonday ? 'on' : 'OFF') + '.');
     out.push('');
     out.push('The schedule, and what each job would do right now:');
     var now = IS9WD_nowManila_();

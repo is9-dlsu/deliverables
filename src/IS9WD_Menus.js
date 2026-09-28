@@ -118,6 +118,10 @@ var IS9WD_ACTION = {
     fn: 'IS9WD_sendMondayAssignments_', from: 'IS9WD_Emails.js', lock: true,
     label: "Send this week's assignment emails now"
   },
+  MAIL_NEW: {
+    fn: 'IS9WD_sendNewAssignments_', from: 'IS9WD_Emails.js', lock: true,
+    label: 'Send new assignment notices now'
+  },
   MAIL_DIGEST: {
     fn: 'IS9WD_sendDailyDigest_', from: 'IS9WD_Emails.js', lock: true,
     label: "Send today's digest now"
@@ -260,6 +264,7 @@ function IS9WD_buildMenu_() {
   var emails = ui.createMenu('Emails')
     .addItem('Preflight check', 'IS9WD_menuMailPreflight')
     .addItem("Send this week's assignment emails now", 'IS9WD_menuSendMonday')
+    .addItem('Send new assignment notices now', 'IS9WD_menuSendNew')
     .addItem("Send today's digest now", 'IS9WD_menuSendDigest')
     .addItem("Send Ethan's brief now", 'IS9WD_menuSendBrief')
     .addSeparator()
@@ -410,6 +415,12 @@ function IS9WD_menuSendMonday() {
   var ui = IS9WD_assertUiContext_();
   if (!IS9WD_confirmSend_(ui, IS9WD_ACTION.MAIL_MONDAY.label)) return;
   IS9WD_do_(ui, IS9WD_ACTION.MAIL_MONDAY, [{ source: 'Menu' }]);
+}
+
+function IS9WD_menuSendNew() {
+  var ui = IS9WD_assertUiContext_();
+  if (!IS9WD_confirmSend_(ui, IS9WD_ACTION.MAIL_NEW.label)) return;
+  IS9WD_do_(ui, IS9WD_ACTION.MAIL_NEW, [{ source: 'Menu' }]);
 }
 
 function IS9WD_menuSendDigest() {

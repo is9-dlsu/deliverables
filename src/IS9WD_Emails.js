@@ -35,6 +35,14 @@
  * from IS9WD_recipientsFor in IS9WD_Core.js, which is already tested, so a quiet day produces
  * an empty list and zero messages rather than fourteen empty ones.
  *
+ * NEW ITEMS ARE ANNOUNCED THE SAME DAY. Ethan asked on 2026-09-29 for a system that is not
+ * bound to the week: an item he adds on a Wednesday reaches its officer on Wednesday. So the
+ * hourly pass, on any day, sends each affected officer one New on your list email for the
+ * rows nobody has told them about, and stamps those rows in the Notified at column; the
+ * Monday email stamps everything it lists, so a row is announced once and then summarised.
+ * The stamp is written in test mode too, or the rehearsal would re-announce the same rows
+ * to Ethan every hour; clearing a cell in that column has the row announced again.
+ *
  * NO URL IS BUILT HERE. The officers page address is a Configuration setting and every link
  * comes from IS9WD_linkFor_, which reads it. When the address or a token is missing, the plain
  * sentence IS9WD_linkFor_ returns is printed as is rather than suppressing the email, because
@@ -274,6 +282,49 @@ function IS9WD_mondayBlocks_(ctx, entry, active, link) {
   }
   b.push.apply(b, IS9WD_mailLinkBlock_(entry, link));
   b.push.apply(b, IS9WD_mailSignoff_(ctx));
+  return b;
+}
+
+// Active, titled, with an ID, and never announced: the rows a New on your list email is for.
+// An unannounced row with no ID is left for the next pass, because the page ticks by ID and
+// an officer told about a row they cannot tick would be told something untrue.
+function IS9WD_freshItems_(active) {
+  var out = [];
+  for (var i = 0; i < active.length; i++) {
+    var it = active[i];
+    if (it.active !== true || IS9WD_txt_(it.title) === '' || IS9WD_txt_(it.id) === '') continue;
+    if (IS9WD_filled_(it.notifiedAt)) continue;
+    out.push(it);
+  }
+  return out;
+}
+
+function IS9WD_itemRowNumbers_(list) {
+  var rows = [];
+  for (var i = 0; i < list.length; i++) {
+    if (IS9WD_posInt_(list[i].row) !== null) rows.push(list[i].row);
+  }
+  return rows;
+}
+
+function IS9WD_noticeSubject_(entry, fresh) {
+  var n = fresh.length;
+  return (n === 1 ? 'New on your list: ' : n + ' new on your list: ') + entry.committee;
+}
+
+/**
+ * EMAIL ONE AND A HALF, the same day notice: only the rows the officer has not been told
+ * about, then the link. No sign-off, because the sign-off belongs to the week's list.
+ */
+function IS9WD_noticeBlocks_(ctx, entry, fresh, link) {
+  var b = [];
+  if (ctx.testMode) b.push(IS9WD_mailTestLine_(entry));
+  b.push({ k: 'p', text: IS9WD_mailGreeting_(entry) });
+  b.push({ k: 'p', text: (fresh.length === 1 ? 'One deliverable was' : fresh.length + ' deliverables were') +
+    ' added to your list.' });
+  b.push({ k: 'items', rows: IS9WD_mailItemRows_(ctx, entry, fresh) });
+  b.push({ k: 'note', text: 'Your whole list for the week is on your page, and the Monday email carries all of it.' });
+  b.push.apply(b, IS9WD_mailLinkBlock_(entry, link));
   return b;
 }
 
@@ -1090,7 +1141,47 @@ function IS9WD_sendMondayAssignments_(opt) {
     compose: function (ctx, entry, active, link) {
       return {
         subject: IS9WD_mondaySubject_(ctx, entry),
-        blocks: IS9WD_mondayBlocks_(ctx, entry, active, link)
+        blocks: IS9WD_mondayBlocks_(ctx, entry, active, link),
+        rows: IS9WD_itemRowNumbers_(active)
+      };
+    }
+  });
+}
+
+/**
+ * THE SAME DAY NOTICE. Run by the hourly pass on every day and by the menu. One message per
+ * officer who has rows nobody has told them about, listing only those rows, and every row
+ * listed is stamped the moment the message has gone. No done keys: the stamps are the memory,
+ * so a second batch of rows the same afternoon is announced the same afternoon.
+ */
+function IS9WD_sendNewAssignments_(opt) {
+  return IS9WD_mailBatch_(opt, {
+    jobKey: 'NEW_ASSIGNMENTS',
+    label: 'New assignment notices',
+    on: function (cfg) { return cfg.switches.mailMonday; },
+    noDoneKeys: true,
+    recipients: function (cfg, items, ctx) {
+      var rows = IS9WD_dirRows_(cfg.directory.rows);
+      var out = [];
+      for (var i = 0; i < rows.length; i++) {
+        if (IS9WD_freshItems_(IS9WD_activeItemsFor_(items, rows[i].committee)).length) out.push(rows[i]);
+      }
+      out.sort(function (a, b) {
+        var ha = IS9WD_int_(a.hierarchy); var hb = IS9WD_int_(b.hierarchy);
+        if (ha === null) ha = 99;
+        if (hb === null) hb = 99;
+        return ha - hb;
+      });
+      return out;
+    },
+    quiet: 'Nothing new to announce: every row has been sent to its officer.',
+    compose: function (ctx, entry, active, link) {
+      var fresh = IS9WD_freshItems_(active);
+      if (!fresh.length) return null;
+      return {
+        subject: IS9WD_noticeSubject_(entry, fresh),
+        blocks: IS9WD_noticeBlocks_(ctx, entry, fresh, link),
+        rows: IS9WD_itemRowNumbers_(fresh)
       };
     }
   });
@@ -1134,16 +1225,21 @@ function IS9WD_mailBatch_(opt, job) {
   }
 
   var items = IS9WD_readItems_();
-  var recipients = IS9WD_recipientsFor(job.jobKey, cfg.directory.rows, items.rows, ctx.effectiveToday);
+  var recipients = job.recipients ? job.recipients(cfg, items, ctx)
+    : IS9WD_recipientsFor(job.jobKey, cfg.directory.rows, items.rows, ctx.effectiveToday);
   if (!recipients.length) {
-    out.lines.push(job.jobKey === IS9WD_JOB_DIGEST_
+    out.lines.push(job.quiet || (job.jobKey === IS9WD_JOB_DIGEST_
       ? 'Nothing is due tomorrow or overdue, so nothing was sent.'
-      : 'Nobody has an active item, so nothing was sent.');
+      : 'Nobody has an active item, so nothing was sent.'));
     return out;
   }
+
   // The done keys come BEFORE the quota guard, so a batch resuming after the six minute limit
-  // is measured against the people still waiting and not against the whole list.
-  var keys = IS9WD_mailDoneKeys_(job.jobKey, ctx.testMode);
+  // is measured against the people still waiting and not against the whole list. A job whose
+  // memory is the stamp on each row carries no done keys at all.
+  var keys = job.noDoneKeys
+    ? { has: function () { return false; }, set: function () {} }
+    : IS9WD_mailDoneKeys_(job.jobKey, ctx.testMode);
   var pending = [];
   for (var p = 0; p < recipients.length; p++) {
     var who = IS9WD_mailEntry_(recipients[p]);
@@ -1174,6 +1270,14 @@ function IS9WD_mailBatch_(opt, job) {
       if (!mail) { out.skipped.push(entry.key + ' (nothing to say)'); continue; }
       IS9WD_mailSend_(entry.email, mail.subject, mail.blocks, IS9WD_mailMeta_(ctx, entry), ctx);
       keys.set(entry.key);
+      // The rows the message listed are stamped the moment it has gone, in test mode too.
+      if (mail.rows && mail.rows.length) {
+        try {
+          IS9WD_itemsStampNotified_(mail.rows);
+        } catch (err) {
+          Logger.log('IS9WD: the notified stamps were not written for ' + entry.key + ': ' + err);
+        }
+      }
       out.sent++;
       IS9WD_logRow_({ source: source, actor: 'Mail', action: job.jobKey, committee: entry.committee,
         detail: 'sent' + (ctx.testMode ? ' to the admin address (test mode)' : ''), ok: true });
@@ -1410,6 +1514,24 @@ function IS9WD_mailPreflight_() {
     });
   } else {
     out.lines.push('', 'No digest would go out today: nothing is due tomorrow and nothing is overdue.');
+  }
+  var freshFor = null;
+  for (i = 0; i < dir.length && !freshFor; i++) {
+    var fr = IS9WD_freshItems_(IS9WD_activeItemsFor_(items, dir[i].committee));
+    if (fr.length) freshFor = { entry: IS9WD_mailEntry_(dir[i]), fresh: fr };
+  }
+  if (freshFor) {
+    out.previews.push({
+      title: 'Same day notice, as ' + (freshFor.entry.fullName || freshFor.entry.committee) +
+        ' would receive it for the rows nobody has told them about',
+      to: ctx.testMode ? ctx.adminEmail : freshFor.entry.email,
+      subject: IS9WD_mailSubject_(ctx, IS9WD_noticeSubject_(freshFor.entry, freshFor.fresh)),
+      blocks: IS9WD_noticeBlocks_(ctx, freshFor.entry, freshFor.fresh, IS9WD_linkFor_(freshFor.entry.key)),
+      meta: IS9WD_mailMeta_(ctx, freshFor.entry),
+      count: 1
+    });
+  } else {
+    out.lines.push('', 'No same day notice would go out right now: every row has been announced.');
   }
   var bc = IS9WD_briefContext_(cfg, items);
   out.previews.push({
