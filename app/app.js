@@ -171,7 +171,7 @@ function SignoffCard({ state, prepared, checked, busy, note, onPrepared, onCheck
   const people = state.people || [];
   const ready = prepared !== '' && checked !== '' && !busy;
   return html`
-    <section class="signoff" aria-labelledby="signoff-title">
+    <section class="signoff" id="signoff" aria-labelledby="signoff-title">
       <h2 class="signoff-title" id="signoff-title">Sign-off for this week</h2>
       <p class=${'signoff-state' + (so.set ? '' : ' hold')}>
         ${so.set
@@ -358,16 +358,11 @@ function App() {
       <div class="body">
         ${error ? html`<${Notice} kind="warn" title=${headline(error)} detail=${error.message} />` : null}
 
-        ${state.role === 'admin' && state.people ? html`
-          <${SignoffCard}
-            state=${state}
-            prepared=${prepared}
-            checked=${checked}
-            busy=${signBusy}
-            note=${signNote}
-            onPrepared=${setPrepared}
-            onChecked=${setChecked}
-            onSave=${saveSignoff} />` : null}
+        ${state.role === 'admin' && state.signoff && !state.signoff.set ? html`
+          <button type="button" class="pointer" onClick=${() => {
+            const el = document.getElementById('signoff');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}>Sign-off not set for this week. Ready for Canva reads NO until it is. Set it below.</button>` : null}
 
         ${items.length === 0 ? html`
           <div class="empty">
@@ -388,6 +383,17 @@ function App() {
                 onToggle=${toggle} />`)}
           </ul>
         `}
+
+        ${state.role === 'admin' && state.people ? html`
+          <${SignoffCard}
+            state=${state}
+            prepared=${prepared}
+            checked=${checked}
+            busy=${signBusy}
+            note=${signNote}
+            onPrepared=${setPrepared}
+            onChecked=${setChecked}
+            onSave=${saveSignoff} />` : null}
       </div>
 
       <footer class="foot">

@@ -382,14 +382,32 @@ body::after {
 
 /* ---------- the sign-off, admin only ---------- */
 
+/* The one line pointer at the top of the admin page while the sign-off is missing: a
+   sentence in the exception colour, and a button because it scrolls to the card. It must
+   never be a link, because a fragment in the address would replace the token on a reload. */
+.pointer {
+  display: block;
+  width: 100%;
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--strong);
+  cursor: pointer;
+}
+
 /* A section, not a box: two hairlines and the same left axis as the list. The heading is in
    the serif because it is the one other title on the page, and the state line under it
    carries the exception colour only while the sign-off is missing. */
 .signoff {
-  margin: 20px 0 4px;
-  padding: 18px 0 22px;
+  margin: 24px 0 4px;
+  padding: 20px 0 22px;
   border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
 }
 .signoff-title {
   margin: 0 0 4px;
