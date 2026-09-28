@@ -144,6 +144,13 @@ var IS9WD_ACTION = {
     fn: 'IS9WD_dispatch_', from: 'IS9WD_Automation.js', lock: true,
     label: 'Run the dispatcher now'
   },
+  // The sweep on demand. A row typed thirty seconds ago has no ID until something mints one,
+  // and the officers page ticks by ID, so without this the answer to "why can I not tick the
+  // task I just entered" is "wait up to an hour, or rebuild nine tabs".
+  SWEEP_IDS: {
+    fn: 'IS9WD_sweepIds_', from: 'IS9WD_Automation.js', lock: true,
+    label: 'Give new rows an ID now'
+  },
   ROTATE_ONE: {
     fn: 'IS9WD_rotateToken_', from: 'IS9WD_Api.js', lock: true,
     label: 'Rotate a link'
@@ -257,7 +264,8 @@ function IS9WD_buildMenu_() {
     .addItem('Install automations', 'IS9WD_menuInstallAutomations')
     .addItem('Remove automations', 'IS9WD_menuRemoveAutomations')
     .addItem('Show automation status', 'IS9WD_menuAutomationStatus')
-    .addItem('Run the dispatcher now', 'IS9WD_menuRunDispatcher');
+    .addItem('Run the dispatcher now', 'IS9WD_menuRunDispatcher')
+    .addItem('Give new rows an ID now', 'IS9WD_menuSweepIds');
 
   var links = ui.createMenu('Links')
     .addItem('Rotate a link', 'IS9WD_menuRotateOne')
@@ -825,6 +833,14 @@ function IS9WD_aboutLines_() {
 function IS9WD_menuResetAndBuild() {
   var ui = IS9WD_assertUiContext_();
   IS9WD_do_(ui, IS9WD_ACTION.RESET);
+}
+
+function IS9WD_menuSweepIds() {
+  var ui = IS9WD_assertUiContext_();
+  var out = IS9WD_do_(ui, IS9WD_ACTION.SWEEP_IDS, [], { quiet: true });
+  IS9WD_showReport_(ui, IS9WD_ACTION.SWEEP_IDS.label, IS9WD_lines_(out),
+    'An officer can only tick a task that has an ID. The hourly job does this too, so this ' +
+    'is for when you have just typed something and do not want to wait.');
 }
 
 function IS9WD_menuBuildViews() {
