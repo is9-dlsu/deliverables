@@ -3991,6 +3991,7 @@ function IS9WD_configReset_() {
   // both suspect. The name coordinates are not; only a re-pointed name clears those.
   IS9WD_snapReset_();
   if (typeof IS9WD_itemsCacheReset_ === 'function') IS9WD_itemsCacheReset_();
+  if (typeof IS9WD_logForget_ === 'function') IS9WD_logForget_();
 }
 
 // One bulk fetch of every named range, so resolving sixty names costs one call.

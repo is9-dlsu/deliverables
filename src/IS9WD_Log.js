@@ -55,6 +55,40 @@ function IS9WD_logText_(value) {
  * tick it again. The failure goes to the execution log instead, where the daily failure mail
  * will find it.
  */
+// THE NEXT LOG ROW IS REMEMBERED. getLastRow after a write in the same execution waits for
+// the workbook to recalculate, and the log row is written after almost every write, so that
+// one read was a large part of what a tick cost. The row to write next is kept in the script
+// cache and advanced after every append; the trim, the self test's own appends and every
+// settings reset forget it, and an empty memory asks the sheet once. Every writer of the log
+// holds the document lock, so two executions cannot advance it against each other.
+var IS9WD_LOG_NEXT_KEY_ = 'IS9WD_LOG_NEXT_ROW_v1';
+
+function IS9WD_logNextRow_(sheet) {
+  try {
+    var held = IS9WD_posInt_(CacheService.getScriptCache().get(IS9WD_LOG_NEXT_KEY_));
+    if (held !== null && held >= IS9WD_LOG.firstRow) return held;
+  } catch (err) {
+    // Ask the sheet.
+  }
+  return Math.max(sheet.getLastRow() + 1, IS9WD_LOG.firstRow);
+}
+
+function IS9WD_logRemember_(next) {
+  try {
+    CacheService.getScriptCache().put(IS9WD_LOG_NEXT_KEY_, String(next), 21600);
+  } catch (err) {
+    Logger.log('IS9WD: the next log row was not remembered: ' + err);
+  }
+}
+
+function IS9WD_logForget_() {
+  try {
+    CacheService.getScriptCache().remove(IS9WD_LOG_NEXT_KEY_);
+  } catch (err) {
+    Logger.log('IS9WD: the next log row was not forgotten: ' + err);
+  }
+}
+
 function IS9WD_logRow_(row) {
   try {
     var r = row || {};
@@ -71,7 +105,7 @@ function IS9WD_logRow_(row) {
       IS9WD_logText_(r.detail),
       r.ok === false ? IS9WD_logText_(r.result || 'FAIL') : IS9WD_logText_(r.result || 'OK')
     ]];
-    var first = Math.max(sheet.getLastRow() + 1, IS9WD_LOG.firstRow);
+    var first = IS9WD_logNextRow_(sheet);
     IS9WD_ensureGrid_(sheet, first, IS9WD_LOG.lastCol);
     var block = sheet.getRange(first, IS9WD_LOG.firstCol, 1, IS9WD_LOG.lastCol);
     block.setValues(values);
@@ -81,6 +115,7 @@ function IS9WD_logRow_(row) {
       sheet.getRange(first, IS9WD_LOG.lastCol).setFontColor(IS9WD_ROLE.FLAG_FG)
         .setFontWeight('bold');
     }
+    IS9WD_logRemember_(first + 1);
     return true;
   } catch (err) {
     Logger.log('IS9WD: the log row was not written: ' + err);
@@ -101,6 +136,7 @@ function IS9WD_logTrim_(keep) {
   if (used <= want) return 0;
   var drop = used - want;
   sheet.deleteRows(IS9WD_LOG.firstRow, drop);
+  IS9WD_logForget_();
   return drop;
 }
 

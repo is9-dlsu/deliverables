@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 13;
+var IS9WD_API_VERSION_ = 15;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -537,18 +537,21 @@ function IS9WD_apiSetStatus_(plan, req, ctx) {
     }
   }
 
-  var sheet = IS9WD_sheet_('ITEMS');
-  var now = IS9WD_nowManila_();
-  sheet.getRange(item.row, IS9WD_itemColIndex_('Status')).setValue(entry.name);
-  sheet.getRange(item.row, IS9WD_itemColIndex_('Status at')).setValue(now);
-  sheet.getRange(item.row, IS9WD_itemColIndex_('Status by')).setValue(plan.name || plan.key);
-  SpreadsheetApp.flush();
-
+  // THE LOG ROW GOES FIRST. It is the one thing here that can read the sheet (the next log
+  // row, when it is not remembered), and a read after the status writes below would wait for
+  // the whole workbook to recalculate. The three cells below cannot fail in any way the log
+  // would want to know about.
   IS9WD_logRow_({
     source: IS9WD_LOG_SOURCE_APP_, actor: IS9WD_apiActor_(plan), action: 'setStatus',
     committee: item.committee, id: item.id,
     detail: IS9WD_trim_(item.status) + ' to ' + entry.name, ok: true
   });
+
+  var sheet = IS9WD_sheet_('ITEMS');
+  var now = IS9WD_nowManila_();
+  sheet.getRange(item.row, IS9WD_itemColIndex_('Status')).setValue(entry.name);
+  sheet.getRange(item.row, IS9WD_itemColIndex_('Status at')).setValue(now);
+  sheet.getRange(item.row, IS9WD_itemColIndex_('Status by')).setValue(plan.name || plan.key);
 
   // The change, applied to the copy already in hand: exactly what the sheet's own derived
   // Active column will say once it has recalculated, without waiting for it.
@@ -615,8 +618,15 @@ function IS9WD_apiAddItem_(plan, req) {
     id, entry.committee, IS9WD_normalizeText(p.title), IS9WD_toDate_(p.deadline),
     IS9WD_normalizeText(p.remark), IS9WD_trim_(cfg.statuses.defaultStatus), '', '', IS9WD_nowManila_()
   ];
-  IS9WD_sheet_('ITEMS').getRange(row, IS9WD_itemColIndex_('ID'), 1, line.length).setValues([line]);
-  SpreadsheetApp.flush();
+  // The log row goes first, for the reason IS9WD_apiSetStatus_ gives.
+  IS9WD_logRow_({
+    source: IS9WD_LOG_SOURCE_APP_, actor: IS9WD_apiActor_(plan), action: 'addItem',
+    committee: entry.committee, id: id, detail: 'row ' + row, ok: true
+  });
+  var itemsSheet = IS9WD_sheet_('ITEMS');
+  itemsSheet.getRange(row, IS9WD_itemColIndex_('ID'), 1, line.length).setValues([line]);
+  // A half cleared row can still carry a Notified at stamp; the new item must not inherit it.
+  itemsSheet.getRange(row, IS9WD_itemColIndex_('Notified at')).clearContent();
   IS9WD_itemsCacheReset_();
   // The new row, as the reader would build it once the sheet has recalculated: the typed
   // cells as written, active from the status list, nothing derived yet.
@@ -630,10 +640,6 @@ function IS9WD_apiAddItem_(plan, req) {
   items.usedRows = (items.usedRows || 0) + 1;
   items.lastUsedRow = row;
   items.nextFreeRow = row + 1;
-  IS9WD_logRow_({
-    source: IS9WD_LOG_SOURCE_APP_, actor: IS9WD_apiActor_(plan), action: 'addItem',
-    committee: entry.committee, id: id, detail: 'row ' + row, ok: true
-  });
   // THE OFFICER IS EMAILED BEFORE THE PAGE HEARS BACK. Ethan ruled on 2026-09-29 that a
   // deliverable encoded from the page is announced at once, not at the next hourly pass. The
   // notice batch is narrowed to this one office, sends whatever that officer has not been
@@ -650,8 +656,17 @@ function IS9WD_apiAddItem_(plan, req) {
   } catch (err) {
     line = 'The email was not sent: ' + IS9WD_txt_(err && err.message ? err.message : err);
   }
-  var state = IS9WD_apiState_(plan, items);
-  state.lastAdd = { id: id, notified: notified, line: line };
+  var state;
+  try {
+    state = IS9WD_apiState_(plan, items);
+  } catch (err) {
+    // The row is written and the mail has gone; the page must not be told to try again, or
+    // the retry adds the item twice. It gets a thin answer and reloads.
+    Logger.log('IS9WD: the state after an add could not be built: ' + err);
+    state = { role: plan.role, items: [], partial: true };
+  }
+  state.lastAdd = { id: id, notified: notified, line: line,
+    testMode: !!(cfg.switches && cfg.switches.testMode) };
   return IS9WD_envelopeOk_('addItem', state);
 }
 
@@ -667,6 +682,12 @@ function IS9WD_signoffCarry_(cfg) {
   if (!so || (so.current && so.current.set === true)) return null;
   var ws = IS9WD_day_(cfg.weeks ? cfg.weeks.weekStart : null);
   if (ws === null) return null;
+  // A row for this week that exists but is incomplete is somebody's half made edit, not a
+  // blank to fill: it is left alone and the gate says so.
+  var have = so.rows || [];
+  for (var h = 0; h < have.length; h++) {
+    if (IS9WD_day_(have[h].weekStart) === ws) return null;
+  }
   var best = null;
   var rows = so.rows || [];
   for (var i = 0; i < rows.length; i++) {
@@ -773,8 +794,8 @@ function IS9WD_apiState_(plan, known) {
     undoSeconds: IS9WD_apiUndoSeconds_(cfg),
     week: {
       number: IS9WD_two_(cfg.weeks ? cfg.weeks.weekNumber : null),
-      start: IS9WD_dateKey_(cfg.weeks ? cfg.weeks.weekStart : null),
-      end: IS9WD_dateKey_(cfg.weeks ? cfg.weeks.weekEnd : null),
+      start: cfg.weeks && IS9WD_isDate_(cfg.weeks.weekStart) ? IS9WD_dateKey_(cfg.weeks.weekStart) : '',
+      end: cfg.weeks && IS9WD_isDate_(cfg.weeks.weekEnd) ? IS9WD_dateKey_(cfg.weeks.weekEnd) : '',
       // What the page prints. The machine keys above stay for anything that sorts or compares.
       startLong: IS9WD_longDate(cfg.weeks ? cfg.weeks.weekStart : null),
       endLong: IS9WD_longDate(cfg.weeks ? cfg.weeks.weekEnd : null),
@@ -818,7 +839,7 @@ function IS9WD_apiState_(plan, known) {
       : { key: adminKey, committee: '', name: '', position: '' };
     state.people = people;
     state.signoff = {
-      weekStart: IS9WD_dateKey_(cfg.weeks ? cfg.weeks.weekStart : null),
+      weekStart: cfg.weeks && IS9WD_isDate_(cfg.weeks.weekStart) ? IS9WD_dateKey_(cfg.weeks.weekStart) : '',
       set: so.set === true,
       preparedName: IS9WD_txt_(so.preparedName),
       preparedPosition: IS9WD_txt_(so.preparedPosition),
@@ -841,14 +862,16 @@ function IS9WD_apiItems_(items) {
   var out = [];
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
-    if (it.title === '') continue;
+    // No title, nothing to show; no ID, nothing to tick: a typed row waits for the sweep or
+    // Sync, which is what the sync report says of it.
+    if (it.title === '' || it.id === '') continue;
     out.push({
       id: it.id,
       // A member's items all carry their own office; the admin list needs it to tell rows apart.
       committee: it.committee,
       title: it.title,
       remark: it.remark,
-      deadline: IS9WD_dateKey_(it.deadline),
+      deadline: IS9WD_isDate_(it.deadline) ? IS9WD_dateKey_(it.deadline) : '',
       // TWO DEADLINE STRINGS, DELIBERATELY. deadlineText is the Canva wording, frozen by SPEC
       // section 4, and the page used to show it. Ethan asked on 2026-09-28 for dates a person
       // reads, so the page shows deadlineLong instead and the carousel keeps its contract.

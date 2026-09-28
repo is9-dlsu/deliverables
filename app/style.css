@@ -599,7 +599,7 @@ body::after {
   cursor: pointer;
 }
 /* Disabled is a colour that still reads, never a fade. */
-.save:disabled { background: var(--rule-strong); color: var(--paper); cursor: default; }
+.save:disabled { background: var(--sage); color: var(--paper); cursor: default; }
 .signoff-note { margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--sage); }
 
 /* The office on an admin row, first on the meta line, so fourteen lists read as one. */

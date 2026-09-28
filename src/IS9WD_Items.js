@@ -813,6 +813,19 @@ function IS9WD_itemsStampNotified_(rowNumbers) {
   return done;
 }
 
+// Every Notified at stamp on the rows in use, cleared in one call. Turning test mode off
+// calls it, because the rehearsal's stamps say the officers were told when only Ethan was.
+function IS9WD_itemsClearNotified_() {
+  var items = IS9WD_readItems_();
+  if (!items.lastUsedRow) return 0;
+  var sheet = IS9WD_sheet_('ITEMS');
+  var col = IS9WD_itemColIndex_('Notified at');
+  var rows = items.lastUsedRow - IS9WD_ITEMS.firstRow + 1;
+  sheet.getRange(IS9WD_ITEMS.firstRow, col, rows, 1).clearContent();
+  IS9WD_itemsCacheReset_();
+  return rows;
+}
+
 // Clears A to I and never deletes the row, because deleting one shrinks every named
 // range that contains it and silently drops the bottom rows out of every COUNTIFS,
 // MINIFS and MATCH the feed depends on (5.1). J to Q stay: they are formulas.

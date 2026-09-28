@@ -353,7 +353,7 @@ console.log('\n10. Adding a deliverable from the page, end to end with the edges
   box.IS9WD_itemColIndex_ = (header) => (header === 'ID' ? 1 : 1);
   box.IS9WD_itemObject_ = (line, row) => ({ row, id: line[0], committee: line[1], title: line[2], deadline: line[3],
     remark: line[4], status: line[5], statusAt: line[6], statusBy: line[7], createdAt: line[8], check: '', active: true });
-  box.IS9WD_sheet_ = () => ({ getRange: (r, c, h, w) => ({ setValues: (v) => { written.push({ r, c, h, w, v: v[0] }); } }) });
+  box.IS9WD_sheet_ = () => ({ getRange: (r, c, h, w) => ({ setValues: (v) => { written.push({ r, c, h, w, v: v[0] }); }, clearContent: () => {} }) });
   box.SpreadsheetApp = { flush: () => {} };
   box.IS9WD_itemsCacheReset_ = () => {};
   box.IS9WD_nowManila_ = () => new Date(2026, 8, 29, 10, 0, 0);

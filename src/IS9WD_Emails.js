@@ -1106,9 +1106,19 @@ function IS9WD_mailClearTodayKeys_() {
   } catch (err) {
     Logger.log('IS9WD: the job keys were not cleared: ' + err);
   }
-  if (cleared.length) {
+  // The rehearsal announced every row to Ethan and stamped it. Live, the officers have never
+  // been told, so the stamps go too and the next pass announces each row once for real.
+  var unstamped = 0;
+  try {
+    var wipe = IS9WD_apiImpl_('IS9WD_itemsClearNotified_');
+    if (wipe) unstamped = wipe();
+  } catch (err) {
+    Logger.log('IS9WD: the rehearsal stamps were not cleared: ' + err);
+  }
+  if (cleared.length || unstamped) {
     IS9WD_logRow_({ source: 'Menu', actor: 'Admin', action: 'testModeOff',
-      detail: "cleared today's job keys: " + cleared.join(', '), ok: true });
+      detail: "cleared today's job keys: " + (cleared.join(', ') || 'none') + '; ' +
+        unstamped + ' notified stamp(s) cleared', ok: true });
   }
   return cleared;
 }
@@ -1157,7 +1167,7 @@ function IS9WD_sendMondayAssignments_(opt) {
 function IS9WD_sendNewAssignments_(opt) {
   return IS9WD_mailBatch_(opt, {
     jobKey: 'NEW_ASSIGNMENTS',
-    label: 'New assignment notices',
+    label: 'same day notice, which follows the Monday email switch,',
     on: function (cfg) { return cfg.switches.mailMonday; },
     noDoneKeys: true,
     recipients: function (cfg, items, ctx) {

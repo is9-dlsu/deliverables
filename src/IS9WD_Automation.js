@@ -208,7 +208,9 @@ function IS9WD_autoNotify_(cfg, say) {
   var fn = IS9WD_apiImpl_('IS9WD_sendNewAssignments_');
   if (!fn) return 0;
   try {
-    var out = fn({ cfg: cfg, source: IS9WD_LOG_SOURCE_TRIGGER_ });
+    var out = IS9WD_lockedRun_(function () {
+      return fn({ cfg: cfg, source: IS9WD_LOG_SOURCE_TRIGGER_ });
+    });
     var note = out && out.lines && out.lines.length ? out.lines[out.lines.length - 1] : 'done';
     say('new assignment notices: ' + note);
     return out && out.sent ? out.sent : 0;
@@ -248,8 +250,12 @@ function IS9WD_autoSweepIds_(cfg, say) {
   try {
     var fn = IS9WD_apiImpl_('IS9WD_itemsBackfill_');
     if (!fn) return 0;
-    IS9WD_apiImpl_('IS9WD_itemsRaiseNextId_') && IS9WD_itemsRaiseNextId_();
-    var filled = fn(cfg) || [];
+    // Under the document lock, the same one the endpoint takes for a write, so a page add
+    // minting an ID and this sweep minting one cannot interleave.
+    var filled = IS9WD_lockedRun_(function () {
+      IS9WD_apiImpl_('IS9WD_itemsRaiseNextId_') && IS9WD_itemsRaiseNextId_();
+      return fn(cfg) || [];
+    });
     var ids = 0;
     for (var i = 0; i < filled.length; i++) {
       if (filled[i] && filled[i].id) ids++;

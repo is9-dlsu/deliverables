@@ -2505,6 +2505,7 @@ function IS9WD_stAppendLog_(suite, summary) {
   IS9WD_ensureGrid_(sheet, first + rows.length - 1, IS9WD_LOG.lastCol);
   var block = sheet.getRange(first, 1, rows.length, IS9WD_LOG.lastCol);
   block.setValues(rows);
+  IS9WD_logForget_();
 
   // Appended rows land below whatever setup formatted, so they are styled here.
   // The background is left alone on purpose: setting one would paint over the

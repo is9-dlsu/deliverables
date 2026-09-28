@@ -172,11 +172,11 @@ function ItemList({ items, busyId, undoLeftFor, onToggle, showCommittee, admin, 
   const rows = open.concat(pinned).concat(shown ? folded : []);
   return html`
     <ul class="list">
-      ${rows.map((item) => html`
+      ${rows.map((item, index) => html`
         <${Item}
-          key=${item.id}
+          key=${item.id || 'row' + index}
           item=${item}
-          busy=${busyId === item.id}
+          busy=${item.id !== '' && busyId === item.id}
           undoLeft=${undoLeftFor(item)}
           showCommittee=${showCommittee}
           admin=${admin}
@@ -230,6 +230,11 @@ function personLabel(p) {
   return p.position ? who + ', ' + p.position : who;
 }
 
+// Offices compared the way the server compares them: trimmed, case blind.
+function sameOffice(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+
 // The key of the person whose name is on the stored row, so the picker opens on what is
 // set rather than on blanks. The store keeps names, not keys, because a name is what prints.
 function keyForName(people, name) {
@@ -243,7 +248,7 @@ function Overview({ people, items, week, onPick }) {
   return html`
     <ul class="overview">
       ${people.map((p) => {
-        const t = tally(items.filter((i) => i.committee === p.committee), week);
+        const t = tally(items.filter((i) => sameOffice(i.committee, p.committee)), week);
         return html`
           <li key=${p.key}>
             <button type="button" class="ov-row" onClick=${() => onPick(p.key)}>
@@ -431,7 +436,7 @@ function App() {
   }
 
   async function toggle(item) {
-    if (busyId) return;                      // one write at a time, so a double tap is one tick
+    if (busyId || !item.id) return;          // one write at a time, so a double tap is one tick
     const statuses = state.statuses || [];
     const open = statuses.filter((s) => !s.terminal)[0];
     const done = statuses.filter((s) => s.terminal)[0];
@@ -489,9 +494,10 @@ function App() {
     const env = await call('addItem', token, payload, { requestId: newRequestId() });
     setAddBusy(false);
     if (env.ok) {
-      setState(env.data);
       const last = env.data && env.data.lastAdd ? env.data.lastAdd : null;
-      setAddNote(last && last.notified > 0 ? 'Added and emailed.'
+      if (env.data && env.data.partial) load(); else setState(env.data);
+      setAddNote(last && last.notified > 0
+        ? (last.testMode ? 'Added. Test mode sent the notice to you.' : 'Added and emailed.')
         : 'Added. ' + (last && last.line ? last.line : 'The officer sees it at their next open.'));
       if (onDone) onDone();
       return;
@@ -513,11 +519,11 @@ function App() {
   const admin = state.role === 'admin';
   const items = state.items || [];
   const mineOffice = admin && state.mine ? state.mine.committee : '';
-  const myItems = admin ? items.filter((i) => i.committee === mineOffice) : items;
+  const myItems = admin ? items.filter((i) => sameOffice(i.committee, mineOffice)) : items;
   const people = admin ? (state.people || []).filter((p) => p.key !== (state.mine || {}).key) : [];
   const everyone = admin ? people.concat(state.mine && state.mine.committee ? [state.mine] : []) : [];
   const pickedPerson = people.filter((p) => p.key === picked)[0] || null;
-  const pickedItems = pickedPerson ? items.filter((i) => i.committee === pickedPerson.committee) : [];
+  const pickedItems = pickedPerson ? items.filter((i) => sameOffice(i.committee, pickedPerson.committee)) : [];
   const all = tally(items, state.week);
   const mineTally = tally(myItems, state.week);
   const left = admin ? all.open : items.filter((i) => i.active !== false).length;
@@ -581,7 +587,7 @@ function App() {
                 : html`<${ItemList} items=${pickedItems} foldKey=${'k:' + picked} ...${listProps} />`}
               <${AddForm} people=${everyone} committee=${pickedPerson.committee} busy=${addBusy} note=${addNote} onSave=${addItem} />`
               : html`
-              <${Tiles} t=${tally(items.filter((i) => i.committee !== mineOffice), state.week)} />
+              <${Tiles} t=${tally(items.filter((i) => !sameOffice(i.committee, mineOffice)), state.week)} />
               <${Overview} people=${people} items=${items} week=${state.week} onPick=${setPicked} />
               <${AddForm} people=${everyone} committee="" busy=${addBusy} note=${addNote} onSave=${addItem} />`}
           </section>
