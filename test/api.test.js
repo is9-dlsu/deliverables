@@ -293,5 +293,41 @@ console.log('\n8. The two envelopes, and the fields they may never carry');
     Object.prototype.hasOwnProperty.call(err, 'data'), false);
 }
 
+// ---------------------------------------------------------------------------
+console.log('\n9. The sign-off endpoint, end to end with the edges stubbed (3)');
+{
+  // A second realm holding the endpoint itself. Everything it touches outside the decision
+  // is a stub that records what it was handed.
+  const box = { console, Date, Math, JSON, String, Number, Array, Object, RegExp, Error,
+    isNaN, parseInt, parseFloat, Logger: { log: () => {} } };
+  box.globalThis = box;
+  vm.createContext(box);
+  vm.runInContext(fs.readFileSync(CORE, 'utf8'), box);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src', 'IS9WD_Config.js'), 'utf8'), box);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src', 'IS9WD_Api.js'), 'utf8'), box);
+  const written = [];
+  const logged = [];
+  box.IS9WD_signoffWrite_ = (p) => { written.push(p); return 60; };
+  box.IS9WD_logRow_ = (r) => { logged.push(r); return true; };
+  box.IS9WD_apiState_ = () => ({ role: 'admin', items: [] });
+  box.IS9WD_apiActor_ = () => 'Admin link';
+  box.Utilities = { formatDate: () => '2026-09-28T00:00:00+08:00' };
+  box.IS9WD_LOG_SOURCE_APP_ = 'App';
+  const plan = { role: 'admin', action: 'setSignoff', key: 'ADMIN', committee: '' };
+  const good = { weekStart: '2026-09-28', preparedName: 'Sample President', preparedPosition: 'President',
+    checkedName: 'Sample Officer', checkedPosition: 'Vice President' };
+
+  const okEnv = box.IS9WD_apiSetSignoff_(plan, { payload: good });
+  check('a valid sign-off is accepted', [okEnv.ok, written.length, logged.length], [true, 1, 1]);
+  check('the writer got the payload as sent', written[0] && written[0].checkedName, 'Sample Officer');
+
+  const bad = box.IS9WD_apiSetSignoff_(plan, { payload: Object.assign({}, good, { checkedName: '' }) });
+  check('a blank name is refused with its own sentence',
+    [bad.ok, bad.error.code, bad.error.message], [false, 'VALIDATION', 'Checked by name is required.']);
+  const tue = box.IS9WD_apiSetSignoff_(plan, { payload: Object.assign({}, good, { weekStart: '2026-09-29' }) });
+  check('a week start that is not a Monday is refused', [tue.ok, tue.error.message], [false, 'Week start must be a Monday.']);
+  check('nothing was written for the refused ones', written.length, 1);
+}
+
 console.log('\n' + pass + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);
