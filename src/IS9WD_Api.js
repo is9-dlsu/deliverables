@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 8;
+var IS9WD_API_VERSION_ = 9;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -405,9 +405,19 @@ function IS9WD_apiPing_(req) {
   if (probe) {
     var t1 = new Date().getTime();
     var itemsMs = null;
+    var counts = { rows: -1, titled: -1, withId: -1 };
     try {
-      IS9WD_readItems_();
+      var read = IS9WD_readItems_();
       itemsMs = new Date().getTime() - t1;
+      // Counts, never content: how many rows the endpoint sees, how many carry a title and
+      // how many an ID. This is what says whether an empty page is the sheet or the code.
+      counts.rows = read.rows.length;
+      counts.titled = 0;
+      counts.withId = 0;
+      for (var q = 0; q < read.rows.length; q++) {
+        if (read.rows[q].title !== '') counts.titled++;
+        if (read.rows[q].id !== '') counts.withId++;
+      }
     } catch (err) {
       itemsMs = -1;
     }
@@ -417,7 +427,13 @@ function IS9WD_apiPing_(req) {
       itemsMs: itemsMs,
       items: IS9WD_ITEMS_HIT_ === true ? 'memory' : 'live ' + (IS9WD_ITEMS_SCAN_ || 'scan'),
       coords: IS9WD_COORDS_HIT_ === true ? 'memory' : 'resolved live',
-      names: IS9WD_COORDS_ ? Object.keys(IS9WD_COORDS_).length : 0
+      names: IS9WD_COORDS_ ? Object.keys(IS9WD_COORDS_).length : 0,
+      rows: counts.rows,
+      titled: counts.titled,
+      withId: counts.withId,
+      lastRowRemembered: IS9WD_itemsHint_(),
+      signoffSet: !!(cfg && cfg.signoff && cfg.signoff.current && cfg.signoff.current.set === true),
+      weekStart: IS9WD_dateKey_(cfg && cfg.weeks ? cfg.weeks.weekStart : null)
     };
   }
   return out;

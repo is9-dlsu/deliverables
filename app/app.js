@@ -2,9 +2,13 @@
 // undo window. Nobody signs in, nobody sees anyone else's list, and there is nothing to learn.
 //
 // THE TOKEN IS IN THE URL FRAGMENT, not the query string: a fragment is never sent to a
-// server, so it cannot reach an access log, and it is stripped from the address bar on load so
-// it does not sit in a screenshot. It is kept in memory only, never in localStorage, because a
-// shared phone is a real thing in a student org.
+// server, so it cannot reach an access log. IT STAYS IN THE ADDRESS. An earlier version
+// stripped it on load so it would not sit in a screenshot, and every reload then came back
+// as "This link is incomplete": pull to refresh, Safari restoring the tab, opening it again an
+// hour later. A link people open from an email has to survive a reload, and a phone's address
+// bar shows only the domain in any case. A per tab copy in sessionStorage covers the one case
+// where the address arrives without it; it dies with the tab, and nothing ever goes in
+// localStorage, because a shared phone is a real thing in a student org.
 
 import { h, render } from './lib/preact.module.js';
 import { useState, useEffect, useRef, useCallback } from './lib/hooks.module.js';
@@ -17,19 +21,25 @@ const html = htm.bind(h);
 // The token
 // ---------------------------------------------------------------------------
 
+const TOKEN_KEY = 'is9wd.token';
+const TOKEN_SHAPE = /^[0-9a-hjkmnp-tv-z]{26}$/;
+
 function readToken() {
   const raw = (window.location.hash || '').replace(/^#/, '').trim();
-  const fromHash = /^[0-9a-hjkmnp-tv-z]{26}$/.test(raw) ? raw : '';
+  const fromHash = TOKEN_SHAPE.test(raw) ? raw : '';
   if (fromHash) {
-    // Out of the address bar immediately. replaceState leaves no history entry, so Back does
-    // not put it back.
-    try {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    } catch (err) {
-      window.location.hash = '';
-    }
+    try { sessionStorage.setItem(TOKEN_KEY, fromHash); } catch (err) { /* private mode */ }
+    return fromHash;
   }
-  return fromHash;
+  // The address arrived without its code: a restored tab, a stripped link. This tab may still
+  // know it.
+  let kept = '';
+  try { kept = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (err) { kept = ''; }
+  if (TOKEN_SHAPE.test(kept)) {
+    try { window.location.hash = kept; } catch (err) { /* the token still works */ }
+    return kept;
+  }
+  return '';
 }
 
 // ---------------------------------------------------------------------------
