@@ -151,6 +151,12 @@ var IS9WD_ACTION = {
     fn: 'IS9WD_sweepIds_', from: 'IS9WD_Automation.js', lock: true,
     label: 'Give new rows an ID now'
   },
+  // The root menu's answer to "how do I sync the deliverables": the ID sweep, a flush, and a
+  // report of what every page shows now.
+  SYNC_APP: {
+    fn: 'IS9WD_syncToApp_', from: 'IS9WD_Automation.js', lock: true,
+    label: 'Sync deliverables to the app'
+  },
   ROTATE_ONE: {
     fn: 'IS9WD_rotateToken_', from: 'IS9WD_Api.js', lock: true,
     label: 'Rotate a link'
@@ -291,6 +297,7 @@ function IS9WD_buildMenu_() {
     .addItem('Build or repair workbook', 'IS9WD_menuBuildOrRepair')
     .addItem('Apply sheet guards', 'IS9WD_menuApplyGuards')
     .addSeparator()
+    .addItem('Sync deliverables to the app', 'IS9WD_menuSyncApp')
     .addItem('Open the app (admin)', 'IS9WD_menuOpenApp')
     .addItem('Show the links', 'IS9WD_menuShowLinks')
     .addItem('Copy the endpoint URL', 'IS9WD_menuCopyEndpoint')
@@ -896,6 +903,16 @@ function IS9WD_aboutLines_() {
 function IS9WD_menuResetAndBuild() {
   var ui = IS9WD_assertUiContext_();
   IS9WD_do_(ui, IS9WD_ACTION.RESET);
+}
+
+function IS9WD_menuSyncApp() {
+  var ui = IS9WD_assertUiContext_();
+  var out = IS9WD_do_(ui, IS9WD_ACTION.SYNC_APP, [], { quiet: true });
+  if (out === null) return;
+  IS9WD_showReport_(ui, IS9WD_ACTION.SYNC_APP.label, IS9WD_lines_(out),
+    'The app reads the sheet live, so the only thing that can keep a typed row off a phone ' +
+    'is a missing ID. This gives every new row one, recomputes the derived columns, and ' +
+    'lists what each officer will see the next time they open or refresh their link.');
 }
 
 function IS9WD_menuSweepIds() {

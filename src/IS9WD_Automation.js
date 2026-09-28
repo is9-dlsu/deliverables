@@ -203,6 +203,67 @@ function IS9WD_autoSweepIds_(cfg, say) {
 }
 
 /**
+ * SYNC DELIVERABLES TO THE APP, from the root menu. The app holds no copy of anything: every
+ * open reads 03 | Deliverables live, so there is nothing to copy across. What CAN stand
+ * between a typed row and a phone is an ID, because the page ticks by ID, and a derived column
+ * that has not recomputed yet. This does both, in one locked run, then reports exactly what
+ * each officer's page will show the next time it is opened or refreshed, and names any row the
+ * app still cannot show and why.
+ */
+function IS9WD_syncToApp_() {
+  var lines = [];
+  var say = function (l) { lines.push(l); };
+  var cfg = IS9WD_readConfig_(true);
+  var ids = IS9WD_autoSweepIds_(cfg, say);
+  // The eight derived columns are sheet formulas; without the flush the read below could see
+  // a brand new row as inactive and unranked.
+  SpreadsheetApp.flush();
+  IS9WD_configReset_();
+  var items = IS9WD_readItems_();
+  var dir = cfg.directory.inHierarchy;
+  var hidden = [];
+  var total = 0;
+  lines.push(ids > 0 ? ids + ' row(s) were given an ID.' : 'Every row already had an ID.');
+  lines.push('');
+  lines.push('What each page shows now, as the app reads it:');
+  for (var i = 0; i < dir.length; i++) {
+    var e = dir[i];
+    var mine = IS9WD_itemsFor_(items, e.committee);
+    var shown = 0;
+    var open = 0;
+    for (var j = 0; j < mine.length; j++) {
+      var it = mine[j];
+      if (it.title === '') { hidden.push('row ' + it.row + ' (no title)'); continue; }
+      if (it.id === '') { hidden.push('row ' + it.row + ' (no ID)'); continue; }
+      shown++;
+      if (it.active === true) open++;
+    }
+    total += shown;
+    lines.push(e.key + '  ' + e.committee + IS9WD_SEP + shown + ' item' + (shown === 1 ? '' : 's') +
+      (shown ? ', ' + open + ' open' : ''));
+  }
+  var known = {};
+  for (var k = 0; k < dir.length; k++) known[IS9WD_trim_(dir[k].committee).toLowerCase()] = true;
+  for (var r = 0; r < items.rows.length; r++) {
+    var row = items.rows[r];
+    if (row.title !== '' && !known[IS9WD_trim_(row.committee).toLowerCase()]) {
+      hidden.push('row ' + row.row + ' (committee "' + row.committee + '" is not in the directory)');
+    }
+  }
+  lines.push('');
+  if (hidden.length) {
+    lines.push('Rows no page can show: ' + hidden.join('; ') + '.');
+    lines.push('');
+  }
+  lines.push(total + ' item' + (total === 1 ? '' : 's') + ' across ' + dir.length + ' pages. Nothing ' +
+    'else needs doing: the app reads the sheet live, so each officer sees this list the moment ' +
+    'they open or refresh their link.');
+  IS9WD_logRow_({ source: 'Menu', actor: 'Admin', action: 'syncToApp',
+    detail: ids + ' IDs given, ' + total + ' items visible', ok: true });
+  return lines;
+}
+
+/**
  * The same sweep on demand, for the menu, because waiting an hour to tick a row you typed
  * thirty seconds ago is not a workflow anybody accepts.
  */
