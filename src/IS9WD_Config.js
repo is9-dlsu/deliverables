@@ -3260,6 +3260,12 @@ function IS9WD_named_(name) {
 var IS9WD_NAMED_INDEX_ = null;
 var IS9WD_NAMED_MADE_ = {};
 
+// How many names this execution actually deleted and re-created, as opposed to left alone.
+// It is reported in the build log because it is the number that matters: re-pointing a name
+// rewrites every formula that uses it, and on a workbook whose layout has not moved it should
+// be zero. A build that suddenly re-points 196 names is the build that destroyed the views.
+var IS9WD_NAMED_REPOINTED_ = 0;
+
 function IS9WD_namedIndex_() {
   if (IS9WD_NAMED_INDEX_) return IS9WD_NAMED_INDEX_;
   var all = IS9WD_ss_().getNamedRanges();
@@ -3276,6 +3282,7 @@ function IS9WD_namedIndex_() {
 function IS9WD_namedIndexReset_() {
   IS9WD_NAMED_INDEX_ = null;
   IS9WD_NAMED_MADE_ = {};
+  IS9WD_NAMED_REPOINTED_ = 0;
 }
 
 // EVERY DEFINITION OF THE NAME GOES BEFORE THE NEW ONE IS MADE, and this is the whole of
@@ -3293,12 +3300,59 @@ function IS9WD_namedIndexReset_() {
 // index. Setting the same name twice in one execution is therefore the one case that has to
 // pay for a re-read, and it is rare: nothing in a build sets a name twice, and the re-read
 // only happens when something does.
+// DELETING A NAMED RANGE DESTROYS THE FORMULAS THAT USE IT, and that is the second half of
+// this function's story. Sheets does not merely unlink a deleted name: it rewrites the text of
+// every formula referencing it, substituting #REF! for the name, permanently. Re-creating the
+// name one line later does not undo that, because the formula no longer mentions it.
+//
+// Which is how the drop-first rule above, added to fix a real bug, caused a worse one. The
+// build writes `_Views` first, and its eight officer helpers name ranges that live on
+// 04 | Statistics. 04 | Statistics is built next and re-points its own names, dropping each one
+// first. Every `_Views` helper written minutes earlier had its text destroyed at that moment,
+// and with it the twelve cells on 04 | Statistics and the six on 05 | Officer Tables that read
+// them. A second build repeated the damage rather than healing it. Ethan saw it as six self
+// test failures on a workbook that was otherwise correct, twice, including once on a workbook
+// built from zero tabs.
+//
+// SO A NAME THAT ALREADY POINTS EXACTLY WHERE IT SHOULD IS LEFT ALONE. Nothing is dropped, no
+// formula is touched, and the name keeps the single definition it already had. Everything the
+// drop-first rule was for survives: a name carrying two definitions is still collapsed to one,
+// and a name whose block has moved is still re-pointed, because in both cases what is there
+// does not match what is wanted.
 function IS9WD_setNamed_(name, range) {
   var want = IS9WD_trim_(name);
   if (IS9WD_NAMED_MADE_[want]) IS9WD_NAMED_INDEX_ = null;
+  if (IS9WD_namedIsExactly_(want, range)) {
+    IS9WD_NAMED_MADE_[want] = true;
+    return;
+  }
   IS9WD_dropNamed_(want);
   IS9WD_ss_().setNamedRange(want, range);
   IS9WD_NAMED_MADE_[want] = true;
+  IS9WD_NAMED_REPOINTED_++;
+}
+
+// True only when the workbook holds EXACTLY ONE definition of this name and it covers exactly
+// this range on exactly this sheet. Anything else, including two definitions of a name that
+// both happen to be right, returns false so the caller drops and re-creates.
+//
+// Compared by sheet name and by the four numbers rather than by A1 text, because getA1Notation
+// is relative and two ranges that differ only in absolute markers would compare unequal.
+function IS9WD_namedIsExactly_(name, range) {
+  var list = IS9WD_namedIndex_()[IS9WD_trim_(name)] || [];
+  if (list.length !== 1) return false;
+  var live = null;
+  try {
+    live = list[0].getRange();
+  } catch (err) {
+    return false;               // a definition whose sheet is gone is not a match
+  }
+  if (!live) return false;
+  return live.getSheet().getSheetId() === range.getSheet().getSheetId() &&
+    live.getRow() === range.getRow() &&
+    live.getColumn() === range.getColumn() &&
+    live.getNumRows() === range.getNumRows() &&
+    live.getNumColumns() === range.getNumColumns();
 }
 
 function IS9WD_dropNamed_(name) {

@@ -210,7 +210,10 @@ function IS9WD_buildViewsLocked_() {
     say('dashboard built: ' + report.dash.cards + ' cards, ' + report.dash.rows +
       ' rows, last row ' + report.dash.lastRow);
   }
-  say('named ranges pointed: ' + report.namesSet);
+  // Re-pointed is the number that matters, not the total. Deleting a name rewrites the text
+  // of every formula using it, so on a workbook whose layout has not moved this must be 0.
+  say('named ranges pointed: ' + report.namesSet + ', re-pointed: ' +
+    IS9WD_NAMED_REPOINTED_);
   return report;
 }
 
@@ -424,9 +427,14 @@ function IS9WD_buildOrRepairLocked_() {
   var audit = IS9WD_nameAudit_(cfg.switches.capacityOk ? cfg.feed : null,
     cfg.stats, cfg.ot, cfg.views);
   report.missingNames = audit.missing;
+  // RE-POINTED IS THE NUMBER THAT MATTERS. Deleting a named range rewrites the text of every
+  // formula that uses it, substituting #REF! permanently, so on a workbook whose layout has not
+  // moved this must read 0. It read 196 on every build until 2026-09-28, which is what
+  // destroyed the eight officer helpers on _Views and everything downstream of them.
   say('named ranges: ' + report.namesSet + ' set of ' + audit.expected +
     ' expected, ' + audit.missing.length + ' missing, ' +
-    report.namesDropped.length + ' retired dropped');
+    report.namesDropped.length + ' retired dropped, ' +
+    IS9WD_NAMED_REPOINTED_ + ' re-pointed');
 
   // The one check that can tell idempotent from intended.
   var diff = IS9WD_setupCompare_(before, IS9WD_setupSnapshot_());
