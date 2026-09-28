@@ -1091,9 +1091,16 @@ function IS9WD_setupStyleRowBlock_(sheet, holder, block) {
   // missing. Auto fit lets the tallest hint in each row decide.
   sheet.autoResizeRows(block.firstRow, count);
   IS9WD_applyRowValidations_(sheet, block.rows, holder.VALUE_COL);
-  // A hint is a paragraph, so a hint row is taller than a data row. One height for the
-  // whole block keeps the block reading as a block.
-  sheet.setRowHeights(block.firstRow, count, IS9WD_ROW_H.DATA);
+  // AUTO FIT WINS, WITH A FLOOR. The line below used to be setRowHeights over the whole
+  // block, which undid the auto fit on the line above it and clipped every plain English
+  // sentence beside every cell Ethan types into to its first line. That is the half of his
+  // 2026-09-27 instruction nobody would have noticed was missing, because a clipped
+  // sentence looks like a short sentence.
+  //
+  // A floor rather than a fixed height: auto fit on a one word hint gives a 21 px row, and a
+  // block of rows that each pick their own small height loses the rhythm that makes a block
+  // read as a block. So a row is at least IS9WD_ROW_H.DATA and taller when its hint needs it.
+  IS9WD_setupFloorRowHeights_(sheet, block.firstRow, count, IS9WD_ROW_H.DATA);
 }
 
 function IS9WD_setupStyleTableBlock_(sheet, block) {
@@ -1250,7 +1257,13 @@ function IS9WD_setupAppendTab_(sheet, tabKey, layout) {
   body.setDataValidation(null);
   IS9WD_applyColumnStyles_(sheet, layout.firstRow, count, layout.firstCol,
     layout.columns);
-  IS9WD_banding_(body);
+  // BANDING IS REMOVED HERE, NOT APPLIED. Both band colours are #F8FBFD since cream came
+  // out of the row rhythm, so the banding painted the page background over a thousand rows
+  // and took the gridlines with it: a filled cell shows no gridline. The rhythm on these two
+  // tabs is the gridline, which is what Ethan asked for, so the fill has to go. Clearing
+  // rather than merely not applying, because a banding an older layout left behind survives
+  // Range.clear().
+  IS9WD_clearBanding_(body);
   IS9WD_setDataHeights_(sheet, layout.firstRow, count);
 
   // A retired row records an accomplishment rather than a published week, so it
@@ -1673,6 +1686,16 @@ function IS9WD_setupAppendLog_(sheet, lines, ok, action) {
   if (!ok) {
     sheet.getRange(first, IS9WD_LOG.lastCol, rows.length, 1)
       .setFontColor(IS9WD_ROLE.FLAG_FG).setFontWeight('bold');
+  }
+}
+
+// Auto fit decides the height and this raises anything shorter than the floor, so a wrapped
+// sentence gets the room it needs and a one word hint does not shrink out of the block's
+// rhythm. Read once and written once per block: getRowHeight in a loop is a round trip a row.
+function IS9WD_setupFloorRowHeights_(sheet, firstRow, count, floor) {
+  for (var i = 0; i < count; i++) {
+    var row = firstRow + i;
+    if (sheet.getRowHeight(row) < floor) sheet.setRowHeight(row, floor);
   }
 }
 

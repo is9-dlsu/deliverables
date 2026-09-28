@@ -1075,6 +1075,13 @@ function IS9WD_feedPaintAll_(sheet, layout) {
   // Setup sets the font before the feed is resized, so anything this module
   // adds below the old last row would come back in the default face.
   sheet.getRange(1, 1, f.endRow, f.helperLastCol).setFontFamily(IS9WD_FONT);
+  // DELIBERATELY TITLE CASE, AND THE ONLY BANNER THAT IS. The other seven are uppercase and
+  // this one looks inconsistent beside them, which is a real cost and it is the lesser one.
+  // A1 is not a heading here, it is DATA: the Drive connector strips tab names out of the
+  // Sunday read, so this cell is the only thing that tells Claude which tab it is looking at,
+  // and the self test asserts it equals IS9WD_TAB.FEED exactly. Uppercasing it for the sake
+  // of the tab bar broke that identification, which the self test caught on the first run.
+  // If it is ever changed, the matching assertion and the Canva run procedure change with it.
   IS9WD_paintBanner_(sheet, f.identityRow, f.firstCol, f.lastCol, IS9WD_TAB.FEED);
   sheet.getRange(f.identityRow, 2).setValue(IS9WD_FEED_SENTINEL.START);
   IS9WD_feedSentinels_(sheet, f);

@@ -1682,7 +1682,11 @@ function IS9WD_statsPaintAll_(sheet, layout) {
   var help = IS9WD_statsBandHelp_();
 
   sheet.getRange(1, 1, f.endRow, f.lastCol).setFontFamily(IS9WD_FONT);
-  var headLast = f.firstCol + f.cellCols - 1;
+  // THE TAB'S OWN CHROME RUNS THE TAB'S OWN WIDTH. It ran to the first card's last column,
+  // which is 12 on a tab that is over 3,000 px wide, so the frozen header was a green bar
+  // that stopped after a third of the width and the end band left 26 columns unpainted. A
+  // reader scrolled to the second or third column of cards saw no banner at all.
+  var headLast = f.lastCol;
   IS9WD_paintBanner_(sheet, f.bannerRow, f.firstCol, headLast, IS9WD_STATS.BANNER);
   IS9WD_paintHelp_(sheet, f.helpRow, f.firstCol, headLast, IS9WD_STATS.HELP);
 
@@ -1711,8 +1715,14 @@ function IS9WD_statsPaintAll_(sheet, layout) {
     IS9WD_STATS_HEADERS.TREND, f.trendFirst, f.trendLast, cols.TREND, f.trendCol);
 
   IS9WD_statsPaintCharts_(sheet, f);
-  IS9WD_statsGaps_(sheet, f);
   IS9WD_statsEndBand_(sheet, f.endRow, headLast);
+  // THE GAP PASS RUNS LAST, AFTER THE END BAND. It used to run before it, which was fine
+  // only while the chrome stopped at the first card. Now that the banner, the help row and
+  // the end band run the tab's own width, they cross the two separator columns, and SPEC
+  // section 3 says without qualification that a separator carries no fill and no border:
+  // that is the only thing making three cards read as three cards. So the gaps are cleared
+  // after everything that could paint over them, not before.
+  IS9WD_statsGaps_(sheet, f);
   IS9WD_statsChrome_(sheet, f);
 }
 
@@ -1808,7 +1818,7 @@ function IS9WD_statsBlock_(sheet, layout, bandRow, title, help, headers, firstRo
   var cardLast = at + width - 1;
   IS9WD_paintCardBand_(sheet, bandRow, at, cardLast, title);
   IS9WD_paintHint_(sheet, bandRow + 1, at, cardLast, help);
-  if (headers) IS9WD_paintHeader_(sheet, bandRow + 2, at, headers);
+  if (headers) IS9WD_paintHeader_(sheet, bandRow + 2, at, headers, cardLast);
   var rows = lastRow - firstRow + 1;
   if (rows < 1) return;
   var body = sheet.getRange(firstRow, at, rows, width);
@@ -2142,7 +2152,7 @@ function IS9WD_otBlockValues_(sheet, layout, block) {
     'INDEX(IS9WD_STATS_OFF_VP,' + ord + ')&' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_ACTIVE_ALL,' + ord + ')&" to do"&' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_DONE_ALL,' + ord + ')&" done"&' + sep + '&' +
-    'INDEX(IS9WD_STATS_OFF_OVERDUE,' + ord + ')&" late"&' +
+    'INDEX(IS9WD_STATS_OFF_OVERDUE,' + ord + ')&" overdue"&' +
     'IF(N(INDEX(IS9WD_STATS_OFF_NOTPUB,' + ord + '))>0,' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_NOTPUB,' + ord + ')&" with no slide","")&' +
     'IF(N(INDEX(IS9WD_STATS_OFF_TOTAL,' + ord + '))=0,' + sep +
@@ -2215,10 +2225,12 @@ function IS9WD_otPaintAll_(sheet, layout) {
   var cols = IS9WD_statsCols_().OT;
 
   sheet.getRange(1, 1, o.endRow, o.lastCol).setFontFamily(IS9WD_FONT);
-  // The banner, the help line and the summary row read across the first card's own width, so
-  // the tab still opens with one line of type rather than with a 29 column bar.
-  IS9WD_paintBanner_(sheet, o.bannerRow, o.firstCol, o.visibleLastCol, IS9WD_OT.BANNER);
-  IS9WD_paintHelp_(sheet, o.helpRow, o.firstCol, o.visibleLastCol, IS9WD_OT.HELP);
+  // The tab's own width, for the reason 04 | Statistics gives: chrome that stops at the
+  // first card leaves a reader scrolled right with no banner and an unpainted end row. The
+  // separator columns are cleared again after the end band, so the bar reads as three
+  // segments rather than as one unbroken 29 column rule.
+  IS9WD_paintBanner_(sheet, o.bannerRow, o.firstCol, o.lastCol, IS9WD_OT.BANNER);
+  IS9WD_paintHelp_(sheet, o.helpRow, o.firstCol, o.lastCol, IS9WD_OT.HELP);
 
   // The summary row is a rule rather than a caption, so it takes body type and sits
   // directly under the help line inside the frozen pane.
@@ -2248,8 +2260,10 @@ function IS9WD_otPaintAll_(sheet, layout) {
     });
   }
 
+  IS9WD_statsEndBand_(sheet, o.endRow, o.lastCol);
+  // Last, for the reason 04 | Statistics gives: the full width chrome crosses the separator
+  // columns, and a separator that carries a fill stops the cards reading as cards.
   IS9WD_otGaps_(sheet, o);
-  IS9WD_statsEndBand_(sheet, o.endRow, o.visibleLastCol);
 
   IS9WD_setWidths_(sheet, 'TABLES');
   sheet.showColumns(1, o.lastCol);
@@ -2277,7 +2291,7 @@ function IS9WD_otPaintBlock_(sheet, layout, block, cols) {
   var at = block.firstCol;
   var width = block.lastCol - at + 1;
   IS9WD_paintCardBand_(sheet, block.bandRow, at, block.lastCol, '');
-  IS9WD_paintHeader_(sheet, block.headerRow, at, IS9WD_OT_HEADERS);
+  IS9WD_paintHeader_(sheet, block.headerRow, at, IS9WD_OT_HEADERS, block.lastCol);
 
   var rows = layout.itemRows;
   var body = sheet.getRange(block.itemFirst, at, rows, width);

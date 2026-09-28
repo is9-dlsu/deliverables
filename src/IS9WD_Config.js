@@ -163,6 +163,11 @@ var IS9WD_ROLE = {
   CARD_BAND_FG: IS9WD_CLR.PAPER,
   CARD_BODY_BG: IS9WD_CLR.PAPER,
   CARD_BORDER: IS9WD_CLR.SAGE,
+  // A CARD OPENS AS BAND, THEN HEADER, THEN BODY. The band and the header were both
+  // #5d4170 and they sit on adjacent rows, so a card began with one unbroken 68 px block of
+  // deep purple and nothing told its heading from its column labels. The header takes the
+  // sage now, which is a step down in weight and still carries #F8FBFD text.
+  CARD_HEAD_BG: IS9WD_CLR.SAGE,
   // Cream is the one signal this workbook cannot afford to blur: it means a cell is
   // Ethan's to type into. Banding used it as its alternate row, which painted cream
   // across calculated rows on three blocks and made the signal meaningless. Both band
@@ -203,10 +208,18 @@ var IS9WD_TAB_COLOR = {
 var IS9WD_FONT = 'Poppins';
 var IS9WD_TZ = 'Asia/Manila';
 
-// TILE is the KPI number on 03 | Statistics. It is the one type size on the workbook
-// that exists to be read from across a desk rather than at arm's length, which is what
-// makes a dashboard read as a dashboard instead of as a table of numbers.
-var IS9WD_SIZE = { BANNER: 14, BAND: 12, HEAD: 10, BODY: 10, HINT: 9, TILE: 22 };
+// ONE TYPE SCALE, AND EVERY ROLE CLEAR OF THE ONE BELOW IT. HEAD and BODY were both 10,
+// so a table header had no type contrast against its own body and there was no visible
+// hierarchy between a tab, a card and a table on it. That is half of why the computed tabs
+// read as a wall: the eye had nothing to climb.
+//
+// TILE is the KPI number on 04 | Statistics. It is the one size on the workbook that exists
+// to be read from across a desk rather than at arm's length, which is what makes a dashboard
+// read as a dashboard instead of as a table of numbers. TILE_LABEL is the small word above
+// it, and it is BODY rather than HINT so a tile reads as one object.
+var IS9WD_SIZE = {
+  BANNER: 18, BAND: 13, HEAD: 11, BODY: 10, HINT: 9, TILE: 26, TILE_LABEL: 10
+};
 
 // 26 for data and 38 for a section title, so a 12 row block reads as a block. BAND grew
 // from 34 and SPACER from 12 on Ethan's instruction of 2026-09-27: taller bands, more
@@ -331,7 +344,11 @@ var IS9WD_WIDTH = {
   // not to waste the width. A sentence column is narrow on purpose and overflows right
   // across the air columns inside its own card, which is the idiom the attention table
   // already used and the reason those air columns exist.
-  STATS: [230, 210, 80, 80, 80, 80, 85, 80, 80, 80, 80, 100,
+  // Column A carries the committee or office name, which SPEC section 10 puts on the left
+  // edge because no column is frozen. At 10 pt bold a 39 character EVP title needs about
+  // 265 px, so five of the fourteen rows of BY OFFICER were clipping in 230. The room comes
+  // out of the count columns, which hold one and two digit integers and never needed 80.
+  STATS: [300, 196, 68, 68, 68, 68, 78, 72, 72, 72, 72, 90,
     30,
     200, 120, 130, 90, 210, 72, 72, 72, 72, 72, 72, 72,
     30,
@@ -367,7 +384,10 @@ var IS9WD_WIDTH = {
 var IS9WD_HIDE_COLS = {
   ITEMS: [{ first: 11, last: 17 }],
   FEED: [{ first: 18, last: 22 }],
-  TABLES: [{ first: 9, last: 9 }, { first: 19, last: 19 }, { first: 29, last: 29 }]
+  // The sort key column of each of the three cards in a row, which moved from 9, 19 and 29
+  // to 8, 18 and 28 when keyOffset was corrected to the header count. Column 9, 19 and 29
+  // are now the column of air inside the grid cell and outside the card border.
+  TABLES: [{ first: 8, last: 8 }, { first: 18, last: 18 }, { first: 28, last: 28 }]
 };
 
 // ============================================================================
@@ -1256,11 +1276,12 @@ IS9WD_ENG.THRESHOLDS = {
     {
       row: 63, name: 'IS9WD_STATS_OFFICER_ROWS',
       label: 'Rows reserved per officer on 04 | Officer Tables',
-      owner: IS9WD_OWN.ETHAN, value: 21, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
-      validate: { kind: IS9WD_V.INT, min: 3, max: 40, help: 'One row is the overflow notice, so 13 shows 12 items. 21 guarantees nothing is ever hidden.' },
+      owner: IS9WD_OWN.ETHAN, value: 11, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      validate: { kind: IS9WD_V.INT, min: 3, max: 40, help: 'One row is the overflow notice, so 11 shows 10 items. Raise it if a card says tasks are hidden.' },
       hint: 'How many rows each officer\'s table reserves. One of them is the notice ' +
-        'row, so 21 shows 20 tasks. This table shows everything an officer holds, which ' +
-        'is not the same as what fits on their slide.',
+        'row, so 11 shows 10 tasks and says so when there are more. It was 21, which sized ' +
+        'every card for a worst case almost nobody reaches and left fifteen blank rows ' +
+        'inside most cards. Raise it if the notice row starts appearing often.',
       note: '=IF(IS9WD_STATS_OFFICER_ROWS<>IS9WD_OT_ROWS_BUILT,"Run Build or repair workbook: the reserved rows do not match the tab","OK")'
     }
   ]
@@ -2597,7 +2618,15 @@ function IS9WD_otLayout_(directoryRows, officerRows) {
     firstCol: 1, lastCol: grid.lastCol,
     cellCols: grid.cellCols, cells: grid.cells, gapCols: grid.gapCols,
     // Relative to the card: seven visible columns, then one of air, then the key.
-    visibleCols: IS9WD_OT_HEADERS.length, keyOffset: IS9WD_OT_CELL_COLS - 1,
+    // OFF BY ONE, AND IT COST THREE FAULTS AT ONCE. The spilling SORT is eight columns
+    // wide from the card's first column, so its eighth column, the machine sort key, lands
+    // at firstCol + 7. keyOffset was IS9WD_OT_CELL_COLS - 1, which is 8, so the hidden
+    // column was firstCol + 8 and stayed empty while 280 cells of sort key sat VISIBLE
+    // inside every card, the card border ran one column wide of its own content, and every
+    // conditional rule that reads the key read a column the spill never writes to.
+    // It is the header count, because the key is the column after the last one a reader
+    // reads.
+    visibleCols: IS9WD_OT_HEADERS.length, keyOffset: IS9WD_OT_HEADERS.length,
     bannerRow: 1, helpRow: 2, summaryRow: 3,
     BANNER: IS9WD_OT.BANNER, HELP: IS9WD_OT.HELP
   };
@@ -3415,14 +3444,25 @@ function IS9WD_clearPastEnd_(sheet, lastRow, lastCol) {
   }
 }
 
-function IS9WD_paintHeader_(sheet, row, firstCol, labels) {
-  var range = sheet.getRange(row, firstCol, 1, labels.length);
-  range.setValues([labels]);
+// `lastCol` is optional and is the card's own last column. Without it a header stops at its
+// last label, so a card wider than its table showed a header that ended short of the card's
+// own border with bare paper beside it, which is the notch every card on both view tabs had.
+// The labels still go only in the first cells; the fill runs the whole width.
+//
+// The background is CARD_HEAD_BG, the sage, not HEAD_BG. HEAD_BG is #5d4170 and so is
+// CARD_BAND_BG, and on a card those two are adjacent rows, so a card used to open with one
+// unbroken 68 px block of deep purple with nothing telling its heading from its column
+// labels. Band, then header, then body, each a step down.
+function IS9WD_paintHeader_(sheet, row, firstCol, labels, lastCol) {
+  var width = IS9WD_posInt_(lastCol) ? lastCol - firstCol + 1 : labels.length;
+  if (width < labels.length) width = labels.length;
+  var range = sheet.getRange(row, firstCol, 1, width);
   IS9WD_style_(range, {
     size: IS9WD_SIZE.HEAD, fg: IS9WD_ROLE.HEAD_FG, bold: true,
-    align: IS9WD_ALIGN.CENTER, bg: IS9WD_ROLE.HEAD_BG, wrap: IS9WD_WRAP.WRAP,
+    align: IS9WD_ALIGN.CENTER, bg: IS9WD_ROLE.CARD_HEAD_BG, wrap: IS9WD_WRAP.WRAP,
     format: IS9WD_FMT.TEXT
   });
+  sheet.getRange(row, firstCol, 1, labels.length).setValues([labels]);
   sheet.setRowHeight(row, IS9WD_ROW_H.HEAD);
   return range;
 }
