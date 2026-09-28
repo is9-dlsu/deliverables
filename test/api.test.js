@@ -308,6 +308,7 @@ console.log('\n9. The sign-off endpoint, end to end with the edges stubbed (3)')
   const written = [];
   const logged = [];
   box.IS9WD_signoffWrite_ = (p) => { written.push(p); return 60; };
+  box.IS9WD_readItems_ = () => ({ rows: [], byId: {} });
   box.IS9WD_logRow_ = (r) => { logged.push(r); return true; };
   box.IS9WD_apiState_ = () => ({ role: 'admin', items: [] });
   box.IS9WD_apiActor_ = () => 'Admin link';
