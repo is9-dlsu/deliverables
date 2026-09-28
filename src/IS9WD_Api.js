@@ -171,7 +171,7 @@ function IS9WD_apiRoute_(req, bodyBytes) {
     if (IS9WD_apiOverLimit_('IS9WD_RL_PING', IS9WD_API_PING_LIMIT_, IS9WD_API_RATE_WINDOW_)) {
       return IS9WD_envelopeErr_('ping', 'RATE_LIMITED', 'Too many requests.');
     }
-    return IS9WD_envelopeOk_('ping', IS9WD_apiPing_());
+    return IS9WD_envelopeOk_('ping', IS9WD_apiPing_(req));
   }
 
   var ctx = IS9WD_apiContext_(req, bodyBytes);
@@ -380,15 +380,45 @@ function IS9WD_apiOut_(envelope) {
 //  ACTIONS
 // ============================================================================
 
-function IS9WD_apiPing_() {
+// Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
+// is actually deployed: a /exec address serves the version it was deployed with, not the code
+// last pushed, and the two have been confused once already.
+var IS9WD_API_VERSION_ = 6;
+
+/**
+ * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
+ * the milliseconds went inside this execution: the settings read, the items read, and whether
+ * the name coordinates came from memory. Numbers about the machine, never about the work.
+ */
+function IS9WD_apiPing_(req) {
   var appOn = true;
+  var out = { appOn: true, transport: 'fetch', version: IS9WD_API_VERSION_ };
+  var probe = !!(req && req.payload && req.payload.probe);
+  var t0 = new Date().getTime();
   try {
     var cfg = IS9WD_readConfig_();
     appOn = cfg.switches ? cfg.switches.appOn !== false : true;
   } catch (err) {
     appOn = false;
   }
-  return { appOn: appOn, transport: 'fetch' };
+  out.appOn = appOn;
+  if (probe) {
+    var t1 = new Date().getTime();
+    var itemsMs = null;
+    try {
+      IS9WD_readItems_();
+      itemsMs = new Date().getTime() - t1;
+    } catch (err) {
+      itemsMs = -1;
+    }
+    out.probe = {
+      settingsMs: t1 - t0,
+      itemsMs: itemsMs,
+      coords: IS9WD_COORDS_HIT_ === true ? 'memory' : 'resolved live',
+      names: IS9WD_COORDS_ ? Object.keys(IS9WD_COORDS_).length : 0
+    };
+  }
+  return out;
 }
 
 function IS9WD_apiRead_(plan, req) {

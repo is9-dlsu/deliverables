@@ -3301,6 +3301,7 @@ var IS9WD_COORDS_KEY_ = 'IS9WD_NAME_COORDS_v1';
 var IS9WD_COORDS_TTL_ = 21600;
 var IS9WD_COORDS_ = null;
 var IS9WD_COORDS_DIRTY_ = false;
+var IS9WD_COORDS_HIT_ = false;
 
 function IS9WD_coords_() {
   if (IS9WD_COORDS_) return IS9WD_COORDS_;
@@ -3315,6 +3316,7 @@ function IS9WD_coords_() {
     try { map = JSON.parse(held); } catch (err) { map = null; }
   }
   IS9WD_COORDS_ = map && typeof map === 'object' ? map : {};
+  IS9WD_COORDS_HIT_ = !!(map && typeof map === 'object');
   IS9WD_COORDS_DIRTY_ = false;
   return IS9WD_COORDS_;
 }
