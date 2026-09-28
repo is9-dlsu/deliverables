@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="IS9">
+  <!--
+    THE IS9 MARK, rebuilt as vector rather than shipped as an image.
+
+    The gradient is not approximated: it runs from #085040 to #724485, the two ends of the
+    workbook's own palette, and the midpoint of those two in RGB is exactly rgb(61, 74, 98),
+    which is the slate tone at the centre of Ethan's icon. So the mark was already built from
+    the palette; this file only states it.
+
+    Vector rather than a PNG because it is 600 bytes, stays sharp on every screen from a
+    16 px favicon to a home screen icon, needs no second file for retina, and adds no
+    download to a page opened on university wifi.
+  -->
+  <defs>
+    <linearGradient id="is9" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#085040"/>
+      <stop offset="1" stop-color="#724485"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="url(#is9)"/>
+  <!-- Three bars, bottom aligned, the middle one shortest. Equal widths and equal gaps. -->
+  <g fill="#F8FBFD">
+    <rect x="33" y="41" width="9" height="25"/>
+    <rect x="46" y="47" width="9" height="19"/>
+    <rect x="59" y="34" width="9" height="32"/>
+  </g>
+</svg>

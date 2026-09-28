@@ -1,199 +1,318 @@
 /*
-  The IS9 palette, and nothing outside it. Same eight colours as the workbook, same meanings,
-  so the page and the Sheet agree about what a colour says:
+  THE OFFICERS PAGE.
 
-    #085040 deep green   text, and a finished tick
-    #58756a sage         secondary text and hairlines
-    #5d4170 deep purple  the header band
-    #8a64a9 bright       a number worth the eye that is not a fault
-    #724485 strong       blocking or overdue, and never on cream
-    #e9ebd4 cream        means "yours to fill in", so it appears on nothing here
-    #F8FBFD paper        the page
+  ONE SURFACE, AND IT IS THE HEADER. The whole page is plain paper except a single panel
+  carrying the mark's own gradient, #085040 to #724485. That gradient appears exactly once.
+  Everything below it is type, whitespace and one hairline per row: no cards, no boxes, no
+  second fill, no shadow. A minimal page earns its calm by having one thing to look at, and
+  repeating a gradient is how a page stops being calm.
 
-  375 px first. Every tap target is at least 44 px. No web font: a system stack renders
-  instantly on a phone with bad wifi and sends nothing to a third party.
+  THE BACKGROUND IS NOT WHITE AND IS NOT BUSY. A wash sits behind the page, the same two
+  colours at two percent, so paper reads as paper rather than as a blank browser. It is a
+  fixed gradient rather than an image: nothing to download, nothing to go stale, and no
+  request leaves the page.
+
+  THE PALETTE IS THE WORKBOOK'S, unchanged:
+    #085040 deep green    text, and a completed tick
+    #58756a sage          secondary text and hairlines
+    #724485 strong purple overdue and blocking, never on cream
+    #8a64a9 bright purple a number worth the eye that is not a fault
+    #F8FBFD paper
+  There is no red and no green-for-good here. A good state gets NO treatment at all; only an
+  exception is decorated. That restraint is the design.
+
+  NO WEB FONT. A system stack is SF Pro on an iPhone and Roboto on an Android, both of which
+  are better than anything that could be downloaded, and neither costs a request on university
+  wifi or tells a third party that an officer opened their list.
 */
 
 :root {
   --green: #085040;
   --sage: #58756a;
-  --purple: #5d4170;
-  --bright: #8a64a9;
   --strong: #724485;
+  --bright: #8a64a9;
   --paper: #F8FBFD;
-  --line: #dfe6e3;
+
+  /* One hairline weight everywhere. Structure comes from space, not from lines. */
+  --rule: rgba(88, 117, 106, 0.22);
+  --rule-strong: rgba(88, 117, 106, 0.38);
+
+  /* A 4 px rhythm. Every vertical measure below is a multiple of it. */
   --tap: 44px;
+  --gutter: 20px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-html, body {
-  margin: 0;
-  padding: 0;
+html {
   background: var(--paper);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
   color: var(--green);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
-  font-size: 16px;               /* never below 16: iOS zooms the page on a smaller control */
-  line-height: 1.45;
-  -webkit-text-size-adjust: 100%;
+  /* Never below 16 px: iOS zooms the whole page when a control is smaller. */
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* The wash. Fixed, so it does not slide under a long list and turn into a stripe. */
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(8, 80, 64, 0.045), transparent 60%),
+    radial-gradient(100% 55% at 100% 0%, rgba(114, 68, 133, 0.05), transparent 62%),
+    var(--paper);
+  background-attachment: fixed;
 }
 
 .wrap {
   max-width: 34rem;
   margin: 0 auto;
-  padding: 1rem 1rem calc(2rem + env(safe-area-inset-bottom));
+  padding: var(--gutter) var(--gutter) calc(40px + env(safe-area-inset-bottom));
 }
 
-/* ---------- header ---------- */
+/* ---------- the one surface ---------- */
 
 .head {
-  background: var(--purple);
+  position: relative;
+  background: linear-gradient(to top right, #085040, #724485);
   color: var(--paper);
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  margin: 0 0 1rem;
+  border-radius: 18px;
+  padding: 20px;
+  margin: 0 0 28px;
+  overflow: hidden;
 }
-.who { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; }
-.week { margin: 0.15rem 0 0; font-size: 0.85rem; opacity: 0.85; }
 
-.count { margin: 0 0 0.6rem; font-size: 0.9rem; color: var(--sage); }
+/* A single soft highlight so the panel reads as a surface rather than as a flat swatch.
+   One, very quiet, and no shadow anywhere on the page. */
+.head::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 88% 6%, rgba(255, 255, 255, 0.14), transparent 55%);
+  pointer-events: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.brand svg { display: block; width: 26px; height: 26px; border-radius: 7px; }
+.brand span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.who {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.week {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.78;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- the count ---------- */
+
+.count {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
 
 /* ---------- the list ---------- */
 
 .list { list-style: none; margin: 0; padding: 0; }
 
-.item {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  margin-bottom: 0.6rem;
-  background: #fff;
-  overflow: hidden;
-}
+/* NO BOX. One hairline between rows and nothing else. The last row has none, so the list
+   ends in space rather than in a line that looks like a mistake. */
+.item { border-bottom: 1px solid var(--rule); }
+.item:last-child { border-bottom: 0; }
 
-/* The whole row is the button. A 20 px checkbox on a phone is how somebody ticks the task
-   below the one they meant. */
 .row {
   display: flex;
-  gap: 0.75rem;
+  gap: 14px;
   width: 100%;
   min-height: var(--tap);
-  padding: 0.85rem;
+  padding: 16px 2px;
   border: 0;
   background: none;
   font: inherit;
   color: inherit;
   text-align: left;
-  cursor: pointer;
   align-items: flex-start;
+  cursor: pointer;
 }
-.row:disabled { cursor: progress; opacity: 0.55; }
+.row:disabled { cursor: progress; }
 
+/* The tick box is a circle, not a square: a square reads as a checkbox control and invites
+   somebody to hunt for the exact 20 px of it. The whole row is the target. */
 .box {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  margin-top: 2px;
-  border: 2px solid var(--sage);
-  border-radius: 7px;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--paper);
+  color: transparent;
+  transition: border-color 140ms ease, background-color 140ms ease;
 }
 
 .text { flex: 1 1 auto; min-width: 0; }
-.title { display: block; font-weight: 600; }
-.remark { display: block; font-size: 0.85rem; color: var(--sage); margin-top: 0.1rem; }
+
+.title {
+  display: block;
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+.remark {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  color: var(--sage);
+}
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  align-items: center;
-  margin-top: 0.3rem;
-  font-size: 0.8rem;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 7px;
+  font-size: 13px;
   color: var(--sage);
 }
+.due { font-variant-numeric: tabular-nums; }
 
+/* A tag is type, not a pill. A border around two words is decoration doing hierarchy's job. */
 .tag {
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--strong);
-  border: 1px solid var(--strong);
-  border-radius: 999px;
-  padding: 0 0.45rem;
 }
-.tag.flag { color: var(--bright); border-color: var(--bright); }
+.tag.flag { color: var(--bright); }
 
-/* DONE IS NOT JUST A COLOUR. The tick mark, the filled box and the struck title all say it,
-   so it reads the same to a colour blind officer and in bright sun on a phone. */
-.item.done { background: #f3f7f5; }
-.item.done .box { background: var(--green); border-color: var(--green); }
-.item.done .title { text-decoration: line-through; color: var(--sage); }
+/* DONE IS NEVER COLOUR ALONE. The tick, the filled circle and the struck title each say it,
+   so it survives a colour blind reader and direct sun on a phone. */
+.item.done .box {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--paper);
+}
+.item.done .title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--rule-strong);
+  color: var(--sage);
+  font-weight: 450;
+}
+.item.done .remark,
+.item.done .meta { opacity: 0.72; }
 
-.item.overdue { border-color: var(--strong); }
-.item.busy { opacity: 0.6; }
+/* Overdue is weight and colour on the tag alone. No border on the row, no fill: the row is
+   still a row, and one word carries the exception. */
+.item.overdue .due { color: var(--strong); font-weight: 600; }
 
+.item.busy { opacity: 0.45; }
+
+/* INDENTED TO THE TEXT COLUMN, not to the row's edge. The tick circle is 22 px and the gap
+   is 14, so 36 px puts these under the title rather than under the circle. Left aligned to
+   the wrong column is the detail that makes a careful layout look accidental. */
 .undo {
   display: block;
   width: 100%;
   min-height: var(--tap);
+  padding: 0 2px 16px 36px;
   border: 0;
-  border-top: 1px solid var(--line);
-  background: #fff;
+  background: none;
   color: var(--strong);
   font: inherit;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 650;
+  text-align: left;
   cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
 .locked {
   display: block;
-  padding: 0.6rem 0.85rem;
-  border-top: 1px solid var(--line);
-  font-size: 0.8rem;
+  padding: 0 2px 16px 36px;
+  font-size: 13px;
   color: var(--sage);
 }
 
 /* ---------- states ---------- */
 
-.wait { padding: 2rem 0; text-align: center; color: var(--sage); }
+.wait {
+  padding: 64px 0;
+  text-align: center;
+  color: var(--sage);
+  font-size: 14px;
+}
 
-.empty { padding: 2rem 0.5rem; text-align: center; }
-.empty-title { margin: 0; font-weight: 600; }
-.empty-detail { margin: 0.3rem 0 0; color: var(--sage); font-size: 0.9rem; }
+.empty { padding: 56px 8px; text-align: center; }
+.empty-title { margin: 0; font-size: 18px; font-weight: 600; }
+.empty-detail { margin: 8px 0 0; color: var(--sage); font-size: 14px; }
 
+/* A notice is a rule and a heading, not a coloured box. The colour lives on the rule. */
 .notice {
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--sage);
-  border-radius: 10px;
-  padding: 0.85rem;
-  margin: 0 0 1rem;
-  background: #fff;
+  border-left: 2px solid var(--sage);
+  padding: 2px 0 2px 14px;
+  margin: 0 0 24px;
 }
 .notice.stop { border-left-color: var(--strong); }
 .notice.warn { border-left-color: var(--bright); }
-.notice-title { margin: 0; font-weight: 700; }
-.notice-detail { margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--sage); }
+.notice-title { margin: 0; font-size: 16px; font-weight: 650; }
+.notice-detail { margin: 6px 0 0; font-size: 14px; color: var(--sage); }
 
 .retry {
-  margin-top: 0.7rem;
+  margin-top: 14px;
   min-height: var(--tap);
-  padding: 0 1rem;
-  border: 1px solid var(--green);
-  border-radius: 8px;
-  background: #fff;
+  padding: 0 18px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: none;
   color: var(--green);
   font: inherit;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.foot { margin-top: 1.5rem; font-size: 0.8rem; color: var(--sage); }
+.foot {
+  margin-top: 36px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+  color: var(--sage);
+}
 .foot p { margin: 0; }
 
-/* Focus must stay visible: some officers navigate with a keyboard, and the row is a button. */
-:focus-visible { outline: 3px solid var(--bright); outline-offset: 2px; }
+/* Focus stays visible. Some officers navigate by keyboard, and every row is a button. */
+:focus-visible { outline: 2px solid var(--bright); outline-offset: 3px; border-radius: 6px; }
 
-@media (prefers-reduced-motion: no-preference) {
-  .item { transition: background-color 120ms ease, border-color 120ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
 }

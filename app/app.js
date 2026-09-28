@@ -36,6 +36,27 @@ function readToken() {
 // Small pieces
 // ---------------------------------------------------------------------------
 
+// THE MARK, INLINE. The same vector as app/icon.svg, drawn straight into the header rather
+// than fetched: one fewer request on university wifi, and it can never be a broken image.
+// The gradient id is unique because a page may hold more than one svg and ids are global.
+function Mark() {
+  return html`
+    <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="is9mark" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stop-color="#085040" />
+          <stop offset="1" stop-color="#724485" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="22" fill="url(#is9mark)" />
+      <g fill="#F8FBFD">
+        <rect x="33" y="41" width="9" height="25" />
+        <rect x="46" y="47" width="9" height="19" />
+        <rect x="59" y="34" width="9" height="32" />
+      </g>
+    </svg>`;
+}
+
 function Spinner() {
   return html`<div class="wait" role="status" aria-live="polite">Loading your list...</div>`;
 }
@@ -185,6 +206,7 @@ function App() {
   return html`
     <${Shell}>
       <header class="head">
+        <p class="brand"><${Mark} /><span>Investors' Society</span></p>
         <p class="who">${state.committee ? state.committee.headline : ''}</p>
         <p class="week">
           Week ${state.week.number}
@@ -202,7 +224,7 @@ function App() {
           <p class="empty-detail">Ethan adds items by Saturday evening.</p>
         </div>
       ` : html`
-        <p class="count">${left === 0 ? 'All done for this week.'
+        <p class="count">${left === 0 ? 'All done for this week'
           : left + (left === 1 ? ' task left' : ' tasks left')}</p>
         <ul class="list">
           ${items.map((item) => html`
