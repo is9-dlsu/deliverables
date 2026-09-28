@@ -656,3 +656,167 @@ function IS9WD_apiImpl_(name) {
   }
   return typeof fn === 'function' ? fn : null;
 }
+
+// ============================================================================
+//  THE LINKS  (7.3: one per officer, issued from the menu, never mailed by the script)
+// ============================================================================
+//
+// A LINK IS A TOKEN IN A URL FRAGMENT. Everything after the # is never sent to a server, so
+// the address reaches the page without the token ever appearing in an access log, and the page
+// strips it from the address bar on load.
+//
+// THESE FUNCTIONS PRINT TOKENS INTO A DIALOG, which is the one place a whole token is ever
+// shown, because Ethan has to be able to send somebody their link. They must never write one
+// anywhere else: not to a cell, because the Canva reader account can read every cell of every
+// tab, and not to 07 | Log, because the log is a record that outlives the token. What goes on
+// the record is the first six characters and the date, which is enough to say WHICH link acted
+// and useless for acting as it.
+
+// The base the links are built on. It is a Configuration cell rather than a constant because a
+// GitHub Pages URL does not redirect after a repository transfer, so the day the tenth
+// administration renames the repo, this one cell moves and every email follows it (7).
+function IS9WD_appBase_() {
+  var base = '';
+  try {
+    var range = IS9WD_namedOrNull_('IS9WD_APP_BASE_URL');
+    base = range ? IS9WD_trim_(range.getValue()) : '';
+  } catch (err) {
+    base = '';
+  }
+  return base.replace(/[#\/]+$/, '');
+}
+
+/**
+ * One officer's link, or a sentence saying why there is not one. Never throws: this is called
+ * from a menu and from the emails, and a missing token must read as a missing token rather
+ * than as a stack trace.
+ *
+ * K10 is the President's row and carries no member token by design (4.8). He holds the ADMIN
+ * link instead, which is the same page with the admin role behind it.
+ */
+function IS9WD_linkFor_(key) {
+  var want = IS9WD_trim_(key).toUpperCase();
+  var base = IS9WD_appBase_();
+  if (base === '') {
+    return 'No address yet: paste the officers page address into ' + IS9WD_TAB.CONFIG + '.';
+  }
+  var admin = IS9WD_trim_(IS9WD_CFG.DIRECTORY.adminKey).toUpperCase();
+  var store = PropertiesService.getScriptProperties();
+  var token = IS9WD_trim_(want === admin || want === 'ADMIN'
+    ? store.getProperty(IS9WD_PROP.TOKEN_ADMIN)
+    : store.getProperty(IS9WD_tokenKey_(want)));
+  if (token === '') {
+    return 'No link yet for ' + want + ': run Build or repair workbook.';
+  }
+  return base + '/#' + token;
+}
+
+/**
+ * Every link, one line each, for the dialog Ethan copies from. Fourteen rows: the President
+ * gets the admin link and the other thirteen get their own.
+ */
+function IS9WD_linksReport_() {
+  var cfg = IS9WD_readConfig_(true);
+  var rows = cfg.directory ? cfg.directory.rows : [];
+  var admin = IS9WD_trim_(IS9WD_CFG.DIRECTORY.adminKey).toUpperCase();
+  var out = [];
+  var base = IS9WD_appBase_();
+  if (base === '') {
+    out.push('THE OFFICERS PAGE ADDRESS IS NOT SET, so there are no links to show yet.');
+    out.push('Paste it into ' + IS9WD_TAB.CONFIG + ', the row "Web address of the ' +
+      'officers\' page", then run this again.');
+    return out;
+  }
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var isAdmin = IS9WD_trim_(row.key).toUpperCase() === admin;
+    var who = IS9WD_trim_(row.fullName) === ''
+      ? row.committee
+      : row.fullName + IS9WD_SEP + row.committee;
+    var note = '';
+    if (row.revoked === true) note = IS9WD_SEP + 'REVOKED, rotate it before sending';
+    if (IS9WD_trim_(row.email) === '') note += IS9WD_SEP + 'no address on file';
+    out.push(row.key + IS9WD_SEP + who + (isAdmin ? IS9WD_SEP + 'ADMIN LINK' : '') + note);
+    out.push('   ' + IS9WD_linkFor_(row.key));
+    out.push('');
+  }
+  out.push('Send each person only their own line. A link is the whole of their access: ' +
+    'anyone holding it can tick that officer\'s items, which is the accepted risk in ' +
+    'SPEC section 6, and the answer to a leak is Rotate a link rather than anything else.');
+  return out;
+}
+
+/**
+ * Mint a fresh token for one row. The old one stops working the instant this returns, so the
+ * person is locked out until they are sent the new link. That is the point: it is the remedy
+ * for a leaked link, not routine maintenance.
+ */
+function IS9WD_rotateToken_(key) {
+  var want = IS9WD_trim_(key).toUpperCase();
+  var admin = IS9WD_trim_(IS9WD_CFG.DIRECTORY.adminKey).toUpperCase();
+  var store = PropertiesService.getScriptProperties();
+  var propKey = (want === admin || want === 'ADMIN')
+    ? IS9WD_PROP.TOKEN_ADMIN : IS9WD_tokenKey_(want);
+  var old = IS9WD_trim_(store.getProperty(propKey));
+  var token = IS9WD_setupNewToken_();
+  store.setProperty(propKey, token);
+  IS9WD_linkStamp_(want, token, false);
+  IS9WD_logRow_({
+    source: 'Menu', actor: 'Admin', action: 'rotateToken', committee: want,
+    detail: 'old link ended ' + (old === '' ? 'nothing' : old.substring(0, 6)) +
+      ', new link starts ' + token.substring(0, 6),
+    ok: true
+  });
+  return [want + ' has a new link. The old one stopped working just now.',
+    '', IS9WD_linkFor_(want), '',
+    'Send it to them before they next need it, or they are locked out.'];
+}
+
+function IS9WD_rotateAllTokens_() {
+  var cfg = IS9WD_readConfig_(true);
+  var rows = cfg.directory ? cfg.directory.rows : [];
+  var out = ['Every link was replaced. All fourteen people need their new one.', ''];
+  for (var i = 0; i < rows.length; i++) {
+    IS9WD_rotateToken_(rows[i].key);
+    out.push(rows[i].key + IS9WD_SEP + IS9WD_linkFor_(rows[i].key));
+  }
+  return out;
+}
+
+/**
+ * Revoke without minting. The link keeps its shape and stops being accepted, which is what you
+ * want when somebody has left and nobody should hold that office's link at all. Rotate instead
+ * when the person is staying and only the link is compromised.
+ */
+function IS9WD_revokeToken_(key) {
+  var want = IS9WD_trim_(key).toUpperCase();
+  IS9WD_linkStamp_(want, '', true);
+  IS9WD_logRow_({
+    source: 'Menu', actor: 'Admin', action: 'revokeToken', committee: want,
+    detail: 'the link was revoked and now answers REVOKED', ok: true
+  });
+  return [want + ' is revoked. That link now answers "This link has been replaced."',
+    '', 'Rotate it when somebody should hold it again.'];
+}
+
+// The two identification columns and the revoked flag on `_Engine`, by row position. The
+// TOKEN ITSELF NEVER TOUCHES A CELL: only its first six characters and the date it was issued,
+// which is enough to tell two links apart in a dispute and useless for using one.
+function IS9WD_linkStamp_(key, token, revoked) {
+  var e = IS9WD_ENG.DIRECTORY;
+  var sheet = IS9WD_sheet_('ENGINE');
+  var count = e.lastRow - e.firstRow + 1;
+  var cfgSheet = IS9WD_sheet_('CONFIG');
+  var d = IS9WD_CFG.DIRECTORY;
+  var keys = cfgSheet.getRange(d.firstRow, 1, count, 1).getValues();
+  for (var r = 0; r < count; r++) {
+    if (IS9WD_trim_(keys[r][0]).toUpperCase() !== IS9WD_trim_(key).toUpperCase()) continue;
+    if (IS9WD_trim_(token) !== '') {
+      sheet.getRange(e.firstRow + r, 4).setValue(token.substring(0, 6));
+      sheet.getRange(e.firstRow + r, 5).setValue(IS9WD_todayManila_());
+    }
+    sheet.getRange(e.firstRow + r, 6).setValue(revoked === true);
+    return true;
+  }
+  return false;
+}
