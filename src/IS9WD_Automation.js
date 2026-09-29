@@ -128,6 +128,10 @@ function IS9WD_dispatch_() {
   // same day notice is the same kind of message as the Monday list.
   IS9WD_autoNotify_(cfg, say);
 
+  // THE CALENDAR FOLLOWS THE SHEET, every pass: an event for every open deliverable on its
+  // deadline, moved when the deadline moves, gone once the task is accomplished.
+  IS9WD_autoCalendar_(cfg, say);
+
   var rows = cfg.schedule ? cfg.schedule.rows : [];
   var doneKeys = IS9WD_autoDoneKeys_();
   var ran = 0;
@@ -249,6 +253,24 @@ function IS9WD_autoImpl_(jobKey) {
  * Returns how many rows were given an ID, and never throws: a sweep that fails must not cost
  * the emails behind it.
  */
+// THE CALENDAR SYNC, under the lock, never fatal: a Calendar that cannot be reached (the
+// permission not granted yet, or a Workspace policy) is logged and the pass goes on, because
+// the emails and the carousel matter more than the calendar.
+function IS9WD_autoCalendar_(cfg, say) {
+  try {
+    return IS9WD_lockedRun_(function () { return IS9WD_calSync_(cfg, say); });
+  } catch (err) {
+    var why = IS9WD_txt_(err && err.message ? err.message : err);
+    if (say) say('the calendar was not updated: ' + why);
+    Logger.log('IS9WD: the calendar sync failed: ' + why);
+    IS9WD_logRow_({
+      source: IS9WD_LOG_SOURCE_TRIGGER_, actor: 'Trigger', action: 'calendarSync',
+      detail: 'failed: ' + why, ok: false
+    });
+    return null;
+  }
+}
+
 // TITLES AND REMARKS, CLEANED OVER EVERY ROW, under the same lock as every other write. It
 // catches what onEdit cannot see: a paste of five hundred rows or more, a value written by
 // another tool, and a row typed before the cleaning existed.
@@ -324,6 +346,7 @@ function IS9WD_syncToApp_() {
   // THE NOTICES GO NOW, not at the next hourly pass: Sync is the one click that means "push
   // this to the officers", so it does everything the hourly pass would, at once.
   var noticed = IS9WD_autoNotify_(cfg, say);
+  IS9WD_autoCalendar_(cfg, say);
   var items = IS9WD_readItems_();
   var dir = cfg.directory.inHierarchy;
   var hidden = [];

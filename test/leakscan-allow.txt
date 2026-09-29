@@ -27,3 +27,9 @@ abcdefghjkmnpqrstvwxyz0123
 # The fake link token in test/email.test.js and the local preview. Shaped like a token
 # so the link count and the fragment check are exercised. Never issued.
 abcdefghjkmnpqrstvwxyz2345
+
+# Fake addresses in test/calendar.test.js, on the .test domain RFC 2606 reserves for tests,
+# so the calendar planner has a well formed address to lowercase and a guest to add.
+PRESIDENT@example.test
+Officer@Example.test
+officer@example.test

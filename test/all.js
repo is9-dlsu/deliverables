@@ -23,6 +23,7 @@ const FILES = [
   ['api.test.js', 'the endpoint decision layer, against SPEC section 3'],
   ['charts.test.js', 'every statistics chart keeps its plot on the canvas'],
   ['tidy.test.js', 'the title and remark tidy, against the real column layout'],
+  ['calendar.test.js', 'the calendar plan and diff, against the 2026-09-29 ruling'],
 ];
 
 let failed = 0;

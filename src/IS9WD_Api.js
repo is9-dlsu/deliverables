@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 17;
+var IS9WD_API_VERSION_ = 18;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -466,6 +466,16 @@ function IS9WD_apiWrite_(plan, req, ctx) {
     var out = IS9WD_apiPerform_(plan, req, ctx);
     if (out.ok && req.requestId !== '') {
       IS9WD_apiReplayRecord_(ctx.hash, req.requestId, out);
+    }
+    // THE CALENDAR FOLLOWS A TICK ONCE ITS UNDO WINDOW HAS CLOSED, and an add at about the
+    // same time: one follow up run, scheduled here and never allowed to fail the write.
+    if (out.ok && (plan.action === 'setStatus' || plan.action === 'addItem') &&
+        typeof IS9WD_calSoon_ === 'function') {
+      try {
+        IS9WD_calSoon_(IS9WD_apiSetting_('IS9WD_UNDO_SECONDS', 60) * 1000 + 5000);
+      } catch (err) {
+        Logger.log('IS9WD: the calendar follow up was not scheduled: ' + err);
+      }
     }
     return out;
   } finally {

@@ -144,6 +144,12 @@ var IS9WD_ACTION = {
     fn: 'IS9WD_automationStatus_', from: 'IS9WD_Automation.js',
     label: 'Show automation status'
   },
+  // The first run asks for the Calendar permission; after that it creates the IS9
+  // Deliverables calendar if it is missing and syncs it at once.
+  CAL_CONNECT: {
+    fn: 'IS9WD_calendarConnect_', from: 'IS9WD_Calendar.js', lock: true,
+    label: 'Connect Google Calendar'
+  },
   DISPATCH: {
     fn: 'IS9WD_dispatch_', from: 'IS9WD_Automation.js', lock: true,
     label: 'Run the dispatcher now'
@@ -276,7 +282,8 @@ function IS9WD_buildMenu_() {
     .addItem('Remove automations', 'IS9WD_menuRemoveAutomations')
     .addItem('Show automation status', 'IS9WD_menuAutomationStatus')
     .addItem('Run the dispatcher now', 'IS9WD_menuRunDispatcher')
-    .addItem('Give new rows an ID now', 'IS9WD_menuSweepIds');
+    .addItem('Give new rows an ID now', 'IS9WD_menuSweepIds')
+    .addItem('Connect Google Calendar', 'IS9WD_menuConnectCalendar');
 
   var links = ui.createMenu('Links')
     .addItem('Rotate a link', 'IS9WD_menuRotateOne')
@@ -501,6 +508,11 @@ function IS9WD_menuShowLog() {
 function IS9WD_menuInstallAutomations() {
   var ui = IS9WD_assertUiContext_();
   IS9WD_do_(ui, IS9WD_ACTION.AUTO_INSTALL);
+}
+
+function IS9WD_menuConnectCalendar() {
+  var ui = IS9WD_assertUiContext_();
+  IS9WD_do_(ui, IS9WD_ACTION.CAL_CONNECT);
 }
 
 function IS9WD_menuRemoveAutomations() {

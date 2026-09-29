@@ -2699,6 +2699,37 @@ function IS9WD_stMail_(suite, ctx) {
     return 'One hourly trigger.';
   });
 
+  // The calendar holds one event per open deliverable with a deadline. A difference is a
+  // warning, not a failure: the next hourly pass or Sync brings it level.
+  IS9WD_stRun_(suite, 'Calendar follows the sheet', have, function () {
+    var cal;
+    try {
+      cal = IS9WD_calCalendar_(false);
+    } catch (err) {
+      return { state: IS9WD_ST.WARN, detail: 'Google Calendar is not connected: ' + IS9WD_stErr_(err) +
+        '. Automation > Connect Google Calendar, and allow the Calendar permission.' };
+    }
+    if (!cal) {
+      return { state: IS9WD_ST.WARN, detail: 'No IS9 Deliverables calendar yet. ' +
+        'Automation > Connect Google Calendar creates it and fills it.' };
+    }
+    var want = IS9WD_calPlan_(IS9WD_readItems_().rows, ctx.cfg.directory.rows, {
+      testMode: !!ctx.cfg.switches.testMode, adminKey: IS9WD_CFG.DIRECTORY.adminKey,
+      undoSeconds: ctx.cfg.statuses.undoSeconds, now: new Date().getTime()
+    });
+    var now = new Date().getTime();
+    var span = IS9WD_CAL_WINDOW_DAYS_ * 24 * 60 * 60 * 1000;
+    var events = cal.getEvents(new Date(now - span), new Date(now + span));
+    var ours = 0;
+    for (var i = 0; i < events.length; i++) if (IS9WD_trim_(events[i].getTag(IS9WD_CAL_TAG_ID_)) !== '') ours++;
+    if (ours === want.length) {
+      return ours + ' event(s), one per open deliverable with a deadline' +
+        (ctx.cfg.switches.testMode ? ', with no officer on them while test mode is on.' : ', each with its officer as a guest.');
+    }
+    return { state: IS9WD_ST.WARN, detail: ours + ' event(s) for ' + want.length + ' open deliverable(s). ' +
+      'The next hourly pass or Sync deliverables to the app brings them level.' };
+  });
+
   IS9WD_stRun_(suite, 'Mail plumbing', have, function () {
     var sw = ctx.cfg.switches;
     var bad = [];
