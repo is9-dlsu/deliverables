@@ -391,7 +391,9 @@ function IS9WD_sweepIds_() {
 
 function IS9WD_installAutomations_() {
   var out = [];
-  var removed = IS9WD_removeAutomations_();
+  // Replacing, not removing: the report names an earlier trigger only when there was one,
+  // so a first install does not open by saying that no trigger was installed.
+  var removed = IS9WD_removeAutomations_(true);
   for (var r = 0; r < removed.length; r++) out.push(removed[r]);
   ScriptApp.newTrigger(IS9WD_AUTO_TRIGGER_).timeBased().everyHours(1).create();
   var me = IS9WD_autoMe_();
@@ -409,7 +411,7 @@ function IS9WD_installAutomations_() {
   return out;
 }
 
-function IS9WD_removeAutomations_() {
+function IS9WD_removeAutomations_(replacing) {
   var out = [];
   var all = ScriptApp.getProjectTriggers();
   var gone = 0;
@@ -418,8 +420,12 @@ function IS9WD_removeAutomations_() {
     ScriptApp.deleteTrigger(all[i]);
     gone++;
   }
-  out.push(gone === 0 ? 'No automation trigger was installed.'
-    : gone + ' automation trigger(s) removed. No job will run until one is installed again.');
+  if (replacing) {
+    if (gone > 0) out.push(gone + ' earlier trigger(s) replaced, so there is still exactly one.');
+  } else {
+    out.push(gone === 0 ? 'There was no automation trigger, so there was nothing to remove.'
+      : gone + ' automation trigger(s) removed. No job will run until one is installed again.');
+  }
   if (gone > 0) {
     IS9WD_logRow_({
       source: 'Menu', actor: IS9WD_autoMe_() || 'Admin', action: 'removeAutomations',

@@ -1462,6 +1462,13 @@ function IS9WD_statsEndRow_(sheet, layout) {
 // charts need three different left margins, because one has fourteen slanted names under
 // it, one has fourteen names beside it and one has none, and a single shared chartArea
 // gave the slanted names 56 px to live in.
+//
+// EVERY chartArea VALUE IS A PERCENTAGE STRING. A sheet chart stores the plot area as
+// fractions of the chart, and a bare number is read as a fraction too, not as pixels as the
+// Google Charts documentation would suggest: left 56 put the plot fifty six chart widths to
+// the right, off the canvas, and every chart on the tab rendered as an empty frame. Measured
+// on 2026-09-29 from the workbook's own export, which stored x as 56.0 beside w as 0.88. A
+// Node test refuses a bare number here, so it cannot come back.
 function IS9WD_statsChartOptions_(builder, width) {
   return builder
     .setOption('title', '')
@@ -1575,7 +1582,7 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
     .setPosition(band(0).firstRow, band(0).firstCol, IS9WD_STATS_CHART_INSET, 8);
   IS9WD_statsChartOptions_(one, IS9WD_statsChartWidth_(band(0)));
   // Fourteen names slanted at 40 degrees need room under the plot, not beside it.
-  one.setOption('chartArea', { left: 56, top: 28, width: '88%', height: '50%' });
+  one.setOption('chartArea', { left: '6%', top: '12%', width: '91%', height: '50%' });
   one.setOption('hAxis', {
     textStyle: axis.textStyle, slantedText: true, slantedTextAngle: 40
   });
@@ -1600,7 +1607,7 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
   two.setOption('legend', { position: 'none' });
   // Fourteen names read straight down the left, so the plot starts well in, and with no
   // legend there is nothing above it to leave room for.
-  two.setOption('chartArea', { left: 240, top: 8, width: '62%', height: '84%' });
+  two.setOption('chartArea', { left: '30%', top: '4%', width: '64%', height: '86%' });
   // On a bar chart the axes swap, so the value axis is the horizontal one and the
   // percentage format belongs there.
   two.setOption('hAxis', {
@@ -1631,7 +1638,7 @@ function IS9WD_statsInsertCharts_(sheet, layout) {
     .setNumHeaders(1)
     .setPosition(band(2).firstRow, band(2).firstCol, IS9WD_STATS_CHART_INSET, 8);
   IS9WD_statsChartOptions_(three, IS9WD_statsChartWidth_(band(2)));
-  three.setOption('chartArea', { left: 56, top: 28, width: '88%', height: '62%' });
+  three.setOption('chartArea', { left: '6%', top: '12%', width: '91%', height: '64%' });
   three.setOption('curveType', 'none');
   // #085040 and #8a64a9 differ mostly in hue, so the two lines carry a shape as well as a
   // colour and stay separable in greyscale and to a colour blind reader.
