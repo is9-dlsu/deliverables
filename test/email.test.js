@@ -84,7 +84,7 @@ function cfgFixture(over) {
       senderName: o.senderName !== undefined ? o.senderName : 'IS9 Tracker',
       replyTo: o.replyTo || '', mailNoReply: o.noReply === true,
       slotsPerPage: 15, maxParts: 1, quotaReserve: 100, retireDays: 14, tokenWarnDays: 120,
-      automationOn: true,
+      automationOn: true, appBaseUrl: o.appBaseUrl !== undefined ? o.appBaseUrl : '',
     },
     signoff: o.signoffSet === false
       ? { current: { set: false }, derivedSet: false }
@@ -128,6 +128,14 @@ console.log('\n1. The context');
   check('unset sign-off', ctxOf({ signoffSet: false }).signoffSet, false);
   check('entry from the reader shape', fn('IS9WD_mailEntry_')({ key: 'k02', committee: 'Finance', fullName: 'A B' }).fullName, 'A B');
   check('entry from the recipients shape', fn('IS9WD_mailEntry_')({ key: 'K02', committee: 'Finance', name: 'C D' }).fullName, 'C D');
+  check('no page address, no asset base', ctx.assetBase, '');
+  check('the asset base is the page address without its trailing slash',
+    ctxOf({ appBaseUrl: 'https://pages.example.test/deliverables/#' }).assetBase, 'https://pages.example.test/deliverables');
+  check('a note in the address cell is not an asset base', ctxOf({ appBaseUrl: 'paste the address here' }).assetBase, '');
+  check('the band rides on the meta from the asset base',
+    fn('IS9WD_mailMeta_')(ctxOf({ appBaseUrl: 'https://pages.example.test/deliverables' }), null, 'Daily Digest').band,
+    'https://pages.example.test/deliverables/mail/band.jpg');
+  check('no asset base, no band', fn('IS9WD_mailMeta_')(ctx, null, 'Daily Digest').band, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -318,10 +326,15 @@ console.log('\n5. The renderers');
   check('html escapes a title', has(h, '&lt;script&gt;') && !has(h, '<script>'), true);
   check('html escapes an ampersand and quotes', has(h, 'A &lt;b&gt;title&lt;/b&gt; &amp; &quot;quotes&quot;'), true);
   check('html shows the overdue word in bold purple small caps', /color:#724485;">OVERDUE</.test(h), true);
+  check('html without a band prints the text mark on the green', has(h, '>IS9</td>') && !has(h, '<img'), true);
+  const hb = html(blocks, { eyebrow: 'E', title: 'Partnerships', sub: 'SUB', foot: 'FOOT', band: 'https://x.example.test/mail/band.jpg' });
+  check('html with a band prints it once, with the title as its alt text',
+    [count(hb, '<img src="https://x.example.test/mail/band.jpg"'), has(hb, 'alt="Partnerships"'), has(hb, '>IS9</td>')], [1, true, false]);
+  check('the ribbon opens the body and the foot', count(h, 'background:#CFC0E0;font-size:1px'), 2);
   check('html paints no cream and no red or green that is not the palette',
     [has(h, '#e9ebd4'), /#(ff0000|00ff00|d32f2f|2e7d32)/i.test(h)], [false, false]);
   check('html uses only the letter palette', (h.match(/#[0-9a-fA-F]{6}\b/g) || []).every((x) =>
-    ['#085040', '#724485', '#8B74A1', '#58756A', '#2A2D2B', '#5C6360', '#FBF9F3', '#F0ECE2', '#DAD4C6', '#EDE8DC'].indexOf(x) !== -1), true);
+    ['#085040', '#5D4170', '#724485', '#8B74A1', '#CFC0E0', '#58756A', '#2A2D2B', '#5C6360', '#FBF9F3', '#F0ECE2', '#E7EFEB', '#DAD4C6', '#EDE8DC'].indexOf(x) !== -1), true);
   check('html carries the raw address twice, as the button and as the line under it', count(h, 'href="https://x.example.test/#tok"'), 2);
   check('the body alone has no html element', has(fn('IS9WD_mailHtmlBody_')(blocks, {}), '<html'), false);
   const EM = String.fromCharCode(8212);

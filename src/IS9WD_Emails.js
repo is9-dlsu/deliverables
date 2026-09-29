@@ -83,19 +83,36 @@ var IS9WD_MAIL_BRAND_ = "Investors' Society";
 // and two hairlines. Nothing here reads as a status colour by accident. It is the only place
 // these hexes appear, and the self test lists them exactly.
 var IS9WD_MAIL_INK_ = {
-  green: '#085040',   // the identity: masthead, headline, the rules that matter, the button
+  green: '#085040',   // the identity: the header block, the headline, the button
+  plum: '#5D4170',    // the running heads, a chapter numeral, one stripe of the ribbon
   purple: '#724485',  // the overdue word, every flag, a holding gate, the test slug
   dusk: '#8B74A1',    // superseded or not applicable: the carousel note
-  sage: '#58756A',    // labels, small caps, the numerals, the signature's short rule
+  lilac: '#CFC0E0',   // the letter's kind on the green, the last stripe of the ribbon
+  sage: '#58756A',    // labels, small caps, the numerals
   ink: '#2A2D2B',     // body text, a warm near black
   slate: '#5C6360',   // secondary text, a cool stone grey
   paper: '#FBF9F3',   // ivory, the page
   page: '#F0ECE2',    // the desk the page sits on
+  mist: '#E7EFEB',    // the pale green panel the sign-off sits on
   line: '#DAD4C6',    // hairline
   faint: '#EDE8DC'    // the lighter hairline inside a list
 };
-// The mark in the masthead's bordered square. Three letters, because the square is 38px.
+// The mark in the header's bordered square when the page address, and so the logo, is not
+// set yet. Three letters, because the square is 38px.
 var IS9WD_MAIL_MONOGRAM_ = 'IS9';
+// THE LOGO IS READ FROM THE OFFICERS PAGE ADDRESS. The brand band, the Society's gradient
+// with the white mark on it, is published beside the page as mail/band.jpg, and the header
+// asks for it at that address, so it is a setting on 01 | Configuration and never a constant
+// here. A blank address prints the text header instead, and a mail client that hides images
+// prints the alt text, which is the Society's name.
+var IS9WD_MAIL_BAND_ = 'mail/band.jpg';
+
+// The page address as an asset base: trimmed, a trailing slash or hash dropped, and only an
+// http address counts, because anything else in that cell is a note to Ethan and not a place.
+function IS9WD_mailAssetBase_(raw) {
+  var base = IS9WD_trim_(raw).replace(/[#\/]+$/, '');
+  return /^https?:\/\//i.test(base) ? base : '';
+}
 var IS9WD_MAIL_GREET_ = 'Greetings in St. La Salle!';
 var IS9WD_MAIL_CLOSE_ = 'For a financially literate Lasallian community,';
 
@@ -158,6 +175,7 @@ function IS9WD_mailContext_(cfg) {
     checkedPosition: IS9WD_txt_(cur.set === true ? cur.checkedPosition : so.checkedPosition),
     slotsPerPage: IS9WD_posInt_(sw.slotsPerPage),
     maxParts: IS9WD_posInt_(sw.maxParts),
+    assetBase: IS9WD_mailAssetBase_(sw.appBaseUrl),
     // The letter is signed by the President, from the directory, never typed here.
     signName: IS9WD_txt_(signer ? signer.fullName : ''),
     signPosition: IS9WD_titleCase_(signer ? signer.position : '')
@@ -300,10 +318,12 @@ function IS9WD_mailItemRows_(ctx, entry, items) {
 }
 
 function IS9WD_mailMeta_(ctx, entry, kind) {
+  var base = IS9WD_txt_(ctx.assetBase);
   return {
     title: IS9WD_MAIL_BRAND_,
     eyebrow: IS9WD_txt_(kind) || 'Weekly Deliverables',
     sub: ctx.weekLine,
+    band: base !== '' ? base + '/' + IS9WD_MAIL_BAND_ : '',
     foot: IS9WD_MAIL_FOOT_
   };
 }
@@ -969,15 +989,15 @@ function IS9WD_mailHtmlBody_(blocks, meta) {
     '<!--[if mso]><table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0"><tr><td><![endif]-->' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" ' +
     'style="max-width:600px;background:' + P.paper + ';">' +
-    '<tr><td style="padding:20px 24px 0;">' +
-    slug +
+    (slug !== '' ? '<tr><td style="padding:16px 24px 0;">' + slug + '</td></tr>' : '') +
     IS9WD_mailMasthead_(m, P, F, IS9WD_mailFigures_(blocks)) +
+    '<tr><td style="padding:8px 24px 0;">' +
     (headline !== '' ? '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">' +
-      '<tr><td style="padding:30px 0 22px;font-family:' + F.serif + ';font-size:32px;line-height:1.15;font-weight:400;' +
+      '<tr><td style="padding:26px 0 22px;font-family:' + F.serif + ';font-size:32px;line-height:1.15;font-weight:400;' +
       'letter-spacing:-0.01em;color:' + P.green + ';">' + IS9WD_mailEsc_(headline) + '</td></tr></table>' : '') +
     body.join('') +
     '</td></tr>' +
-    '<tr><td style="padding:16px 24px 22px;">' + IS9WD_mailColophon_(m, P, F) + '</td></tr>' +
+    IS9WD_mailColophon_(m, P, F) +
     '</table>' +
     '<!--[if mso]></td></tr></table><![endif]-->' +
     '</td></tr></table>';
@@ -1037,10 +1057,10 @@ function IS9WD_mailRule_(P, double) {
     '<tr><td style="' + style + '">&nbsp;</td></tr></table>';
 }
 
-// A short rule, 36px, the one the signature stands on.
+// A short rule, 36px, purple, the one the signature stands on.
 function IS9WD_mailShortRule_(P) {
   return '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>' +
-    '<td width="36" style="width:36px;border-top:1px solid ' + P.sage + ';height:1px;font-size:1px;line-height:1px;">&nbsp;</td>' +
+    '<td width="36" style="width:36px;border-top:2px solid ' + P.purple + ';height:2px;font-size:1px;line-height:2px;">&nbsp;</td>' +
     '</tr></table>';
 }
 
@@ -1072,40 +1092,61 @@ function IS9WD_mailFigures_(blocks) {
   return items + (items === 1 ? ' item' : ' items') + (overdue > 0 ? '  ·  ' + overdue + ' overdue' : '');
 }
 
-// The masthead: the double hairline, the bordered monogram, the Society letterspaced, the
-// letter's kind, the italic dateline, the figures, one hairline.
+// THE RIBBON: four stripes of the identity, sage to lilac, the width of the page. It closes
+// the header and opens the foot, so the page carries its colours at both ends.
+function IS9WD_mailRibbon_(P) {
+  var stripes = [P.sage, P.plum, P.purple, P.lilac];
+  var cells = [];
+  for (var i = 0; i < stripes.length; i++) {
+    cells.push('<td width="25%" style="width:25%;height:5px;background:' + stripes[i] +
+      ';font-size:1px;line-height:5px;">&nbsp;</td>');
+  }
+  return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">' +
+    '<tr>' + cells.join('') + '</tr></table>';
+}
+
+// THE HEADER, as rows of the page table because the band bleeds to both edges: the brand
+// band (the Society's gradient with the white mark, an image read from the page address, or
+// the text mark in a bordered square on the green when there is no address yet), then the
+// green block with the letter's kind in lilac small caps, the italic dateline in ivory and
+// the figures, then the ribbon.
 function IS9WD_mailMasthead_(m, P, F, figures) {
   var kind = IS9WD_txt_(m.eyebrow);
   var sub = IS9WD_txt_(m.sub);
-  return IS9WD_mailRule_(P, true) +
+  var band = IS9WD_txt_(m.band);
+  var top = band !== ''
+    ? '<tr><td style="padding:0;background:' + P.green + ';">' +
+      '<img src="' + IS9WD_mailEsc_(band) + '" width="600" alt="' + IS9WD_mailEsc_(m.title) + '" ' +
+      'style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">' +
+      '</td></tr>'
+    : '<tr><td align="center" style="padding:30px 24px 0;background:' + P.green + ';">' +
+      '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>' +
+      '<td align="center" width="38" height="38" style="width:38px;height:38px;border:1px solid ' + P.lilac +
+      ';font-family:' + F.serif + ';font-size:13px;line-height:38px;letter-spacing:0.12em;color:' + P.paper +
+      ';">' + IS9WD_mailEsc_(IS9WD_MAIL_MONOGRAM_) + '</td></tr></table>' +
+      '<div style="padding:14px 0 0;' + IS9WD_mailCapsStyle_(F, P.paper, 13, '0.34em', 700) + '">' +
+      IS9WD_mailCaps_(m.title) + '</div>' +
+      '</td></tr>';
+  return top +
+    '<tr><td align="center" style="padding:' + (band !== '' ? '4px' : '10px') + ' 24px 22px;background:' + P.green + ';">' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">' +
-    '<tr><td align="center" style="padding:22px 0 0;">' +
-    '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>' +
-    '<td align="center" width="38" height="38" style="width:38px;height:38px;border:1px solid ' + P.green +
-    ';font-family:' + F.serif + ';font-size:13px;line-height:38px;letter-spacing:0.12em;color:' + P.green +
-    ';">' + IS9WD_mailEsc_(IS9WD_MAIL_MONOGRAM_) + '</td></tr></table>' +
-    '</td></tr>' +
-    '<tr><td align="center" style="padding:14px 0 0;' + IS9WD_mailCapsStyle_(F, P.green, 13, '0.34em', 700) + '">' +
-    IS9WD_mailCaps_(m.title) + '</td></tr>' +
-    (kind !== '' ? '<tr><td align="center" style="padding:7px 0 0;' + IS9WD_mailCapsStyle_(F, P.sage, 12, '0.26em') + '">' +
+    (kind !== '' ? '<tr><td align="center" style="' + IS9WD_mailCapsStyle_(F, P.lilac, 12, '0.3em', 700) + '">' +
       IS9WD_mailCaps_(kind) + '</td></tr>' : '') +
-    (sub !== '' ? '<tr><td align="center" style="padding:16px 0 0;' + IS9WD_mailSerifStyle_(F, P.slate, 13, 'font-style:italic;') + '">' +
+    (sub !== '' ? '<tr><td align="center" style="padding:10px 0 0;' + IS9WD_mailSerifStyle_(F, P.paper, 13, 'font-style:italic;') + '">' +
       IS9WD_mailDateline_(sub) + '</td></tr>' : '') +
-    (figures !== '' ? '<tr><td align="center" style="padding:8px 0 0;' + IS9WD_mailCapsStyle_(F, P.sage, 12, '0.14em') + '">' +
+    (figures !== '' ? '<tr><td align="center" style="padding:8px 0 0;' + IS9WD_mailCapsStyle_(F, P.lilac, 12, '0.14em') + '">' +
       IS9WD_mailCaps_(figures) + '</td></tr>' : '') +
-    '<tr><td style="padding:16px 0 0;">' + IS9WD_mailRule_(P, false) + '</td></tr>' +
-    '</table>';
+    '</table></td></tr>' +
+    '<tr><td style="padding:0;">' + IS9WD_mailRibbon_(P) + '</td></tr>';
 }
 
-// The foot: the sentence in small type, then the double hairline that closes the page as it
-// opened. No ornament of its own, because the signature above it already carries the one
-// short rule a letter gets.
+// The foot, as rows of the page table: the ribbon again, then the sentence in small type on
+// the desk colour. The signature above it already carries the one short rule a letter gets.
 function IS9WD_mailColophon_(m, P, F) {
   var foot = IS9WD_txt_(m.foot);
-  return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">' +
-    (foot !== '' ? '<tr><td align="center" style="padding:10px 12px 20px;font-family:' + F.sans +
-      ';font-size:12px;line-height:1.7;color:' + P.slate + ';">' + IS9WD_mailEsc_(foot) + '</td></tr>' : '') +
-    '<tr><td>' + IS9WD_mailRule_(P, true) + '</td></tr></table>';
+  return '<tr><td style="padding:22px 0 0;">' + IS9WD_mailRibbon_(P) + '</td></tr>' +
+    (foot !== '' ? '<tr><td align="center" style="padding:16px 32px 20px;background:' + P.mist + ';font-family:' + F.sans +
+      ';font-size:12px;line-height:1.7;color:' + P.slate + ';">' + IS9WD_mailEsc_(foot) + '</td></tr>' : '');
 }
 
 // One block. The optional chapter is set only by the body, for a section head in a letter long
@@ -1155,14 +1196,14 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
         return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:18px 0 16px;">' +
           '<tr><td colspan="2" style="border-top:1px solid ' + P.line + ';height:1px;font-size:1px;line-height:1px;">&nbsp;</td></tr>' +
           '<tr><td valign="baseline" width="52" style="width:52px;padding:16px 8px 0 0;' +
-          IS9WD_mailSerifStyle_(F, P.sage, 20, 'line-height:1.2;letter-spacing:0.04em;') + '">' +
+          IS9WD_mailSerifStyle_(F, P.plum, 20, 'line-height:1.2;letter-spacing:0.04em;') + '">' +
           IS9WD_mailEsc_(IS9WD_mailPad2_(chapter)) + '</td>' +
           '<td valign="baseline" style="padding:16px 0 0;' + IS9WD_mailSerifStyle_(F, P.green, 21, 'line-height:1.2;') + '">' +
           IS9WD_mailEsc_(b.text) + '</td></tr></table>';
       }
-      // A running head: the label in small caps in the green, a hairline running out from it.
+      // A running head: the label in small caps in plum, a hairline running out from it.
       return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 14px;">' +
-        '<tr><td style="padding:0 12px 0 0;white-space:nowrap;' + IS9WD_mailCapsStyle_(F, P.green, 12, '0.2em', 700) + '">' +
+        '<tr><td style="padding:0 12px 0 0;white-space:nowrap;' + IS9WD_mailCapsStyle_(F, P.plum, 12, '0.2em', 700) + '">' +
         IS9WD_mailCaps_(b.text) + '</td>' +
         '<td width="100%" style="border-top:1px solid ' + P.line + ';height:1px;font-size:1px;line-height:1px;">&nbsp;</td>' +
         '</tr></table>';
@@ -1209,7 +1250,7 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
         var row = b.rows[j];
         var hot = row[2] === true;
         var edgeKv = b.small ? '' : 'border-bottom:1px solid ' + P.faint + ';';
-        var pad = b.small ? '3px 0' : '9px 0';
+        var pad = b.small ? '4px 16px' : '9px 0';
         kv.push('<tr>' +
           '<td valign="top" width="40%" style="width:40%;padding:' + pad + ';padding-right:14px;' + edgeKv + '">' +
           caps(row[0], hot ? P.purple : P.sage, hot ? 700 : 400) + '</td>' +
@@ -1217,7 +1258,8 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
           IS9WD_mailSerifStyle_(F, hot ? P.purple : P.ink, b.small ? 13 : 14, 'line-height:1.55;' + (hot ? 'font-weight:700;' : '')) + '">' +
           IS9WD_mailEsc_(row[1]) + '</td></tr>');
       }
-      return table(kv, b.small ? 'margin:22px 0 0;' : 'margin:0 0 24px;');
+      // The small ledger, which is the sign-off, sits on a pale green panel.
+      return table(kv, b.small ? 'margin:22px 0 0;background:' + P.mist + ';padding:10px 0;border-radius:6px;' : 'margin:0 0 24px;');
     }
     case 'table': {
       // A list read as a ledger, whatever its width, so four columns never squeeze into 390px:
@@ -1258,13 +1300,13 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
     case 'link': {
       var out = '';
       if (b.url !== '') {
-        // The button is a bordered card the width of the page, small caps in the green, so the
-        // whole row is the tap target: the cell carries padding for Outlook, which ignores it on
-        // an anchor, and the anchor is a block with padding of its own for every other client.
+        // The button is a green card the width of the page, small caps in ivory, so the whole
+        // row is the tap target: the cell carries padding for Outlook, which ignores it on an
+        // anchor, and the anchor is a block with padding of its own for every other client.
         out += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 0;"><tr>' +
-          '<td align="center" style="border:1px solid ' + P.green + ';padding:6px 12px;">' +
+          '<td align="center" style="background:' + P.green + ';border-radius:6px;padding:6px 12px;">' +
           '<a href="' + IS9WD_mailEsc_(b.url) + '" style="display:block;padding:10px 8px;' +
-          IS9WD_mailCapsStyle_(F, P.green, 13, '0.18em', 700) + 'line-height:1.3;text-decoration:none;">' +
+          IS9WD_mailCapsStyle_(F, P.paper, 13, '0.18em', 700) + 'line-height:1.3;text-decoration:none;">' +
           IS9WD_mailCaps_(b.text) + '</a></td></tr></table>' +
           // The raw address under it, in an anchor of its own colour, because Gmail autolinks a
           // bare address in its own blue and underlines it.
@@ -1687,7 +1729,7 @@ function IS9WD_sendSundayBrief_(opt) {
   try {
     var items = IS9WD_readItems_();
     var bc = IS9WD_briefContext_(cfg, items);
-    var meta = { title: IS9WD_MAIL_BRAND_, eyebrow: 'Sunday Brief', sub: bc.weekLine, foot: IS9WD_MAIL_FOOT_ };
+    var meta = IS9WD_mailMeta_(ctx, null, 'Sunday Brief');
     IS9WD_mailSend_(ctx.adminEmail, IS9WD_briefSubject_(bc), IS9WD_briefBlocks_(bc), meta, ctx);
     keys.set(adminKey);
     out.sent = 1;
@@ -1882,7 +1924,7 @@ function IS9WD_mailPreflight_() {
     to: ctx.adminEmail || '(blank admin address)',
     subject: IS9WD_mailSubject_(ctx, IS9WD_briefSubject_(bc)),
     blocks: IS9WD_briefBlocks_(bc),
-    meta: { title: IS9WD_MAIL_BRAND_, eyebrow: 'Sunday Brief', sub: bc.weekLine, foot: IS9WD_MAIL_FOOT_ },
+    meta: IS9WD_mailMeta_(ctx, null, 'Sunday Brief'),
     count: 1
   });
   out.lines.push('', 'Nothing was sent. ' + out.previews.length + ' rendering(s) follow.');
