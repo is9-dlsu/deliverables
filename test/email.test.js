@@ -158,6 +158,9 @@ console.log('\n2. The Monday email');
   check('the closing signs as the Society', has(body, 'For a financially literate Lasallian community,'), true);
   check('greeting falls back to the committee', has(text(monday(ctx, entryOf({ fullName: '' }), ITEMS)), 'Dear Partnerships,'), true);
   check('title case keeps the small words small', fn('IS9WD_titleCase_')('EXECUTIVE VICE PRESIDENT FOR EXTERNALS'), 'Executive Vice President for Externals');
+  check('title case keeps a short acronym', fn('IS9WD_titleCase_')('EVP FOR IT'), 'EVP for IT');
+  check('title case capitalises after a hyphen', fn('IS9WD_titleCase_')('VICE-PRESIDENT FOR EXTERNALS'), 'Vice-President for Externals');
+  check('a position typed in mixed case prints as typed', fn('IS9WD_titleCase_')(' Vice President for MOA '), 'Vice President for MOA');
   check('the week line is in the body', has(body, 'WEEK 04  |  SEP 28 TO OCT 4  |  A.Y. 2026 - 2027'), true);
   check('the count sentence', has(body, 'Here are your 3 deliverables for week 04, September 28 to October 4, 2026.'), true);
   check('a single item reads singular', has(text(monday(ctx, entry, [ITEMS[1]])), 'Here is your deliverable for week 04'), true);
@@ -331,6 +334,21 @@ console.log('\n5. The renderers');
   check('html with a band prints it once, with the title as its alt text',
     [count(hb, '<img src="https://x.example.test/mail/band.jpg"'), has(hb, 'alt="Partnerships"'), has(hb, '>IS9</td>')], [1, true, false]);
   check('the ribbon opens the body and the foot', count(h, 'background:#CFC0E0;font-size:1px'), 2);
+  check('the band alt text is set in ivory, centred, so a client that hides images still shows the name',
+    /<img [^>]*color:#FBF9F3;[^>]*text-align:center;[^>]*>/.test(hb), true);
+  check('a running head holds its line by attribute as well as by style', has(h, '<td nowrap style='), true);
+  const ht = html([
+    { k: 'table', head: ['ID', 'Committee or office', 'Deliverable', 'Was due'], rows: [['D-1', 'R & D', 'x', 'Mon']] },
+    { k: 'table', head: ['Committee or office', 'Active', 'Notes'], rows: [['R & D', '2', "a & b's"]] },
+    { k: 'kv', rows: [['Prepared by', 'X'], ['Checked by', 'Y']], small: true },
+  ], { title: 'T' });
+  check('a brief table escapes each cell once', [count(ht, 'R &amp; D'), has(ht, '&amp;amp;'), has(ht, 'a &amp; b&#39;s')], [2, false, true]);
+  check('the sign-off panel pads its first and last rows and keeps its corners',
+    [has(ht, 'padding:14px 16px 4px'), has(ht, 'padding:4px 16px 14px'), has(ht, 'border-collapse:separate')], [true, true, true]);
+  const many = [];
+  for (let i = 0; i < 30; i++) many.push({ id: 'D-' + i, row: i + 2, committee: 'C', title: 'T' + i, when: 'Mon' });
+  const capped = fn('IS9WD_briefItemTable_')(many);
+  check('a brief list is cut at twenty five rows with a count of the rest', [capped.length, capped[25][2]], [26, 'and 5 more']);
   check('html paints no cream and no red or green that is not the palette',
     [has(h, '#e9ebd4'), /#(ff0000|00ff00|d32f2f|2e7d32)/i.test(h)], [false, false]);
   check('html uses only the letter palette', (h.match(/#[0-9a-fA-F]{6}\b/g) || []).every((x) =>

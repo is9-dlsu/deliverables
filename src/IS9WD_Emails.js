@@ -66,8 +66,12 @@ var IS9WD_MAIL_BATCH_RESERVE_ = 100;
 var IS9WD_MAIL_BRIEF_RESERVE_ = 5;
 
 // How many log rows the failure mail carries, and where a long list in the brief is cut.
+// The cap is what keeps the brief under Gmail's 102 KB clip: three lists of forty ledger rows
+// on top of the brief's own 35 KB would pass it, and a clipped brief loses the machine, the
+// housekeeping, the workbook link and the signature. Twenty five rows a list keeps the worst
+// case near 80 KB.
 var IS9WD_MAIL_LOG_TAIL_ = 5;
-var IS9WD_MAIL_LIST_CAP_ = 40;
+var IS9WD_MAIL_LIST_CAP_ = 25;
 
 var IS9WD_JOB_MONDAY_ = 'MONDAY_ASSIGNMENTS';
 var IS9WD_JOB_DIGEST_ = 'DAILY_DIGEST';
@@ -118,18 +122,32 @@ var IS9WD_MAIL_CLOSE_ = 'For a financially literate Lasallian community,';
 
 // A position as the directory shouts it, as a letter prints it: EXECUTIVE VICE PRESIDENT FOR
 // EXTERNALS becomes Executive Vice President for Externals. Small words stay small unless they
-// open the phrase.
+// open the phrase, a short all caps token (VP, EVP, IT, IS9) stays as typed, a hyphenated word
+// capitalises each part, and a position typed in mixed case already prints exactly as typed,
+// because a person chose that case.
 function IS9WD_titleCase_(text) {
+  var raw = IS9WD_trim_(text);
+  if (/[a-z]/.test(raw)) return raw;
   var small = { 'for': 1, 'of': 1, 'and': 1, 'the': 1, 'in': 1, 'on': 1, 'to': 1 };
-  var words = IS9WD_trim_(text).toLowerCase().split(/\s+/);
+  var words = raw.toLowerCase().split(/\s+/);
   var out = [];
   for (var i = 0; i < words.length; i++) {
     var w = words[i];
     if (w === '') continue;
     if (i > 0 && small[w]) { out.push(w); continue; }
-    out.push(w.charAt(0).toUpperCase() + w.slice(1));
+    out.push(IS9WD_titleWord_(w));
   }
   return out.join(' ');
+}
+
+function IS9WD_titleWord_(word) {
+  var parts = word.split('-');
+  for (var k = 0; k < parts.length; k++) {
+    var part = parts[k];
+    if (part === '') continue;
+    parts[k] = part.length <= 3 ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1);
+  }
+  return parts.join('-');
 }
 var IS9WD_MAIL_FOOT_ = 'Sent by the IS9 Weekly Deliverables Tracker. Reply to this message ' +
   'if something on your list is wrong.';
@@ -714,12 +732,14 @@ function IS9WD_briefContext_(cfg, items) {
     var terminal = it.active !== true && IS9WD_txt_(it.status) !== '';
     if (it.id === '' && it.typed === true) noId++;
     if (it.active === true && d !== null && today !== null && d < today) {
+      // The ledger's right column is 96 px wide on a phone, so the date is the short form the
+      // feed uses, Fri, Sep 25, and not the long one a letter's body prints.
       overdue.push({ id: it.id, row: it.row, committee: it.committee, title: it.title,
-        when: IS9WD_longDateDay(it.deadline) });
+        when: IS9WD_ddd_(it.deadline) });
     }
     if (terminal && when !== null && ws !== null && when >= ws - 7 && when <= ws - 1) {
       doneLastWeek.push({ id: it.id, row: it.row, committee: it.committee, title: it.title,
-        when: IS9WD_longDate(it.statusAt) });
+        when: IS9WD_ddd_(it.statusAt) });
     }
     if (terminal && when !== null && today !== null && retireDays > 0 && when <= today - retireDays) {
       retireWaiting++;
@@ -947,6 +967,9 @@ function IS9WD_mailHtml_(blocks, meta) {
   return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<meta name="x-apple-disable-message-reformatting">' +
+    // The letter is a light page and says so, so Apple Mail and Outlook keep the ivory rather
+    // than inverting it in dark mode. Gmail ignores the hint and recolours on its own.
+    '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">' +
     '<title>' + IS9WD_mailEsc_(m.title) + '</title></head>' +
     '<body style="margin:0;padding:0;background:' + IS9WD_MAIL_INK_.page +
     ';-webkit-text-size-adjust:100%;">' +
@@ -1116,8 +1139,11 @@ function IS9WD_mailMasthead_(m, P, F, figures) {
   var band = IS9WD_txt_(m.band);
   var top = band !== ''
     ? '<tr><td style="padding:0;background:' + P.green + ';">' +
+      // The alt text is styled like the text mark, because a client that hides images prints
+      // it in its own default black otherwise, which on the green is no name at all.
       '<img src="' + IS9WD_mailEsc_(band) + '" width="600" alt="' + IS9WD_mailEsc_(m.title) + '" ' +
-      'style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">' +
+      'style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;' +
+      'color:' + P.paper + ';font-family:' + F.sans + ';font-size:13px;line-height:1.5;letter-spacing:0.2em;text-align:center;">' +
       '</td></tr>'
     : '<tr><td align="center" style="padding:30px 24px 0;background:' + P.green + ';">' +
       '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>' +
@@ -1203,7 +1229,7 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
       }
       // A running head: the label in small caps in plum, a hairline running out from it.
       return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 14px;">' +
-        '<tr><td style="padding:0 12px 0 0;white-space:nowrap;' + IS9WD_mailCapsStyle_(F, P.plum, 12, '0.2em', 700) + '">' +
+        '<tr><td nowrap style="padding:0 12px 0 0;white-space:nowrap;' + IS9WD_mailCapsStyle_(F, P.plum, 12, '0.2em', 700) + '">' +
         IS9WD_mailCaps_(b.text) + '</td>' +
         '<td width="100%" style="border-top:1px solid ' + P.line + ';height:1px;font-size:1px;line-height:1px;">&nbsp;</td>' +
         '</tr></table>';
@@ -1250,7 +1276,9 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
         var row = b.rows[j];
         var hot = row[2] === true;
         var edgeKv = b.small ? '' : 'border-bottom:1px solid ' + P.faint + ';';
-        var pad = b.small ? '4px 16px' : '9px 0';
+        var pad = b.small
+          ? (j === 0 ? '14px' : '4px') + ' 16px ' + (j === b.rows.length - 1 ? '14px' : '4px')
+          : '9px 0';
         kv.push('<tr>' +
           '<td valign="top" width="40%" style="width:40%;padding:' + pad + ';padding-right:14px;' + edgeKv + '">' +
           caps(row[0], hot ? P.purple : P.sage, hot ? 700 : 400) + '</td>' +
@@ -1259,7 +1287,7 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
           IS9WD_mailEsc_(row[1]) + '</td></tr>');
       }
       // The small ledger, which is the sign-off, sits on a pale green panel.
-      return table(kv, b.small ? 'margin:22px 0 0;background:' + P.mist + ';padding:10px 0;border-radius:6px;' : 'margin:0 0 24px;');
+      return table(kv, b.small ? 'margin:22px 0 0;background:' + P.mist + ';border-radius:6px;border-collapse:separate;' : 'margin:0 0 24px;');
     }
     case 'table': {
       // A list read as a ledger, whatever its width, so four columns never squeeze into 390px:
@@ -1282,12 +1310,14 @@ function IS9WD_mailBlockHtml_(b, P, F, chapter) {
         var extra = [];
         for (var c = 0; c < line.length; c++) {
           if (c === mainAt || c === rightAt) continue;
-          if (IS9WD_txt_(line[c]) !== '') extra.push(IS9WD_mailEsc_(line[c]));
+          if (IS9WD_txt_(line[c]) !== '') extra.push(IS9WD_txt_(line[c]));
         }
+        // Escaped once, at the print: caps() escapes the line above, the line below is escaped here.
         var above = extra.length && mainAt > 0
           ? '<div style="padding:0 0 3px;">' + caps(extra.join('  ·  ')) + '</div>' : '';
         var below = extra.length && mainAt === 0
-          ? '<div style="padding:3px 0 0;' + IS9WD_mailSerifStyle_(F, P.slate, 13, 'font-style:italic;') + '">' + extra.join(', ') + '</div>' : '';
+          ? '<div style="padding:3px 0 0;' + IS9WD_mailSerifStyle_(F, P.slate, 13, 'font-style:italic;') + '">' +
+            IS9WD_mailEsc_(extra.join(', ')) + '</div>' : '';
         cells.push('<tr>' +
           '<td valign="top" style="padding:10px 0;' + edgeT + '">' + above +
           '<div style="' + IS9WD_mailSerifStyle_(F, P.ink, 14, 'line-height:1.45;') + '">' + IS9WD_mailEsc_(line[mainAt]) + '</div>' + below + '</td>' +
