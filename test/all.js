@@ -22,6 +22,7 @@ const FILES = [
   ['archive.test.js', 'the two archive jobs, against reference 10.1 and the trend block'],
   ['api.test.js', 'the endpoint decision layer, against SPEC section 3'],
   ['charts.test.js', 'every statistics chart keeps its plot on the canvas'],
+  ['tidy.test.js', 'the title and remark tidy, against the real column layout'],
 ];
 
 let failed = 0;

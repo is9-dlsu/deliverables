@@ -54,11 +54,18 @@
 // either end breaks a slide and fails the self test, and nobody can see it in the cell. Two
 // places keep them clean: onEdit, as a cell is typed or pasted, and the hourly pass and Sync,
 // over every row. Only whitespace changes, and only a cell that needs it is written.
+// The two text columns by their real headers. One place, because a guessed header ('Title'
+// for 'Title of Task') threw on the first live run and a test now runs this against the
+// real layout.
+function IS9WD_itemsTextCols_() {
+  return [IS9WD_itemColIndex_('Title of Task'), IS9WD_itemColIndex_('Remark')];
+}
+
 function IS9WD_itemsTidyRows_(sheet, first, last, onlyCols) {
   var lo = Math.max(first, IS9WD_ITEMS.firstRow);
   var hi = Math.min(last, IS9WD_ITEMS.lastRow);
   if (hi < lo) return 0;
-  var cols = onlyCols || [IS9WD_itemColIndex_('Title'), IS9WD_itemColIndex_('Remark')];
+  var cols = onlyCols || IS9WD_itemsTextCols_();
   var changed = 0;
   for (var c = 0; c < cols.length; c++) {
     var values = sheet.getRange(lo, cols[c], hi - lo + 1, 1).getValues();
@@ -80,7 +87,7 @@ function IS9WD_itemsTidyEdit_(range) {
   if (last < IS9WD_ITEMS.firstRow || last - first >= 500) return 0;
   var left = range.getColumn();
   var right = range.getLastColumn();
-  var want = [IS9WD_itemColIndex_('Title'), IS9WD_itemColIndex_('Remark')];
+  var want = IS9WD_itemsTextCols_();
   var cols = [];
   for (var i = 0; i < want.length; i++) if (want[i] >= left && want[i] <= right) cols.push(want[i]);
   if (!cols.length) return 0;
