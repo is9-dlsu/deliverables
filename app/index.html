@@ -46,6 +46,38 @@
   request tells no new party that an officer opened their page.
 -->
 <script src="./endpoint.js" onerror="window.IS9WD_ENDPOINT=''"></script>
+<script>
+  // THE LIST IS ASKED FOR NOW, before the page's code has loaded. Apps Script takes two to
+  // three seconds to answer whatever the page does, so the only way to shorten the wait is to
+  // start it earlier: wire.js picks this reply up instead of sending a second request. The
+  // token rule is the page's own, and nothing here runs without a well formed token and a
+  // real endpoint address.
+  (function () {
+    try {
+      var url = String(window.IS9WD_ENDPOINT || '').trim();
+      if (!url || url === 'PASTE_THE_EXEC_URL_HERE') return;
+      var shape = /^[0-9a-hjkmnp-tv-z]{26}$/;
+      var token = String(location.hash || '').replace(/^#/, '').trim();
+      if (!shape.test(token)) {
+        try { token = sessionStorage.getItem('is9wd.token') || ''; } catch (e) { token = ''; }
+      }
+      if (!shape.test(token)) return;
+      window.IS9WD_BOOT = {
+        token: token,
+        used: false,
+        text: fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ v: 1, action: 'state', token: token, payload: {} }),
+          redirect: 'follow',
+          credentials: 'omit'
+        }).then(function (r) { return r.text(); }).catch(function () { return null; })
+      };
+    } catch (e) {
+      // The page's own first read covers anything that went wrong here.
+    }
+  })();
+</script>
 </head>
 <body>
 <div id="app">

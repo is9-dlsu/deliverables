@@ -16,7 +16,7 @@
 import { h, render } from './lib/preact.module.js';
 import { useState, useEffect, useRef, useCallback } from './lib/hooks.module.js';
 import htm from './lib/htm.module.js';
-import { call, newRequestId, endpointReady } from './wire.js';
+import { call, newRequestId, endpointReady, bootState } from './wire.js';
 import { quoteForToday } from './quotes.js';
 
 const html = htm.bind(h);
@@ -106,6 +106,21 @@ function Notice({ kind, title, detail, onRetry }) {
 
 // A whole item. The row is the tap target, not a small checkbox: a 44 px minimum is the
 // difference between ticking your task and ticking the one under it on a phone.
+// THE FIRST OPEN ON A NEW PHONE, before there is any list: the shape of one rather than a
+// spinner, so the page already looks like itself and the rows fill in where the eye is. A phone
+// that has opened the page before shows its last list instead and never sees this.
+function Skeleton() {
+  return html`
+    <div class="skeleton" role="status" aria-live="polite">
+      <span class="sr-only">Loading your list</span>
+      ${[0, 1, 2, 3, 4].map((i) => html`
+        <div key=${i} class="sk-row" aria-hidden="true">
+          <span class="sk-box"></span>
+          <span class="sk-lines"><span class="sk-line"></span><span class="sk-line short"></span></span>
+        </div>`)}
+    </div>`;
+}
+
 // THE QUOTE OF THE DAY, the same line for every page on the same Manila day, from quotes.js.
 // It turns over at Manila midnight, at the next open or refresh.
 function Quote() {
@@ -462,7 +477,11 @@ function App() {
 
   const load = useCallback(async () => {
     setError(null);
-    const env = await call('state', token, {});
+    // The first read of the page was already sent by index.html; a bounce or a lost connection
+    // there is sent again the normal way.
+    let env = await bootState(token);
+    const code = env && !env.ok && env.error ? env.error.code : '';
+    if (!env || code === 'DOWNGRADED' || code === 'OFFLINE') env = await call('state', token, {});
     lastLoad.current = Date.now();
     if (env.ok) {
       accept(env.data);
@@ -643,7 +662,14 @@ function App() {
         onRetry=${error.code === 'OFFLINE' || error.code === 'DOWNGRADED' ? load : null} />
     <//>`;
   }
-  if (!state) return html`<${Shell}><${Spinner} /><//>`;
+  if (!state) {
+    return html`<${Shell}>
+      <div class="body">
+        <${Quote} />
+        <${Skeleton} />
+      </div>
+    <//>`;
+  }
 
   const admin = state.role === 'admin';
   const items = state.items || [];

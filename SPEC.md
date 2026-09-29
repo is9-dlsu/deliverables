@@ -30,6 +30,7 @@ Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet acces
 - **A container-bound Apps Script project**: the JSON endpoint, the emails, the hourly job, and the setup that builds and repairs the workbook.
 - **A React app** in `app/`, built to static files, hosted free on GitHub Pages under `github.com/is9-dlsu`. The repo is public, because a free organization cannot publish Pages from a private repo. Every page opens on a quote of the day, the same line for everyone on the same Manila day, from `app/quotes.js`: public domain lines and the Society's own, each naming the work it comes from.
 - **One hourly trigger** that runs every scheduled job.
+- **A keep warm workflow**, `.github/workflows/keep-warm.yml`, that pings the endpoint with a read only probe every ten minutes from 06:00 to midnight Manila time. Measured on 2026-09-30, a full list read and a bare ping both take about three seconds, so what an officer waits on is Apps Script itself; the ping keeps the script loaded and the settings and item memories filled, so a first open after a quiet spell is not a cold one. The page also sends its first read from the HTML, before its own code loads, and shows the shape of the list rather than a spinner while it waits.
 - **Four emails**, all sent by the script from Ethan's DLSU account.
 
 ## 3. The rules that matter

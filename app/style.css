@@ -711,3 +711,34 @@ body::after {
 .item.pending { opacity: 0.62; }
 /* The list on screen came from this phone's last visit and the fresh one is on its way. */
 .week .syncing { font-style: italic; opacity: 0.75; }
+
+/* THE FIRST OPEN ON A NEW PHONE: the shape of the list, not a spinner. The rows sit where the
+   real ones will, so nothing jumps when they arrive. */
+.skeleton { padding: 2px 0 8px; }
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.sk-box { flex: 0 0 26px; height: 26px; border-radius: 50%; background: rgba(88, 117, 106, 0.14); }
+.sk-lines { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.sk-line { display: block; height: 12px; width: 72%; border-radius: 6px; background: rgba(88, 117, 106, 0.14); }
+.sk-line.short { width: 44%; height: 10px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sk-box, .sk-line {
+    background: linear-gradient(90deg, rgba(88, 117, 106, 0.10) 0%, rgba(88, 117, 106, 0.22) 50%,
+      rgba(88, 117, 106, 0.10) 100%);
+    background-size: 200% 100%;
+    animation: sk-sheen 1.2s ease-in-out infinite;
+  }
+  @keyframes sk-sheen { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  /* The list settles in rather than appearing in one frame. */
+  .list { animation: list-in 220ms ease-out both; }
+  @keyframes list-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}

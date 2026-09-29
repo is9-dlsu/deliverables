@@ -96,6 +96,19 @@ async function callOnce(action, token, payload, opts) {
     return offline('The reply could not be read. Try again in a moment.');
   }
 
+  return readEnvelope(action, text);
+}
+
+function offline(message) {
+  return {
+    v: 1, ok: false, action: '', serverTime: '',
+    error: { code: 'OFFLINE', message },
+  };
+}
+
+// The envelope inside a reply, or an OFFLINE one when the reply is not an envelope. One reading
+// for a normal call and for the first read index.html starts, so the two can never disagree.
+function readEnvelope(action, text) {
   try {
     const env = JSON.parse(text);
     if (env && typeof env === 'object' && typeof env.ok === 'boolean') {
@@ -119,9 +132,20 @@ async function callOnce(action, token, payload, opts) {
   return offline('The sheet answered with something unreadable. Tell Ethan.');
 }
 
-function offline(message) {
-  return {
-    v: 1, ok: false, action: '', serverTime: '',
-    error: { code: 'OFFLINE', message },
-  };
+// THE FIRST READ STARTS IN index.html, before this module or the framework has loaded, so the
+// seconds Apps Script takes overlap the page's own loading instead of following it. It is used
+// once, only for the same link and only as a read; a reply that did not arrive as a usable
+// envelope falls back to a normal call, which retries a bounce the usual way.
+export async function bootState(token) {
+  const boot = typeof window !== 'undefined' ? window.IS9WD_BOOT : null;
+  if (!boot || boot.used || boot.token !== token || !boot.text) return null;
+  boot.used = true;
+  let text = null;
+  try {
+    text = await boot.text;
+  } catch (err) {
+    text = null;
+  }
+  if (typeof text !== 'string' || text === '') return null;
+  return readEnvelope('state', text);
 }

@@ -1,0 +1,48 @@
+# Keeps the endpoint warm, so the first open after a quiet spell answers in about three seconds
+# rather than five or more.
+#
+# WHY. Measured on 2026-09-30: a full state read and a bare ping both take about three seconds,
+# so the endpoint's own work is no longer the cost; what varies is Apps Script starting cold,
+# and the settings and item memories having expired. A probe ping every ten minutes, from six in
+# the morning to midnight Manila time, keeps the script loaded and both memories filled, so an
+# officer opening their link is answered from them.
+#
+# SAFE BY CONSTRUCTION. The ping is the one action that needs no token, the probe only reads,
+# nothing is logged, and the /exec address comes from the same repository variable the page's
+# own publish workflow reads, IS9WD_ENDPOINT, so no address is committed here.
+#
+# GitHub pauses a scheduled workflow in a public repository after sixty days without a commit;
+# Actions > Keep the endpoint warm > Enable workflow turns it back on.
+name: Keep the endpoint warm
+
+on:
+  schedule:
+    # 06:00 to 23:59 in Manila is 22:00 to 15:59 UTC.
+    - cron: '*/10 22-23 * * *'
+    - cron: '*/10 0-15 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ask the endpoint for a probe
+        env:
+          ENDPOINT: ${{ vars.IS9WD_ENDPOINT }}
+        run: |
+          set -u
+          if [ -z "${ENDPOINT}" ]; then
+            echo "IS9WD_ENDPOINT is not set, so there is nothing to keep warm."
+            exit 0
+          fi
+          loc=$(curl -s -o /dev/null -w '%{redirect_url}' -X POST \
+            -H 'Content-Type: text/plain' \
+            --data '{"v":1,"action":"ping","payload":{"probe":1}}' "${ENDPOINT}")
+          if [ -z "${loc}" ]; then
+            echo "The endpoint did not redirect; it answers again at the next run."
+            exit 0
+          fi
+          curl -s -o /dev/null -w 'Warm: answered %{http_code} in %{time_total}s\n' "${loc}"
