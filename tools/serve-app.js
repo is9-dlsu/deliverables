@@ -12,6 +12,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..', 'app');
 const PORT = 8123;
+const DELAY = Number(process.env.IS9WD_DELAY_MS || 0) || 0;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.md': 'text/plain' };
 
@@ -100,8 +101,12 @@ http.createServer((req, res) => {
       } else {
         env = { v: 1, ok: true, action: 'ping', serverTime: now, data: { appOn: true, transport: 'fetch' } };
       }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(env));
+      // IS9WD_DELAY_MS slows every answer to what Apps Script really takes, two to five seconds,
+      // so the page's instant taps can be watched against a server that is not instant.
+      setTimeout(() => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(env));
+      }, DELAY);
     });
     return;
   }

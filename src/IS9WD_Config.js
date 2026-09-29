@@ -4043,7 +4043,25 @@ function IS9WD_namedDuplicates_() {
 // which is how a grown sign-off store stays inside the snapshot without asking the sheet how
 // tall it is; on a cold memory it asks.
 var IS9WD_SNAP_KEY_ = 'IS9WD_SETTINGS_SNAP_v1';
-var IS9WD_SNAP_TTL_ = 300;
+// Six hours, the most the cache keeps, and for one Manila day only. The settings change only
+// when somebody edits 01 | Configuration or _Engine, which onEdit sees and every script write
+// resets; what changes by itself is the date, the week and the term, which is why the key
+// carries the day.
+var IS9WD_SNAP_TTL_ = 21600;
+
+function IS9WD_snapKey_() {
+  return IS9WD_SNAP_KEY_ + IS9WD_memoryDay_();
+}
+
+// Today in Manila as _yyyyMMdd, so a memory kept yesterday is never read today. Blank where
+// Utilities is not there, which is only the Node tests.
+function IS9WD_memoryDay_() {
+  try {
+    return '_' + Utilities.formatDate(new Date(), 'Asia/Manila', 'yyyyMMdd');
+  } catch (err) {
+    return '';
+  }
+}
 var IS9WD_SNAP_HIT_ = false;
 
 function IS9WD_cfgSnapshot_(force) {
@@ -4097,7 +4115,7 @@ function IS9WD_cfgSnapshot_(force) {
 
 function IS9WD_snapFromCache_() {
   try {
-    var held = CacheService.getScriptCache().get(IS9WD_SNAP_KEY_);
+    var held = CacheService.getScriptCache().get(IS9WD_snapKey_());
     if (!held) return null;
     var snap = IS9WD_unpackJson_(held);
     return snap && snap.sheets && snap.order ? snap : null;
@@ -4110,7 +4128,7 @@ function IS9WD_snapToCache_(snap) {
   try {
     var text = JSON.stringify(IS9WD_packDates_(snap));
     if (text.length > 90000) return;
-    CacheService.getScriptCache().put(IS9WD_SNAP_KEY_, text, IS9WD_SNAP_TTL_);
+    CacheService.getScriptCache().put(IS9WD_snapKey_(), text, IS9WD_SNAP_TTL_);
   } catch (err) {
     Logger.log('IS9WD: the settings snapshot was not remembered: ' + err);
   }
@@ -4135,6 +4153,9 @@ function onEdit(e) {
     if (name === IS9WD_TAB.ITEMS) {
       // A title or remark typed with a stray space or line break is cleaned as it lands.
       if (typeof IS9WD_itemsTidyEdit_ === 'function') IS9WD_itemsTidyEdit_(range);
+      // A row whose title was just typed gets its ID now, so it is on the officer's phone at
+      // the next open rather than after the hourly pass.
+      if (typeof IS9WD_itemsIdOnEdit_ === 'function') IS9WD_itemsIdOnEdit_(range);
       if (typeof IS9WD_itemsCacheReset_ === 'function') IS9WD_itemsCacheReset_(true);
       if (typeof IS9WD_itemsHintLift_ === 'function') IS9WD_itemsHintLift_(range.getLastRow());
     } else if (name === IS9WD_TAB.CONFIG || name === IS9WD_TAB.ENGINE) {
@@ -4148,7 +4169,7 @@ function onEdit(e) {
 
 function IS9WD_snapReset_() {
   try {
-    CacheService.getScriptCache().remove(IS9WD_SNAP_KEY_);
+    CacheService.getScriptCache().remove(IS9WD_snapKey_());
   } catch (err) {
     Logger.log('IS9WD: the settings snapshot was not cleared: ' + err);
   }

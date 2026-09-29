@@ -124,6 +124,7 @@ function Item({ item, busy, undoLeft, onToggle, showCommittee, admin }) {
   // `fresh` marks the item ticked on this screen inside its undo window: the only one whose
   // circle should move. Without it every earlier tick would pop again on each load.
   const cls = ['item', done ? 'done' : '', overdue ? 'overdue' : '', busy ? 'busy' : '',
+    item.pending ? 'pending' : '',
     done && undoLeft > 0 ? 'fresh' : ''].filter(Boolean).join(' ');
   return html`
     <li class=${cls}>
@@ -131,7 +132,7 @@ function Item({ item, busy, undoLeft, onToggle, showCommittee, admin }) {
         type="button"
         class="row"
         aria-pressed=${done}
-        disabled=${busy}
+        disabled=${item.pending === true}
         onClick=${() => onToggle(item)}>
         <span class="box" aria-hidden="true">${done ? html`<${Check} />` : null}</span>
         <span class="text">
@@ -145,8 +146,8 @@ function Item({ item, busy, undoLeft, onToggle, showCommittee, admin }) {
           </span>
         </span>
       </button>
-      ${busy ? html`<span class="saving">Saving...</span>` : null}
-      ${!busy && done && undoLeft > 0 ? html`
+      ${busy || item.pending ? html`<span class="saving">Saving...</span>` : null}
+      ${done && undoLeft > 0 ? html`
         <button
           type="button"
           class="undo"
@@ -164,7 +165,7 @@ function Item({ item, busy, undoLeft, onToggle, showCommittee, admin }) {
 // done stays one tap away, except a row ticked on this screen inside its undo window, which
 // stays in place so the undo is where the thumb already is. The order is the server's:
 // deadline first, then ID.
-function ItemList({ items, busyId, undoLeftFor, onToggle, showCommittee, admin, foldKey, folds, setFolds }) {
+function ItemList({ items, busyFor, undoLeftFor, onToggle, showCommittee, admin, foldKey, folds, setFolds }) {
   const open = items.filter((i) => i.active !== false);
   const done = items.filter((i) => i.active === false);
   const pinned = done.filter((i) => undoLeftFor(i) > 0);
@@ -177,7 +178,7 @@ function ItemList({ items, busyId, undoLeftFor, onToggle, showCommittee, admin, 
         <${Item}
           key=${item.id || 'row' + index}
           item=${item}
-          busy=${item.id !== '' && busyId === item.id}
+          busy=${busyFor(item)}
           undoLeft=${undoLeftFor(item)}
           showCommittee=${showCommittee}
           admin=${admin}
@@ -279,13 +280,16 @@ function AddForm({ people, committee, busy, note, onSave, fixed }) {
   const [deadline, setDeadline] = useState('');
   const [remark, setRemark] = useState('');
   useEffect(() => { setOffice(committee || ''); }, [committee]);
-  const ready = office !== '' && title.trim() !== '' && deadline !== '' && !busy;
+  const ready = office !== '' && title.trim() !== '' && deadline !== '';
   const submit = (e) => {
     e.preventDefault();
     if (!ready) return;
-    onSave({ committee: office, title: title.trim(), deadline, remark: remark.trim() }, () => {
-      setTitle(''); setRemark(''); setDeadline('');
-    });
+    const kept = { title, deadline, remark };
+    setTitle(''); setRemark(''); setDeadline('');
+    Promise.resolve(onSave({ committee: office, title: title.trim(), deadline, remark: remark.trim() }))
+      .then((ok) => {
+        if (ok === false) { setTitle(kept.title); setDeadline(kept.deadline); setRemark(kept.remark); }
+      });
   };
   return html`
     <form class="add" onSubmit=${submit}>
@@ -293,29 +297,28 @@ function AddForm({ people, committee, busy, note, onSave, fixed }) {
       ${fixed ? null : html`
         <label class="field">
           <span>For</span>
-          <select value=${office} disabled=${busy} onChange=${(e) => setOffice(e.target.value)}>
+          <select value=${office} onChange=${(e) => setOffice(e.target.value)}>
             <option value="">Choose a committee or office</option>
             ${people.map((p) => html`<option key=${p.key} value=${p.committee}>${p.committee}</option>`)}
           </select>
         </label>`}
       <label class="field">
         <span>Task</span>
-        <input type="text" maxlength="40" value=${title} disabled=${busy}
+        <input type="text" maxlength="40" value=${title}
           placeholder="Up to 40 characters" onInput=${(e) => setTitle(e.target.value)} />
       </label>
       <div class="field-row">
         <label class="field">
           <span>Deadline</span>
-          <input type="date" value=${deadline} disabled=${busy} onInput=${(e) => setDeadline(e.target.value)} />
+          <input type="date" value=${deadline} onInput=${(e) => setDeadline(e.target.value)} />
         </label>
         <label class="field">
           <span>Remark</span>
-          <input type="text" maxlength="30" value=${remark} disabled=${busy}
+          <input type="text" maxlength="30" value=${remark}
             placeholder="Optional, up to 30" onInput=${(e) => setRemark(e.target.value)} />
         </label>
       </div>
-      <button type="submit" class="save" disabled=${!ready}>${busy ? (fixed ? 'Saving...' : 'Saving and emailing...')
-        : (fixed ? 'Add to my list' : 'Add and notify')}</button>
+      <button type="submit" class="save" disabled=${!ready}>${fixed ? 'Add to my list' : 'Add and notify'}</button>
       ${note ? html`<p class="signoff-note" role="status" aria-live="polite">${note}</p>` : null}
     </form>`;
 }
@@ -366,11 +369,78 @@ function SignoffCard({ state, prepared, checked, busy, note, onPrepared, onCheck
 // The screen
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Speed: the last list on this phone, and every tap on screen before the server answers
+// ---------------------------------------------------------------------------
+
+// THE LAST LIST THIS PHONE SAW, shown the instant the page opens while the fresh one loads, so
+// a second open never waits on Apps Script. Kept per link, for twelve hours, and never trusted
+// for a write: every tick still goes to the server, which checks it against the Sheet.
+const CACHE_PREFIX = 'is9wd.state.';
+const CACHE_HOURS = 12;
+
+function readCached(token) {
+  if (!token) return null;
+  try {
+    const raw = window.localStorage.getItem(CACHE_PREFIX + token);
+    if (!raw) return null;
+    const kept = JSON.parse(raw);
+    if (!kept || !kept.state || Date.now() - kept.at > CACHE_HOURS * 3600 * 1000) return null;
+    return kept.state;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeCached(token, state) {
+  if (!token || !state) return;
+  try {
+    window.localStorage.setItem(CACHE_PREFIX + token, JSON.stringify({ at: Date.now(), state }));
+  } catch (e) {
+    // A full or blocked storage only costs the instant first paint.
+  }
+}
+
+// The server's list with every tap still on its way laid on top, and every add still saving
+// placed by its deadline, so an earlier answer arriving never flips back a later tap.
+function overlay(data, pending, temps) {
+  if (!data || !data.items) return data;
+  const ids = Object.keys(pending);
+  let items = data.items.filter((i) => String(i.id).indexOf('tmp:') !== 0);
+  if (ids.length) {
+    items = items.map((it) => (pending[it.id]
+      ? Object.assign({}, it, { active: pending[it.id].active, overdue: pending[it.id].active ? it.overdue : false })
+      : it));
+  }
+  if (temps.length) {
+    items = items.concat(temps).sort((a, b) => String(a.deadline || '').localeCompare(String(b.deadline || '')));
+  }
+  return Object.assign({}, data, { items });
+}
+
+// "Monday, October 5, 2026" for a row that is still saving, the same words the server sends.
+function longDay(ymd) {
+  const p = String(ymd || '').split('-').map(Number);
+  if (p.length !== 3 || p.some((x) => !isFinite(x))) return '';
+  return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString('en-US',
+    { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 function App() {
   const [token] = useState(readToken);
-  const [state, setState] = useState(null);
+  const [state, setState] = useState(() => readCached(token));
   const [error, setError] = useState(null);
-  const [busyId, setBusyId] = useState('');
+  // WRITES LAND ON SCREEN AT ONCE. A tap flips its row immediately and the save runs behind
+  // it, one at a time and in order; `pending` holds the taps still on their way and `temps` the
+  // adds, and every answer is shown with both laid on top. A failed save re-reads the Sheet and
+  // says why, so the screen never keeps a change the Sheet refused.
+  const pending = useRef({});
+  const temps = useRef([]);
+  const seq = useRef(0);
+  const queue = useRef(Promise.resolve());
+  const lastLoad = useRef(0);
+  const lastTap = useRef({});
+  const [fresh, setFresh] = useState(false);
   const [tick, setTick] = useState(0);
   const tickedAt = useRef({});
   const [prepared, setPrepared] = useState('');
@@ -382,11 +452,20 @@ function App() {
   const [addBusy, setAddBusy] = useState(false);
   const [addNote, setAddNote] = useState('');
 
+  // Every answer from the server goes through here: kept for the next open, shown with the
+  // taps still saving laid on top.
+  function accept(data) {
+    writeCached(token, data);
+    setState(overlay(data, pending.current, temps.current));
+    setFresh(true);
+  }
+
   const load = useCallback(async () => {
     setError(null);
     const env = await call('state', token, {});
+    lastLoad.current = Date.now();
     if (env.ok) {
-      setState(env.data);
+      accept(env.data);
     } else {
       setError(env.error);
     }
@@ -402,6 +481,20 @@ function App() {
       return;
     }
     load();
+  }, [token, load]);
+
+  // BACK TO THE TAB, BACK TO THE SHEET. A page left open reads the Sheet again when it is
+  // looked at after half a minute away, so a row Ethan typed meanwhile is there without a
+  // manual refresh. Never while a tap is still saving.
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState !== 'visible' || !token || !endpointReady()) return;
+      if (Date.now() - lastLoad.current < 30000) return;
+      if (Object.keys(pending.current).length || temps.current.length) return;
+      load();
+    };
+    document.addEventListener('visibilitychange', onShow);
+    return () => document.removeEventListener('visibilitychange', onShow);
   }, [token, load]);
 
   // One timer for the whole screen rather than one per item, so a list of fifteen does not
@@ -440,31 +533,45 @@ function App() {
     return left > 0 ? left : 0;
   }
 
-  async function toggle(item) {
-    if (busyId || !item.id) return;          // one write at a time, so a double tap is one tick
-    const statuses = state.statuses || [];
+  function toggle(item) {
+    if (!item.id || item.pending) return;
+    const now = Date.now();
+    if (now - (lastTap.current[item.id] || 0) < 400) return;   // a double tap is one tap
+    lastTap.current[item.id] = now;
+    const statuses = (state && state.statuses) || [];
     const open = statuses.filter((s) => !s.terminal)[0];
     const done = statuses.filter((s) => s.terminal)[0];
     if (!open || !done) return;
-    const target = item.active === false ? open.name : done.name;
-
-    setBusyId(item.id);
+    const makeDone = item.active !== false;
+    const target = makeDone ? done.name : open.name;
+    const n = ++seq.current;
+    const before = tickedAt.current[item.id];
+    pending.current[item.id] = { active: !makeDone, n };
+    if (makeDone) tickedAt.current[item.id] = now;
+    else delete tickedAt.current[item.id];
     setError(null);
-    const env = await call('setStatus', token, { id: item.id, status: target },
-      { requestId: newRequestId() });
-    setBusyId('');
+    setState((s) => overlay(s, pending.current, temps.current));
 
-    if (env.ok) {
-      if (target === done.name) tickedAt.current[item.id] = Date.now();
-      else delete tickedAt.current[item.id];
-      setState(env.data);                    // the server's own recomputed list, never a guess
-      return;
-    }
-    if (env.error.code === 'NO_CHANGE') {
-      load();                                // somebody else already did it; re-read the truth
-      return;
-    }
-    setError(env.error);
+    queue.current = queue.current.then(async () => {
+      const env = await call('setStatus', token, { id: item.id, status: target },
+        { requestId: newRequestId() });
+      const mine = pending.current[item.id] && pending.current[item.id].n === n;
+      if (mine) delete pending.current[item.id];
+      if (env.ok) {
+        accept(env.data);                    // the server's own recomputed list, never a guess
+        return;
+      }
+      if (env.error && env.error.code === 'NO_CHANGE') {
+        await load();                        // somebody else already did it; re-read the truth
+        return;
+      }
+      if (mine) {
+        if (before) tickedAt.current[item.id] = before;
+        else delete tickedAt.current[item.id];
+      }
+      await load();
+      setError(env.error);
+    }).catch(() => {});
   }
 
   async function saveSignoff() {
@@ -484,31 +591,47 @@ function App() {
     }, { requestId: newRequestId() });
     setSignBusy(false);
     if (env.ok) {
-      setState(env.data);
+      accept(env.data);
       setSignNote('Saved. The carousel feed reads it now.');
       return;
     }
     setSignNote(env.error && env.error.message ? env.error.message : 'It was not saved.');
   }
 
-  async function addItem(payload, onDone) {
-    if (addBusy) return;
-    setAddBusy(true);
-    setAddNote('');
+  // An add shows in the list at once, marked as saving, and the form is free for the next one.
+  // Resolves false when the Sheet refused it, so the form can put the words back.
+  function addItem(payload) {
+    const tempId = 'tmp:' + (++seq.current);
+    const office = payload.committee && payload.committee !== 'mine' ? payload.committee
+      : ((state && state.committee && state.committee.name) || '');
+    temps.current = temps.current.concat([{
+      id: tempId, committee: office, title: payload.title, remark: payload.remark || '',
+      deadline: payload.deadline, deadlineLong: longDay(payload.deadline), deadlineText: '',
+      status: '', active: true, overdue: false, flag: '', pending: true,
+    }]);
+    setAddNote('Saving...');
     setError(null);
-    const env = await call('addItem', token, payload, { requestId: newRequestId() });
-    setAddBusy(false);
-    if (env.ok) {
-      const last = env.data && env.data.lastAdd ? env.data.lastAdd : null;
-      if (env.data && env.data.partial) load(); else setState(env.data);
-      setAddNote(last && last.self ? 'Added to your list, and to the Sheet.'
-        : last && last.notified > 0
-          ? (last.testMode ? 'Added. Test mode sent the notice to you.' : 'Added and emailed.')
-          : 'Added. ' + (last && last.line ? last.line : 'The officer sees it at their next open.'));
-      if (onDone) onDone();
-      return;
-    }
-    setAddNote(env.error && env.error.message ? env.error.message : 'It was not added.');
+    setState((s) => overlay(s, pending.current, temps.current));
+
+    return new Promise((resolve) => {
+      queue.current = queue.current.then(async () => {
+        const env = await call('addItem', token, payload, { requestId: newRequestId() });
+        temps.current = temps.current.filter((t) => t.id !== tempId);
+        if (env.ok) {
+          const last = env.data && env.data.lastAdd ? env.data.lastAdd : null;
+          if (env.data && env.data.partial) await load(); else accept(env.data);
+          setAddNote(last && last.self ? 'Added to your list, and to the Sheet.'
+            : last && last.notified > 0
+              ? (last.testMode ? 'Added. Test mode sent the notice to you.' : 'Added and emailed.')
+              : 'Added. ' + (last && last.line ? last.line : 'The officer sees it at their next open.'));
+          resolve(true);
+          return;
+        }
+        setState((s) => overlay(s, pending.current, temps.current));
+        setAddNote(env.error && env.error.message ? env.error.message : 'It was not added.');
+        resolve(false);
+      }).catch(() => resolve(false));
+    });
   }
 
   if (error && !state) {
@@ -547,6 +670,7 @@ function App() {
         Week ${weekNo(state.week)}
         ${weekSpan(state.week) ? ' · ' + weekSpan(state.week) : ''}
         ${admin ? ' · ' + all.open + ' open across ' + (state.people || []).length + ' officers' : ''}
+        ${fresh ? null : html`<span class="syncing"> · Updating</span>`}
       </p>
       ${items.length > 0 ? html`
         <div class="progress" aria-hidden="true">
@@ -554,7 +678,8 @@ function App() {
         </div>` : null}
     </header>`;
 
-  const listProps = { busyId, undoLeftFor, onToggle: toggle, admin, folds, setFolds };
+  const busyFor = (item) => !!item.id && Object.prototype.hasOwnProperty.call(pending.current, item.id);
+  const listProps = { busyFor, undoLeftFor, onToggle: toggle, admin, folds, setFolds };
 
   return html`
     <${Shell} head=${head}>

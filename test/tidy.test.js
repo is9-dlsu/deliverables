@@ -82,5 +82,51 @@ check('the two text columns resolve to the real headers, C and E', cols, [3, 5])
   check('a paste of five hundred rows is left to the hourly pass', box.IS9WD_itemsTidyEdit_(fakeRange(sheet, 5, 1, 504, 18)), 0);
 }
 
+// THE ID RULE AND THE ID ON EDIT. A row is in use when it names an office or a task, and a
+// title typed in the Sheet gets its ID at once rather than at the next hourly pass.
+{
+  const cells = {};
+  const put = (row, col, v) => { cells[row + ',' + col] = v; };
+  put(5, 2, 'Finance'); put(5, 3, 'Task A');
+  put(6, 6, 'Open');
+  put(7, 1, 'D0001'); put(7, 2, 'Finance'); put(7, 3, 'Done before'); put(7, 6, 'Open');
+  put(8, 3, 'Only a title');
+  const writes = [];
+  const sheet = {
+    getRange(row, col, rows, cols) {
+      return {
+        getValues() {
+          const out = [];
+          for (let r = 0; r < (rows || 1); r++) {
+            const line = [];
+            for (let c = 0; c < (cols || 1); c++) {
+              const v = cells[(row + r) + ',' + (col + c)];
+              line.push(v === undefined ? '' : v);
+            }
+            out.push(line);
+          }
+          return out;
+        },
+        setValue(v) { writes.push([row, col, v]); cells[row + ',' + col] = v; },
+      };
+    },
+  };
+  let reserved = 0;
+  box.IS9WD_sheet_ = () => sheet;
+  box.IS9WD_readConfig_ = () => ({ statuses: { defaultStatus: 'Open' } });
+  box.IS9WD_reserveItemIds_ = (k) => { reserved += k; const out = []; for (let i = 0; i < k; i++) out.push('D01' + String(i).padStart(2, '0')); return out; };
+  box.CacheService = { getScriptCache: () => ({ get: () => null, put: () => {}, remove: () => {} }) };
+  box.LockService = { getDocumentLock: () => ({ tryLock: () => true, releaseLock: () => {}, hasLock: () => false }) };
+
+  const range = (row, col, lastRow, lastCol) => ({ getSheet: () => sheet, getRow: () => row, getLastRow: () => lastRow, getColumn: () => col, getLastColumn: () => lastCol });
+  check('an edit of the remark alone mints nothing', box.IS9WD_itemsIdOnEdit_(range(5, 5, 5, 5)), 0);
+  check('typing a title mints an ID at once for every titled row without one', box.IS9WD_itemsIdOnEdit_(range(5, 3, 5, 3)), 2);
+  check('the office and the task rows got an ID; the status only row got nothing',
+    writes.filter((w) => w[1] === 1).map((w) => w[0]).sort(), [5, 8]);
+  check('only two IDs were drawn', reserved, 2);
+  check('the leftover status row is still not a deliverable', cells['6,1'] === undefined, true);
+  delete box.CacheService; delete box.LockService;
+}
+
 console.log('\n    ' + pass + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

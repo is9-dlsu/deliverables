@@ -94,6 +94,38 @@ function IS9WD_itemsTidyEdit_(range) {
   return IS9WD_itemsTidyRows_(range.getSheet(), first, last, cols);
 }
 
+// A ROW TYPED IN THE SHEET GETS ITS ID AS IT IS TYPED. The page shows a row only once it has
+// an ID, because it ticks by ID, and IDs used to be minted only by the hourly pass or Sync, so
+// a row typed at noon was invisible on phones until one o'clock. Measured on 2026-09-30: the
+// officers saw this week's rows, typed first, and none of next week's, typed after. Now onEdit
+// runs the same backfill the sweep runs as soon as an edit fills a title on a row with no ID,
+// under the document lock the endpoint also takes, so a phone add and a typed row cannot draw
+// the same number. A paste of five hundred rows or more is left to the hourly pass.
+function IS9WD_itemsIdOnEdit_(range) {
+  var first = Math.max(range.getRow(), IS9WD_ITEMS.firstRow);
+  var last = Math.min(range.getLastRow(), IS9WD_ITEMS.lastRow);
+  if (last < first || last - first >= 500) return 0;
+  var colId = IS9WD_itemColIndex_('ID');
+  var colTitle = IS9WD_itemColIndex_('Title of Task');
+  if (range.getColumn() > colTitle || range.getLastColumn() < colId) return 0;
+  var values = range.getSheet().getRange(first, colId, last - first + 1, colTitle - colId + 1).getValues();
+  var wanted = false;
+  for (var r = 0; r < values.length && !wanted; r++) {
+    if (IS9WD_blank_(values[r][0]) && IS9WD_filled_(values[r][colTitle - colId])) wanted = true;
+  }
+  if (!wanted) return 0;
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(10000)) return 0;
+  try {
+    var done = IS9WD_itemsBackfill_(null) || [];
+    var ids = 0;
+    for (var i = 0; i < done.length; i++) if (done[i] && done[i].id) ids++;
+    return ids;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function IS9WD_itemColIndex_(header) {
   var want = IS9WD_trim_(header);
   for (var i = 0; i < IS9WD_ITEMS.columns.length; i++) {
@@ -589,7 +621,14 @@ function IS9WD_itemObject_(line, row) {
 // the last. Half the cells of the old single read on an empty sheet, and a fraction on one
 // with a few dozen rows.
 var IS9WD_ITEMS_KEY_ = 'IS9WD_ITEM_ROWS_v1';
-var IS9WD_ITEMS_TTL_ = 600;
+// Thirty minutes, and kept for one Manila day only. Every script write and every typed edit
+// drops it, so the only thing it can miss is a whole row deleted or inserted by hand, which no
+// edit hook sees; thirty minutes bounds that.
+var IS9WD_ITEMS_TTL_ = 1800;
+
+function IS9WD_itemsKey_() {
+  return IS9WD_ITEMS_KEY_ + IS9WD_memoryDay_();
+}
 var IS9WD_ITEMS_LIVE_ = false;
 var IS9WD_ITEMS_HIT_ = false;
 
@@ -632,7 +671,7 @@ function IS9WD_itemsLines_() {
   IS9WD_ITEMS_HIT_ = false;
   if (!IS9WD_ITEMS_LIVE_) {
     try {
-      var held = CacheService.getScriptCache().get(IS9WD_ITEMS_KEY_);
+      var held = CacheService.getScriptCache().get(IS9WD_itemsKey_());
       if (held) {
         var kept = IS9WD_unpackJson_(held);
         if (kept && typeof kept.length === 'number') {
@@ -704,7 +743,7 @@ function IS9WD_itemsRemember_(out) {
     try {
       var text = JSON.stringify(IS9WD_packDates_(out));
       if (text.length <= 90000) {
-        CacheService.getScriptCache().put(IS9WD_ITEMS_KEY_, text, IS9WD_ITEMS_TTL_);
+        CacheService.getScriptCache().put(IS9WD_itemsKey_(), text, IS9WD_ITEMS_TTL_);
       }
     } catch (err) {
       Logger.log('IS9WD: the item rows were not remembered: ' + err);
@@ -719,7 +758,7 @@ function IS9WD_itemsRemember_(out) {
 function IS9WD_itemsCacheReset_(keepHint) {
   try {
     var cache = CacheService.getScriptCache();
-    cache.remove(IS9WD_ITEMS_KEY_);
+    cache.remove(IS9WD_itemsKey_());
     if (keepHint !== true) cache.remove(IS9WD_ITEMS_HINT_KEY_);
   } catch (err) {
     Logger.log('IS9WD: the item rows were not cleared: ' + err);
@@ -903,16 +942,18 @@ function IS9WD_itemsBackfill_(cfg) {
   var colId = IS9WD_itemColIndex_('ID');
   var colStatus = IS9WD_itemColIndex_('Status');
   var fromCol = IS9WD_itemColIndex_('Committee');
+  var colTitle = IS9WD_itemColIndex_('Title of Task');
   var values = sheet.getRange(first, IS9WD_ITEMS.firstCol, rows,
     IS9WD_itemColIndex_('Created at') - IS9WD_ITEMS.firstCol + 1).getValues();
 
   var need = [];
   for (var r = 0; r < values.length; r++) {
     var line = values[r];
-    var used = false;
-    for (var c2 = fromCol - IS9WD_ITEMS.firstCol; c2 <= colStatus - IS9WD_ITEMS.firstCol; c2++) {
-      if (IS9WD_filled_(line[c2])) { used = true; break; }
-    }
+    // IN USE MEANS AN OFFICE OR A TASK. A status, a deadline or a remark left behind on a row
+    // somebody emptied is not a deliverable, and giving it an ID put three empty rows on the
+    // tab as D0035 to D0037 on 2026-09-29.
+    var used = IS9WD_filled_(line[fromCol - IS9WD_ITEMS.firstCol]) ||
+      IS9WD_filled_(line[colTitle - IS9WD_ITEMS.firstCol]);
     if (!used) continue;
     var blankId = IS9WD_blank_(line[colId - IS9WD_ITEMS.firstCol]);
     var blankStatus = IS9WD_blank_(line[colStatus - IS9WD_ITEMS.firstCol]);

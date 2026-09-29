@@ -706,3 +706,8 @@ body::after {
   text-transform: uppercase;
   color: var(--sage);
 }
+
+/* A row still saving: shown at once, a little faded until the Sheet has it. */
+.item.pending { opacity: 0.62; }
+/* The list on screen came from this phone's last visit and the fresh one is on its way. */
+.week .syncing { font-style: italic; opacity: 0.75; }
