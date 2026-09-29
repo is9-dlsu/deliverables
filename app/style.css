@@ -164,12 +164,12 @@ body::after {
   gap: 10px;
   margin: 0 0 20px;
 }
-.brand svg {
+.brand img {
   display: block;
-  width: 28px;
-  height: 28px;
-  /* 22 percent tracks the mark's own corner (rx 22 on a 100 box) at any size. */
-  border-radius: 22%;
+  width: 32px;
+  height: 32px;
+  /* The logo is a circle already; the ring and the shadow lift it off the backdrop. */
+  border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28), 0 6px 16px -6px rgba(0, 0, 0, 0.35);
 }
 .brand span {

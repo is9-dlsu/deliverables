@@ -337,6 +337,7 @@ old, no job shows a failed status, and `Ready for Canva` reads YES with this wee
 |---|---|
 | The `/exec` address | `01 \| Configuration`, `Web address the page talks to`; and the repo variable `IS9WD_ENDPOINT` |
 | The officers' page address | `01 \| Configuration`, `Web address of the officers' page`; shown at repo `Settings > Pages` |
+| The logo in every email's header and on the page | `app/mail/band.jpg` and `app/mail/logo.png` in the repo, published with the page; the emails read them at the page address above |
 | Your address | `01 \| Configuration`, `Your own email address` |
 | Reply-to, sender name, reader address, automation owner | `_Engine`, under `MAIL AND APP PLUMBING` |
 | The fourteen tokens | Script Properties in the editor, `Project Settings`. Never a cell |
