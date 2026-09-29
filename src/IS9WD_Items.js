@@ -49,6 +49,44 @@
 
 // A formula that names column D is a formula that breaks silently when Deadline
 // moves. Asking for the header instead means the break is a thrown sentence.
+// TITLES AND REMARKS ARE KEPT CLEAN. A title or a remark reaches the Canva feed as a contract
+// string and every email as a line, so a line break typed with Alt+Enter or a space pasted at
+// either end breaks a slide and fails the self test, and nobody can see it in the cell. Two
+// places keep them clean: onEdit, as a cell is typed or pasted, and the hourly pass and Sync,
+// over every row. Only whitespace changes, and only a cell that needs it is written.
+function IS9WD_itemsTidyRows_(sheet, first, last, onlyCols) {
+  var lo = Math.max(first, IS9WD_ITEMS.firstRow);
+  var hi = Math.min(last, IS9WD_ITEMS.lastRow);
+  if (hi < lo) return 0;
+  var cols = onlyCols || [IS9WD_itemColIndex_('Title'), IS9WD_itemColIndex_('Remark')];
+  var changed = 0;
+  for (var c = 0; c < cols.length; c++) {
+    var values = sheet.getRange(lo, cols[c], hi - lo + 1, 1).getValues();
+    for (var r = 0; r < values.length; r++) {
+      var clean = IS9WD_tidyCell_(values[r][0]);
+      if (clean === null) continue;
+      sheet.getRange(lo + r, cols[c]).setValue(clean);
+      changed++;
+    }
+  }
+  return changed;
+}
+
+// The edit that was just typed or pasted, from onEdit: only the title and remark cells inside
+// it. A paste of five hundred rows or more is left to the hourly pass rather than held up here.
+function IS9WD_itemsTidyEdit_(range) {
+  var first = range.getRow();
+  var last = range.getLastRow();
+  if (last < IS9WD_ITEMS.firstRow || last - first >= 500) return 0;
+  var left = range.getColumn();
+  var right = range.getLastColumn();
+  var want = [IS9WD_itemColIndex_('Title'), IS9WD_itemColIndex_('Remark')];
+  var cols = [];
+  for (var i = 0; i < want.length; i++) if (want[i] >= left && want[i] <= right) cols.push(want[i]);
+  if (!cols.length) return 0;
+  return IS9WD_itemsTidyRows_(range.getSheet(), first, last, cols);
+}
+
 function IS9WD_itemColIndex_(header) {
   var want = IS9WD_trim_(header);
   for (var i = 0; i < IS9WD_ITEMS.columns.length; i++) {

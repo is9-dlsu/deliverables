@@ -454,6 +454,11 @@ console.log('\n7. The derived Active flag, sorting and normalization (1.3, 5.4, 
     'Confirm speaker');
   check('all three at once', normalizeText('  Confirm\nthe\tspeaker  '),
     'Confirm the speaker');
+  const tidyCell = fn('IS9WD_tidyCell_');
+  check('tidy: a trailing space is removed', tidyCell('Send final name '), 'Send final name');
+  check('tidy: an Alt+Enter line break becomes one space', tidyCell('Send final\nname'), 'Send final name');
+  check('tidy: clean text is left alone', tidyCell('Send final name'), null);
+  check('tidy: an empty cell, a number and a date are never touched', [tidyCell(''), tidyCell(5), tidyCell(new Date(2026, 8, 29))], [null, null, null]);
   check('internal double spaces survive, or every contract pipe breaks',
     normalizeText('A  |  B'), 'A  |  B');
 }

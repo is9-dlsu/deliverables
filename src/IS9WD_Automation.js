@@ -113,6 +113,9 @@ function IS9WD_dispatch_() {
   // cannot tick. It also carries the blocking "Missing ID" flag, which holds Ready for Canva
   // at NO. Running it first means the Monday email and the carousel both describe a workbook
   // whose rows can actually be acted on.
+  // TITLES AND REMARKS CLEANED FIRST, so the sweep, the emails and the feed all read clean
+  // text. onEdit cleans a typed cell; this catches what onEdit cannot see.
+  IS9WD_autoTidyText_(say);
   var swept = IS9WD_autoSweepIds_(cfg, say);
 
   // THE SIGN-OFF CARRIES FORWARD before anything reads it, so the Sunday brief in this same
@@ -246,6 +249,30 @@ function IS9WD_autoImpl_(jobKey) {
  * Returns how many rows were given an ID, and never throws: a sweep that fails must not cost
  * the emails behind it.
  */
+// TITLES AND REMARKS, CLEANED OVER EVERY ROW, under the same lock as every other write. It
+// catches what onEdit cannot see: a paste of five hundred rows or more, a value written by
+// another tool, and a row typed before the cleaning existed.
+function IS9WD_autoTidyText_(say) {
+  try {
+    var cleaned = IS9WD_lockedRun_(function () {
+      return IS9WD_itemsTidyRows_(IS9WD_sheet_('ITEMS'), IS9WD_ITEMS.firstRow, IS9WD_ITEMS.lastRow);
+    });
+    if (cleaned > 0) {
+      if (say) say(cleaned + ' title or remark cell(s) carried a line break or an outer space, now removed');
+      IS9WD_logRow_({
+        source: IS9WD_LOG_SOURCE_TRIGGER_, actor: 'Trigger', action: 'tidyText',
+        detail: cleaned + ' cells cleaned', ok: true
+      });
+      IS9WD_itemsCacheReset_();
+    }
+    return cleaned;
+  } catch (err) {
+    if (say) say('the text tidy failed, so a title or remark may still carry a stray space: ' + err);
+    Logger.log('IS9WD: the text tidy failed: ' + err);
+    return 0;
+  }
+}
+
 function IS9WD_autoSweepIds_(cfg, say) {
   try {
     var fn = IS9WD_apiImpl_('IS9WD_itemsBackfill_');
@@ -287,6 +314,7 @@ function IS9WD_syncToApp_() {
   var lines = [];
   var say = function (l) { lines.push(l); };
   var cfg = IS9WD_readConfig_(true);
+  IS9WD_autoTidyText_(say);
   var ids = IS9WD_autoSweepIds_(cfg, say);
   // The eight derived columns are sheet formulas; without the flush the read below could see
   // a brand new row as inactive and unranked.

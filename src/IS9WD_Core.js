@@ -539,6 +539,16 @@ function IS9WD_normalizeText(s) {
     .replace(/^\s+|\s+$/g, '');
 }
 
+// One title or remark cell as the tidy pass sees it: the cleaned text when the cell is text
+// and cleaning changes it, otherwise null, so a caller writes only what actually changed. A
+// number, a date or an empty cell is never touched, and neither is a long one: cutting a title
+// would change what it says, so length stays the self test's to name.
+function IS9WD_tidyCell_(v) {
+  if (typeof v !== 'string' || v === '') return null;
+  var clean = IS9WD_normalizeText(v);
+  return clean === v ? null : clean;
+}
+
 // ============================================================================
 //  RANK, PAGES AND SLOTS  (the pagination design, reference 5.4 and 6.3)
 // ============================================================================

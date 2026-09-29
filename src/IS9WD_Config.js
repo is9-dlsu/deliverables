@@ -4133,6 +4133,8 @@ function onEdit(e) {
     if (!range) return;
     var name = range.getSheet().getName();
     if (name === IS9WD_TAB.ITEMS) {
+      // A title or remark typed with a stray space or line break is cleaned as it lands.
+      if (typeof IS9WD_itemsTidyEdit_ === 'function') IS9WD_itemsTidyEdit_(range);
       if (typeof IS9WD_itemsCacheReset_ === 'function') IS9WD_itemsCacheReset_(true);
       if (typeof IS9WD_itemsHintLift_ === 'function') IS9WD_itemsHintLift_(range.getLastRow());
     } else if (name === IS9WD_TAB.CONFIG || name === IS9WD_TAB.ENGINE) {
