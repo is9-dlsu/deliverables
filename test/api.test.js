@@ -192,13 +192,16 @@ console.log('\n4. Rate limit, the app switch, role and the term calendar');
   refused('every action when the app is switched off', req({ action: 'state' }),
     ctx({ appOn: false }), 'APP_OFF', 'appOn');
 
-  // A member link holds ONE action. The other five are Ethan's.
-  for (const action of ['addItem', 'editItem', 'deleteItem', 'rotateToken', 'setSignoff']) {
+  // A member link holds two actions, a tick and an add to their own list. The other four are
+  // Ethan's.
+  for (const action of ['editItem', 'deleteItem', 'rotateToken', 'setSignoff']) {
     refused('a member calling ' + action, req({ action, requestId: RID }), ctx(),
       'NOT_ALLOWED', 'role');
   }
   check('a member may setStatus',
     route(req({ action: 'setStatus', requestId: RID }), ctx()).ok, true);
+  check('a member may addItem, which the add itself narrows to their own list',
+    route(req({ action: 'addItem', requestId: RID }), ctx()).ok, true);
   check('an admin may addItem',
     route(req({ action: 'addItem', token: ADMIN_TOKEN, requestId: RID }), ctx()).ok, true);
 
@@ -385,6 +388,35 @@ console.log('\n10. Adding a deliverable from the page, end to end with the edges
   box.IS9WD_readItems_ = () => ({ rows: [], nextFreeRow: 2005, usedRows: 2000, capacity: 2000 });
   const full = box.IS9WD_apiAddItem_(plan, { payload: { committee: 'Partnerships', title: 'x', deadline: '2026-10-02' } });
   check('a full tab is refused in words', [full.ok, full.error.code], [false, 'SERVER_ERROR']);
+
+  // An officer adds to their own list: the office is the link's own whatever the page sent,
+  // nobody is emailed, the row is stamped as announced, and the day's count caps the link.
+  const stamped = [];
+  box.IS9WD_sheet_ = () => ({ getRange: (r, c, h, w) => ({
+    setValues: (v) => { written.push({ r, c, h, w, v: v[0] }); },
+    clearContent: () => {},
+    setValue: (v) => { stamped.push({ r, c, v }); },
+  }) });
+  box.IS9WD_readItems_ = () => ({ rows: [], byId: {}, nextFreeRow: 20, usedRows: 15, capacity: 2000 });
+  let adds = 0;
+  box.CacheService = { getScriptCache: () => ({ get: () => String(adds), put: (k, v) => { adds = Number(v); } }) };
+  const sentBefore = notices.length;
+  const member = { role: 'member', action: 'addItem', key: 'K01', committee: 'Partnerships' };
+  const mine = box.IS9WD_apiAddItem_(member, { payload: { committee: 'Finance', title: 'Book the room', deadline: '2026-10-03', remark: '', status: 'Accomplished' } });
+  check('an officer adds to their own list, whatever office the page sent, at the default status',
+    [mine.ok, written[written.length - 1].v[1], written[written.length - 1].v[5]], [true, 'Partnerships', 'Open']);
+  check('nobody is emailed about a row they typed themselves', notices.length, sentBefore);
+  check('the row is stamped as announced, so the hourly pass does not email them either',
+    [stamped.length, stamped[0] && stamped[0].r, stamped[0] && stamped[0].v instanceof Date], [1, 20, true]);
+  check('the answer says it was their own add', [mine.data.lastAdd.self, mine.data.lastAdd.notified, mine.data.lastAdd.line], [true, 0, 'Added to your list.']);
+  check('the log names the add as the officer own', logged[logged.length - 1].detail, 'row 20, added by the officer');
+  check('the day count went up by one', adds, 1);
+  adds = 20;
+  const writesBefore = written.length;
+  const capped = box.IS9WD_apiAddItem_(member, { payload: { title: 'One more', deadline: '2026-10-03' } });
+  check('the twenty first add of the day is refused in words', [capped.ok, capped.error.code, /20 deliverables today/.test(capped.error.message)], [false, 'VALIDATION', true]);
+  check('and nothing was written for it', written.length, writesBefore);
+  delete box.CacheService;
 }
 
 

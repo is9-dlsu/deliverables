@@ -679,3 +679,30 @@ body::after {
    purple, not the accent: the accent means "a number worth the eye", and a focus ring wearing
    it invites somebody to read focus as a state on the row. This measures 8.2:1. */
 :focus-visible { outline: 2px solid var(--deep); outline-offset: 3px; border-radius: 6px; }
+
+/* THE QUOTE OF THE DAY. One line of encouragement at the top of every page, the same line for
+   everyone on the same Manila day, set in the display serif so it reads as a line and not as a
+   notice, on a purple rule that is the palette's accent and nothing louder. */
+.quote {
+  margin: 0 0 20px;
+  padding: 14px 16px 13px 18px;
+  border-left: 3px solid var(--bright);
+  border-radius: 0 16px 16px 0;
+  background: rgba(138, 100, 169, 0.07);
+}
+.quote blockquote {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--green);
+}
+.quote figcaption {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sage);
+}

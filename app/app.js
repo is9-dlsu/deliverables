@@ -17,6 +17,7 @@ import { h, render } from './lib/preact.module.js';
 import { useState, useEffect, useRef, useCallback } from './lib/hooks.module.js';
 import htm from './lib/htm.module.js';
 import { call, newRequestId, endpointReady } from './wire.js';
+import { quoteForToday } from './quotes.js';
 
 const html = htm.bind(h);
 
@@ -105,6 +106,18 @@ function Notice({ kind, title, detail, onRetry }) {
 
 // A whole item. The row is the tap target, not a small checkbox: a 44 px minimum is the
 // difference between ticking your task and ticking the one under it on a phone.
+// THE QUOTE OF THE DAY, the same line for every page on the same Manila day, from quotes.js.
+// It turns over at Manila midnight, at the next open or refresh.
+function Quote() {
+  const q = quoteForToday();
+  if (!q) return null;
+  return html`
+    <figure class="quote">
+      <blockquote>${q.text}</blockquote>
+      <figcaption>${q.who}</figcaption>
+    </figure>`;
+}
+
 function Item({ item, busy, undoLeft, onToggle, showCommittee, admin }) {
   const done = item.active === false;
   const overdue = item.overdue === true && !done;
@@ -258,7 +271,9 @@ function Overview({ people, items, week, onPick }) {
 // ADD A DELIVERABLE, from the page. The same row the President would type on the tab: the
 // office, the title, the deadline, a remark. The server mints the ID and the defaults, and
 // emails the officer before it answers.
-function AddForm({ people, committee, busy, note, onSave }) {
+// `fixed` is an officer's own form: the office is theirs, so there is nothing to choose, and
+// nobody is emailed about a row they typed themselves.
+function AddForm({ people, committee, busy, note, onSave, fixed }) {
   const [office, setOffice] = useState(committee || '');
   const [title, setTitle] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -274,14 +289,15 @@ function AddForm({ people, committee, busy, note, onSave }) {
   };
   return html`
     <form class="add" onSubmit=${submit}>
-      <h3 class="add-title">Add a deliverable</h3>
-      <label class="field">
-        <span>For</span>
-        <select value=${office} disabled=${busy} onChange=${(e) => setOffice(e.target.value)}>
-          <option value="">Choose a committee or office</option>
-          ${people.map((p) => html`<option key=${p.key} value=${p.committee}>${p.committee}</option>`)}
-        </select>
-      </label>
+      <h3 class="add-title">${fixed ? 'Add your own' : 'Add a deliverable'}</h3>
+      ${fixed ? null : html`
+        <label class="field">
+          <span>For</span>
+          <select value=${office} disabled=${busy} onChange=${(e) => setOffice(e.target.value)}>
+            <option value="">Choose a committee or office</option>
+            ${people.map((p) => html`<option key=${p.key} value=${p.committee}>${p.committee}</option>`)}
+          </select>
+        </label>`}
       <label class="field">
         <span>Task</span>
         <input type="text" maxlength="40" value=${title} disabled=${busy}
@@ -298,7 +314,8 @@ function AddForm({ people, committee, busy, note, onSave }) {
             placeholder="Optional, up to 30" onInput=${(e) => setRemark(e.target.value)} />
         </label>
       </div>
-      <button type="submit" class="save" disabled=${!ready}>${busy ? 'Saving and emailing...' : 'Add and notify'}</button>
+      <button type="submit" class="save" disabled=${!ready}>${busy ? (fixed ? 'Saving...' : 'Saving and emailing...')
+        : (fixed ? 'Add to my list' : 'Add and notify')}</button>
       ${note ? html`<p class="signoff-note" role="status" aria-live="polite">${note}</p>` : null}
     </form>`;
 }
@@ -484,9 +501,10 @@ function App() {
     if (env.ok) {
       const last = env.data && env.data.lastAdd ? env.data.lastAdd : null;
       if (env.data && env.data.partial) load(); else setState(env.data);
-      setAddNote(last && last.notified > 0
-        ? (last.testMode ? 'Added. Test mode sent the notice to you.' : 'Added and emailed.')
-        : 'Added. ' + (last && last.line ? last.line : 'The officer sees it at their next open.'));
+      setAddNote(last && last.self ? 'Added to your list, and to the Sheet.'
+        : last && last.notified > 0
+          ? (last.testMode ? 'Added. Test mode sent the notice to you.' : 'Added and emailed.')
+          : 'Added. ' + (last && last.line ? last.line : 'The officer sees it at their next open.'));
       if (onDone) onDone();
       return;
     }
@@ -543,6 +561,8 @@ function App() {
       <div class="body">
         ${error ? html`<${Notice} kind="warn" title=${headline(error)} detail=${error.message} />` : null}
 
+        <${Quote} />
+
         ${admin && state.signoff && !state.signoff.set ? html`
           <button type="button" class="pointer" onClick=${() => {
             const el = document.getElementById('signoff');
@@ -579,16 +599,18 @@ function App() {
               <${Overview} people=${people} items=${items} week=${state.week} onPick=${setPicked} />
               <${AddForm} people=${everyone} committee="" busy=${addBusy} note=${addNote} onSave=${addItem} />`}
           </section>
-        ` : (items.length === 0 ? html`
-          <div class="empty">
-            <p class="empty-title">Nothing on your list this week.</p>
-            <p class="empty-detail">The President adds items by Saturday evening.</p>
-          </div>
         ` : html`
-          <p class="count" role="status" aria-live="polite">${left === 0 ? 'All done for this week'
-            : left + (left === 1 ? ' task left' : ' tasks left')}</p>
-          <${ItemList} items=${items} foldKey="mine" showCommittee=${false} ...${listProps} />
-        `)}
+          ${items.length === 0 ? html`
+            <div class="empty">
+              <p class="empty-title">Nothing on your list this week.</p>
+              <p class="empty-detail">The President adds items, and you can add your own below.</p>
+            </div>` : html`
+            <p class="count" role="status" aria-live="polite">${left === 0 ? 'All done for this week'
+              : left + (left === 1 ? ' task left' : ' tasks left')}</p>
+            <${ItemList} items=${items} foldKey="mine" showCommittee=${false} ...${listProps} />`}
+          <${AddForm} people=${[]} committee=${(state.committee && state.committee.name) || 'mine'} fixed=${true}
+            busy=${addBusy} note=${addNote} onSave=${addItem} />
+        `}
 
         ${admin && state.people ? html`
           <${SignoffCard}
@@ -604,7 +626,7 @@ function App() {
 
       <footer class="foot">
         <p>${admin ? 'You can reopen any item, and add one for anyone; they are emailed as you add it. Officers see changes at their next open.'
-          : 'Ticking is yours for ' + undoSeconds + ' seconds. After that, ask the President to reopen it.'}</p>
+          : 'Ticking is yours for ' + undoSeconds + ' seconds. After that, ask the President to reopen it. What you add goes straight into the Sheet.'}</p>
       </footer>
     <//>`;
 }

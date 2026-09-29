@@ -86,7 +86,7 @@ var IS9WD_ACTIONS_ = {
   ping: { open: true, admin: true, member: true, write: false },
   state: { open: false, admin: true, member: true, write: false },
   setStatus: { open: false, admin: true, member: true, write: true },
-  addItem: { open: false, admin: true, member: false, write: true },
+  addItem: { open: false, admin: true, member: true, write: true },
   editItem: { open: false, admin: true, member: false, write: true },
   deleteItem: { open: false, admin: true, member: false, write: true },
   rotateToken: { open: false, admin: true, member: false, write: true },

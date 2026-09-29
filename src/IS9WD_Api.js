@@ -383,7 +383,7 @@ function IS9WD_apiOut_(envelope) {
 // Bumped by hand whenever the endpoint's behaviour changes, so a ping can say which version
 // is actually deployed: a /exec address serves the version it was deployed with, not the code
 // last pushed, and the two have been confused once already.
-var IS9WD_API_VERSION_ = 16;
+var IS9WD_API_VERSION_ = 17;
 
 /**
  * Ping answers strangers, so it carries no data. With payload.probe set it also carries where
@@ -598,9 +598,39 @@ function IS9WD_apiSetSignoff_(plan, req) {
  * the sweep uses. The derived columns are formulas already on every row, so the row is live
  * the moment it is written, and the next hourly pass or Sync announces it.
  */
+// How many deliverables one officer link may add in a Manila day. The link is a bearer
+// token, so this is what bounds a leaked link: twenty is far past any honest day.
+var IS9WD_MEMBER_ADD_CAP_ = 20;
+
+// The count of today's adds for one link, from the script cache, raised by one when `bump`.
+// A cache that cannot be reached counts zero rather than refusing an honest add.
+function IS9WD_apiAddCount_(plan, bump) {
+  var key = 'IS9WD_ADDS_' + IS9WD_trim_(plan.key).toUpperCase() + '_' + IS9WD_formatDate(IS9WD_nowManila_());
+  try {
+    var cache = CacheService.getScriptCache();
+    var count = IS9WD_posInt_(cache.get(key)) || 0;
+    if (bump) cache.put(key, String(count + 1), 21600);
+    return count;
+  } catch (err) {
+    return 0;
+  }
+}
+
 function IS9WD_apiAddItem_(plan, req) {
   var cfg = IS9WD_readConfig_();
   var p = req.payload || {};
+  // AN OFFICER ADDS TO THEIR OWN LIST, AND ONLY THEIRS. Ethan ruled on 2026-09-29 that every
+  // officer but the President can add deliverables for themselves from their own page. The
+  // office is the link's own whatever the page sent, the status is the default, nobody is
+  // emailed about a row they typed themselves, and a link adds at most twenty a day.
+  var self = plan.role !== 'admin';
+  if (self) {
+    p = { committee: plan.committee, title: p.title, deadline: p.deadline, remark: p.remark };
+    if (IS9WD_apiAddCount_(plan, false) >= IS9WD_MEMBER_ADD_CAP_) {
+      return IS9WD_envelopeErr_('addItem', 'VALIDATION', 'You have added ' + IS9WD_MEMBER_ADD_CAP_ +
+        ' deliverables today, which is the most one link can add in a day. Ask the President to add the rest.');
+    }
+  }
   var verdict = IS9WD_validateItem(p, cfg.directory.rows, cfg.statuses.rows);
   if (!verdict || verdict.ok !== true) {
     return IS9WD_envelopeErr_('addItem', 'VALIDATION',
@@ -621,12 +651,19 @@ function IS9WD_apiAddItem_(plan, req) {
   // The log row goes first, for the reason IS9WD_apiSetStatus_ gives.
   IS9WD_logRow_({
     source: IS9WD_LOG_SOURCE_APP_, actor: IS9WD_apiActor_(plan), action: 'addItem',
-    committee: entry.committee, id: id, detail: 'row ' + row, ok: true
+    committee: entry.committee, id: id, detail: 'row ' + row + (self ? ', added by the officer' : ''), ok: true
   });
   var itemsSheet = IS9WD_sheet_('ITEMS');
   itemsSheet.getRange(row, IS9WD_itemColIndex_('ID'), 1, line.length).setValues([line]);
   // A half cleared row can still carry a Notified at stamp; the new item must not inherit it.
-  itemsSheet.getRange(row, IS9WD_itemColIndex_('Notified at')).clearContent();
+  // An officer's own row is stamped instead, as announced, so the hourly pass does not email
+  // them about something they typed a minute ago. The Monday email still lists it.
+  if (self) {
+    itemsSheet.getRange(row, IS9WD_itemColIndex_('Notified at')).setValue(IS9WD_nowManila_());
+    IS9WD_apiAddCount_(plan, true);
+  } else {
+    itemsSheet.getRange(row, IS9WD_itemColIndex_('Notified at')).clearContent();
+  }
   IS9WD_itemsCacheReset_();
   // The new row, as the reader would build it once the sheet has recalculated: the typed
   // cells as written, active from the status list, nothing derived yet.
@@ -645,9 +682,9 @@ function IS9WD_apiAddItem_(plan, req) {
   // notice batch is narrowed to this one office, sends whatever that officer has not been
   // told about, and stamps it; a failure to send never fails the add, it is reported instead.
   var notified = 0;
-  var line = '';
+  var line = self ? 'Added to your list.' : '';
   try {
-    var notice = IS9WD_apiImpl_('IS9WD_sendNewAssignments_');
+    var notice = self ? null : IS9WD_apiImpl_('IS9WD_sendNewAssignments_');
     if (notice) {
       var out = notice({ cfg: cfg, source: IS9WD_LOG_SOURCE_APP_, only: entry.committee, items: items });
       notified = out && out.sent ? out.sent : 0;
@@ -665,7 +702,7 @@ function IS9WD_apiAddItem_(plan, req) {
     Logger.log('IS9WD: the state after an add could not be built: ' + err);
     state = { role: plan.role, items: [], partial: true };
   }
-  state.lastAdd = { id: id, notified: notified, line: line,
+  state.lastAdd = { id: id, notified: notified, line: line, self: self,
     testMode: !!(cfg.switches && cfg.switches.testMode) };
   return IS9WD_envelopeOk_('addItem', state);
 }

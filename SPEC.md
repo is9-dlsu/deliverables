@@ -11,7 +11,7 @@ Ethan writes each officer's weekly deliverables. Each officer opens a private li
 | Who | What they touch |
 |---|---|
 | Ethan, on his DLSU account | Owns the Sheet, the script, the deployment, the repo. Adds, edits and reopens every item. |
-| 13 officers: 4 EVPs and 9 VPs | One private link each, their own items only. One action: tick or untick. They never open the Sheet and never sign in. |
+| 13 officers: 4 EVPs and 9 VPs | One private link each, their own items only. They tick or untick, and since 2026-09-29 they can add a deliverable to their own list. They never open the Sheet and never sign in. |
 | Claude, through the Drive connector | Reads `01 \| Canva Feed`, which says so in plain English in its own first row. |
 
 Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet access, progress percentages, file uploads as proof.
@@ -28,13 +28,15 @@ Out of scope: editing Canva, the EBEXECOM MasterSheet, giving anyone Sheet acces
   - `_Views` holds the helper band the two computed views used to hide inside themselves, plus `OPERATIONAL HEALTH` and `SCHEDULED JOBS`, which are the machine reporting on itself.
   Every value on both hidden tabs keeps the named range it always had, so no formula, no email and no reader changed when it moved. The feed stays tab 2 and is **never hidden**, because a truncated Drive read must lose the Archive and the Log before it loses a contract string, and because whether the connector reads a hidden tab at all is unmeasured.
 - **A container-bound Apps Script project**: the JSON endpoint, the emails, the hourly job, and the setup that builds and repairs the workbook.
-- **A React app** in `app/`, built to static files, hosted free on GitHub Pages under `github.com/is9-dlsu`. The repo is public, because a free organization cannot publish Pages from a private repo.
+- **A React app** in `app/`, built to static files, hosted free on GitHub Pages under `github.com/is9-dlsu`. The repo is public, because a free organization cannot publish Pages from a private repo. Every page opens on a quote of the day, the same line for everyone on the same Manila day, from `app/quotes.js`: public domain lines and the Society's own, each naming the work it comes from.
 - **One hourly trigger** that runs every scheduled job.
 - **Four emails**, all sent by the script from Ethan's DLSU account.
 
 ## 3. The rules that matter
 
 **Status is a checklist.** `Open` or `Accomplished`, defined in Configuration, never hardcoded. Ticking is reversible for 60 seconds, then only Ethan can reopen an item. Nothing in the code keys on the label: everything reads a derived `Active` flag, so renaming a status, or going back to four of them, costs one Configuration edit.
+
+**An officer can add to their own list.** Ethan ruled on 2026-09-29 that every officer but the President can add deliverables for themselves from their own page, and that the Sheet and the page stay one list: the add writes the row on `03 | Deliverables` at once, and a row Ethan types appears on the page at its next open. The endpoint narrows the add to the link's own office whatever the page sends, at the default status. Nobody is emailed about a row they typed themselves: the row is stamped in `Notified at` as announced, and the Monday email still lists it. A link adds at most twenty a day, which bounds a leaked link. An officer cannot edit or delete a row; Ethan does that in the Sheet, and every add is in `07 | Log` with the officer as its actor.
 
 **No cap on items, fifteen slots per slide, one slide per officer.** Ethan ruled on 2026-09-28. The carousel is 1 title slide plus 14 officer slides, always, at every possible input: fifteen is not a typical length, it is the only length. There are no continuation slides, so no week can make the carousel longer or shorter than the master design. An officer holding more than fifteen active items shows fifteen; the rest live in the app, the emails and the Sunday brief, and the feed reports the count under `Not published`. The tagline prints the count that FIT rather than the count held, so a reader who counts the lines on a slide gets the number in the headline.
 
@@ -109,7 +111,7 @@ The digest goes out in the EVENING, not the morning, and the workbook has always
 
 ## 6. Accepted risks
 
-- Anyone holding an officer's link can tick that officer's items. Every change is logged with a timestamp, and any link can be reissued from the menu.
+- Anyone holding an officer's link can tick that officer's items and add up to twenty a day to their list. Every change is logged with a timestamp, and any link can be reissued from the menu.
 - The endpoint URL is public. Tokens are the only gate.
 - A DLSU administrator could disable Apps Script or external sharing at any time. Both were confirmed available on 2026-09-27.
 - Moving the Sheet to a shared drive breaks the web app until it is redeployed.
