@@ -34,6 +34,12 @@ var IS9WD_CAL_TAG_SIG_ = 'is9wd_sig';
 // How far either side of today a sync looks for its own events. A deadline outside it widens
 // the look to include it, so this only bounds how far a stale event can hide.
 var IS9WD_CAL_WINDOW_DAYS_ = 400;
+// HOW LONG ONE SYNC MAY SPEND CHANGING EVENTS. Turning test mode off puts an officer on every
+// event at once, and on 2026-10-02 that was 149 events: at up to a second a change that is most
+// of an execution's six minutes, inside an hourly pass that still has emails to send. So a sync
+// stops changing after this long, says how many are left, and a follow up run a minute later
+// carries on; each event records its own state as it is done, so nothing is done twice.
+var IS9WD_CAL_BUDGET_MS_ = 150000;
 // A pending follow up that has not run ten minutes after it was due is taken as lost.
 var IS9WD_CAL_STALE_MS_ = 10 * 60 * 1000;
 var IS9WD_CAL_EMAIL_ = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -193,52 +199,84 @@ function IS9WD_calSync_(cfg, say) {
   }
   var plan = IS9WD_calDiff_(desired, existing);
   var i;
+  // REMOVALS FIRST, THEN NEW EVENTS, THEN CORRECTIONS, because an accomplished task still on
+  // the calendar is the one thing an officer would notice. Each change is tried on its own, so
+  // one event Calendar refuses never stops the rest, and nothing more is started once the
+  // budget is spent.
+  var started = new Date().getTime();
+  var spent = function () { return new Date().getTime() - started > IS9WD_CAL_BUDGET_MS_; };
+  var removed = 0;
+  var created = 0;
+  var updated = 0;
+  var left = 0;
+  var failed = 0;
+  var firstError = '';
+  var attempt = function (fn) {
+    if (spent()) { left++; return false; }
+    try {
+      fn();
+      return true;
+    } catch (err) {
+      failed++;
+      if (firstError === '') firstError = IS9WD_txt_(err && err.message ? err.message : err);
+      return false;
+    }
+  };
+  for (i = 0; i < plan.remove.length; i++) {
+    if (attempt((function (gone) { return function () { gone.ref.deleteEvent(); }; })(plan.remove[i]))) removed++;
+  }
   for (i = 0; i < plan.create.length; i++) {
-    var w = plan.create[i];
-    var options = { description: w.description, sendInvites: false };
-    if (w.guest !== '') options.guests = w.guest;
-    var made = cal.createAllDayEvent(w.summary, w.date, options);
-    made.setTag(IS9WD_CAL_TAG_ID_, w.id);
-    made.setTag(IS9WD_CAL_TAG_SIG_, w.sig);
+    if (attempt((function (w) {
+      return function () {
+        var options = { description: w.description, sendInvites: false };
+        if (w.guest !== '') options.guests = w.guest;
+        var made = cal.createAllDayEvent(w.summary, w.date, options);
+        made.setTag(IS9WD_CAL_TAG_ID_, w.id);
+        made.setTag(IS9WD_CAL_TAG_SIG_, w.sig);
+      };
+    })(plan.create[i]))) created++;
   }
   for (i = 0; i < plan.update.length; i++) {
-    var u = plan.update[i];
-    var ev = u.have.ref;
-    ev.setTitle(u.want.summary);
-    ev.setAllDayDate(u.want.date);
-    ev.setDescription(u.want.description);
-    var guests = ev.getGuestList();
-    var hasGuest = false;
-    for (var g = 0; g < guests.length; g++) {
-      var address = IS9WD_trim_(guests[g].getEmail()).toLowerCase();
-      if (address === u.want.guest) { hasGuest = true; continue; }
-      ev.removeGuest(address);
-    }
-    if (u.want.guest !== '' && !hasGuest) ev.addGuest(u.want.guest);
-    ev.setTag(IS9WD_CAL_TAG_SIG_, u.want.sig);
+    if (attempt((function (u) { return function () { IS9WD_calCorrect_(u.have.ref, u.want); }; })(plan.update[i]))) updated++;
   }
-  for (i = 0; i < plan.remove.length; i++) plan.remove[i].ref.deleteEvent();
 
   var waiting = 0;
   for (i = 0; i < desired.length; i++) if (desired[i].waiting) waiting++;
-  var changed = plan.create.length + plan.update.length + plan.remove.length;
   var result = {
-    events: desired.length, created: plan.create.length, updated: plan.update.length,
-    removed: plan.remove.length, waiting: waiting, undoSeconds: undo,
+    events: desired.length, created: created, updated: updated, removed: removed,
+    waiting: waiting, undoSeconds: undo, left: left, failed: failed, more: left > 0,
     testMode: !!(c.switches && c.switches.testMode)
   };
-  if (changed > 0) {
-    if (say) {
-      say('Calendar: ' + result.created + ' added, ' + result.updated + ' corrected, ' +
-        result.removed + ' removed, ' + result.events + ' open in all');
-    }
+  if (created + updated + removed + left + failed > 0) {
+    var detail = created + ' added, ' + updated + ' corrected, ' + removed + ' removed, ' +
+      result.events + ' open' + (left > 0 ? ', ' + left + ' still to do in the next run' : '') +
+      (failed > 0 ? ', ' + failed + ' refused by Calendar: ' + firstError : '');
+    if (say) say('Calendar: ' + detail);
     IS9WD_logRow_({
       source: IS9WD_LOG_SOURCE_TRIGGER_, actor: 'Trigger', action: 'calendarSync',
-      detail: result.created + ' added, ' + result.updated + ' corrected, ' + result.removed +
-        ' removed, ' + result.events + ' open', ok: true
+      detail: detail, ok: failed === 0
     });
   }
   return result;
+}
+
+// ONE EVENT BROUGHT LEVEL, touching only what differs. Each setter is a call to Calendar, and
+// the common correction is the guest alone, when test mode is cleared, so the title, the day
+// and the description are compared first and written only when they changed.
+function IS9WD_calCorrect_(ev, want) {
+  if (ev.getTitle() !== want.summary) ev.setTitle(want.summary);
+  var day = ev.isAllDayEvent() ? ev.getAllDayStartDate() : null;
+  if (!day || IS9WD_formatDate(day) !== want.ymd) ev.setAllDayDate(want.date);
+  if (IS9WD_txt_(ev.getDescription()) !== want.description) ev.setDescription(want.description);
+  var guests = ev.getGuestList();
+  var hasGuest = false;
+  for (var g = 0; g < guests.length; g++) {
+    var address = IS9WD_trim_(guests[g].getEmail()).toLowerCase();
+    if (address === want.guest) { hasGuest = true; continue; }
+    ev.removeGuest(address);
+  }
+  if (want.guest !== '' && !hasGuest) ev.addGuest(want.guest);
+  ev.setTag(IS9WD_CAL_TAG_SIG_, want.sig);
 }
 
 // ============================================================================
@@ -278,7 +316,10 @@ function IS9WD_calendarSweep() {
     var cfg = IS9WD_readConfig_(true);
     if (cfg.switches && cfg.switches.automationOn === false) return;
     var out = IS9WD_lockedRun_(function () { return IS9WD_calSync_(cfg, null); });
-    if (out && out.waiting > 0) IS9WD_calSoon_(out.undoSeconds * 1000 + 5000);
+    // Unfinished work carries on in a minute; a tick still inside its window is looked at again
+    // once the window has closed.
+    if (out && out.more) IS9WD_calSoon_(60000);
+    else if (out && out.waiting > 0) IS9WD_calSoon_(out.undoSeconds * 1000 + 5000);
   } catch (err) {
     Logger.log('IS9WD: the calendar follow up failed: ' + err);
     IS9WD_logRow_({
@@ -295,11 +336,13 @@ function IS9WD_calendarSweep() {
 function IS9WD_calendarConnect_() {
   var cfg = IS9WD_readConfig_(true);
   var out = IS9WD_calSync_(cfg, null);
+  if (out.more) IS9WD_calSoon_(60000);
   var cal = IS9WD_calCalendar_(false);
   var lines = [
     'The ' + IS9WD_CAL_NAME_ + ' calendar is on ' + (cal ? 'your account' : 'no account yet') + '.',
     out.events + ' open deliverable(s) with a deadline: ' + out.created + ' added, ' +
-      out.updated + ' corrected, ' + out.removed + ' removed.',
+      out.updated + ' corrected, ' + out.removed + ' removed' +
+      (out.more ? ', and ' + out.left + ' more follow in a minute or two by themselves.' : '.'),
     out.testMode
       ? 'Test mode is on, so no officer is on the events yet. They are added at the first sync after test mode is cleared.'
       : 'Each officer is on their own events as a guest, without an invitation email, so they appear on the officer\'s own calendar.',

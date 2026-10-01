@@ -115,5 +115,83 @@ console.log('\n4. What has to change');
   })(), [0, 0, 0]);
 }
 
+console.log('\n5. The sync itself, over a fake calendar');
+{
+  const calls = [];
+  const fakeEvent = (o) => {
+    const tags = { is9wd_id: o.id, is9wd_sig: o.sig };
+    let guests = (o.guests || []).slice();
+    return {
+      o,
+      getTag: (k) => tags[k] || '',
+      setTag: (k, v) => { calls.push(['setTag', o.id, k]); tags[k] = v; },
+      getTitle: () => o.title,
+      setTitle: (v) => { calls.push(['setTitle', o.id]); o.title = v; },
+      isAllDayEvent: () => true,
+      getAllDayStartDate: () => o.date,
+      setAllDayDate: (v) => { calls.push(['setAllDayDate', o.id]); o.date = v; },
+      getDescription: () => o.description,
+      setDescription: (v) => { calls.push(['setDescription', o.id]); o.description = v; },
+      getGuestList: () => guests.map((g) => ({ getEmail: () => g })),
+      addGuest: (g) => { if (o.refuse) throw new Error('Calendar said no'); calls.push(['addGuest', o.id, g]); guests.push(g); },
+      removeGuest: (g) => { calls.push(['removeGuest', o.id, g]); guests = guests.filter((x) => x !== g); },
+      deleteEvent: () => { calls.push(['deleteEvent', o.id]); },
+    };
+  };
+  const ITEMS = [
+    item('D0001', 'Partnerships', 'One', d(2026, 10, 5)),
+    item('D0002', 'Partnerships', 'Two', d(2026, 10, 6)),
+    item('D0003', 'Partnerships', 'Three', d(2026, 10, 7)),
+  ];
+  // The events as a test mode sync left them: right in every way, with nobody on them.
+  const asTest = plan(ITEMS, { testMode: true });
+  let events = [];
+  const reset = (over) => {
+    calls.length = 0;
+    events = asTest.map((w) => fakeEvent(Object.assign({ id: w.id, sig: w.sig, title: w.summary, date: w.date, description: w.description }, (over || {})[w.id] || {})));
+    events.push(fakeEvent({ id: 'D0099', sig: 'x', title: 'Accomplished', date: d(2026, 10, 1), description: '' }));
+  };
+  const logged = [];
+  let created = 0;
+  box.CalendarApp = {
+    getCalendarById: () => ({
+      getId: () => 'cal',
+      getEvents: () => events,
+      createAllDayEvent: () => { created++; return fakeEvent({ id: 'new' }); },
+    }),
+  };
+  box.PropertiesService = { getScriptProperties: () => ({ getProperty: () => 'cal', setProperty: () => {}, deleteProperty: () => {} }) };
+  box.IS9WD_readItems_ = () => ({ rows: ITEMS });
+  box.IS9WD_logRow_ = (r) => { logged.push(r); return true; };
+  box.IS9WD_LOG_SOURCE_TRIGGER_ = 'Trigger';
+  const cfg = { switches: { testMode: false }, statuses: { undoSeconds: 60 }, directory: { rows: DIR } };
+
+  reset();
+  const out = box.IS9WD_calSync_(cfg, null);
+  check('test mode cleared: every event is corrected and the stale one removed',
+    [out.updated, out.removed, out.created, out.left, out.failed, out.more], [3, 1, 0, 0, 0, false]);
+  check('a correction that is only the guest writes only the guest and the tag',
+    calls.filter((c) => c[1] === 'D0001').map((c) => c[0]), ['addGuest', 'setTag']);
+  check('the removal comes before any correction', calls[0], ['deleteEvent', 'D0099']);
+  check('nothing was created', created, 0);
+
+  reset({ D0002: { refuse: true } });
+  const bad = box.IS9WD_calSync_(cfg, null);
+  check('one event Calendar refuses does not stop the others', [bad.updated, bad.failed, bad.left], [2, 1, 0]);
+  check('and the log row says so, as not OK', [logged[logged.length - 1].ok, /1 refused by Calendar: Calendar said no/.test(logged[logged.length - 1].detail)], [false, true]);
+
+  reset();
+  box.IS9WD_CAL_BUDGET_MS_ = -1;
+  const none = box.IS9WD_calSync_(cfg, null);
+  check('a spent budget starts nothing and says how much is left', [none.updated, none.removed, none.left, none.more, calls.length], [0, 0, 4, true, 0]);
+  check('the log names what is still to do', /4 still to do in the next run/.test(logged[logged.length - 1].detail), true);
+  box.IS9WD_CAL_BUDGET_MS_ = 150000;
+
+  reset({ D0003: { title: 'Old title (Partnerships)', date: d(2026, 10, 1) } });
+  box.IS9WD_calSync_(cfg, null);
+  check('a moved and renamed task is retitled and moved, and its description left alone',
+    calls.filter((c) => c[1] === 'D0003').map((c) => c[0]), ['setTitle', 'setAllDayDate', 'addGuest', 'setTag']);
+}
+
 console.log('\n    ' + pass + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

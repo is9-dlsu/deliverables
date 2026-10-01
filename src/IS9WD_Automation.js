@@ -258,7 +258,10 @@ function IS9WD_autoImpl_(jobKey) {
 // the emails and the carousel matter more than the calendar.
 function IS9WD_autoCalendar_(cfg, say) {
   try {
-    return IS9WD_lockedRun_(function () { return IS9WD_calSync_(cfg, say); });
+    var out = IS9WD_lockedRun_(function () { return IS9WD_calSync_(cfg, say); });
+    // A sync that ran out of its budget carries on in a follow up run a minute from now.
+    if (out && out.more) IS9WD_calSoon_(60000);
+    return out;
   } catch (err) {
     var why = IS9WD_txt_(err && err.message ? err.message : err);
     if (say) say('the calendar was not updated: ' + why);
