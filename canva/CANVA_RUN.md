@@ -6,8 +6,8 @@ What a Claude session does every Sunday: read `02 | Canva Feed` through the Goog
 
 ## Three rules, before the first read
 
-1. **Nothing in this run adds, deletes or reorders a page, and nothing deletes an element.** The master is drawn once by hand and reused every week. The run replaces text inside frames that already exist, and exports a page list. A frame the feed marks `Visible = FALSE` gets its blank strings pasted in and is otherwise left alone.
-2. **Every paste is page scoped.** The headline, the VP line, the tagline and every slot string are pasted into one named page by its page index. Across fourteen near identical pages two officers with the same count share a byte identical tagline, and every unused slot shares identical blank text, so a design wide find and replace hits pages it was not aimed at. Only the week line and the three legends are design wide, and they live on page 1 alone.
+1. **Nothing in this run adds, deletes or reorders a page, and nothing deletes an element.** The master is drawn once by hand and reused every week. The run replaces text inside frames that already exist, and exports a page list. A slot the feed marks `Visible = FALSE` is hidden, never deleted: its five elements (station, number, title, deadline, remark) are set to opacity 0. A visible slot has all five set back to opacity 1, because last week may have hidden it.
+2. **Every paste is page scoped.** The headline, the VP line, the tagline and every slot string are pasted into one named page by its page index. Across fourteen near identical pages two officers with the same count share a byte identical tagline, and every unused slot shares identical blank text, so a design wide find and replace hits pages it was not aimed at. The week line lives on page 1 alone. **The three legends are on page 1 and again on every officer page**, under the tagline, so they are pasted fifteen times, page by page, like everything else. Found on 2026-10-05 filling the real master: an officer page still read `DUE SEP 21 TO 22` after page 1 had moved to Week 05.
 3. **Copy, never assemble.** Every string is taken from its feed cell as is, with `\|` unescaped back to `|`, the double spaces kept, the middle dot kept, and the case kept. If a string looks wrong, the feed is wrong and the fix is in the workbook, not in the paste.
 
 ## What the connector hands you
@@ -174,8 +174,11 @@ A range inside one month reads `SEP 21 TO 27`; across a month boundary it reads 
 
 The run edits what is already on a page and nothing else:
 
-- **Text.** The eight strings on page 1. On each officer page the headline, the VP line, the tagline, and for each of the fifteen slots the title, the deadline text and the remark text. That is the whole list. A blank string is pasted as a blank string.
+- **Text.** The eight strings on page 1, plus the fourteen title page rows (office, next due text, count). On each officer page the headline, the VP line, the tagline, the three legends, and for each visible slot the title, the deadline text and, when `Remark visible` is TRUE, the remark text. That is the whole list.
 - **Colour, on an element that exists.** The two hex columns are the fill for a slot's station element and the colour of its number text, and the officer row's pair is the title page's station indicator for that officer. They are applied to the element already on the page, by its hex value from the feed, never by a hex from memory.
+- **Opacity, on an element that exists.** A `Visible = FALSE` slot has its five elements at 0 and a visible one at 1. A visible slot whose `Remark visible` is FALSE has only its remark at 0. Nothing else on a page ever changes opacity.
+
+The operations that do this, measured on the real master on 2026-10-05 inside an unsaved transaction: `replace_text` keeps the frame's font, size and colour; `recolor_element` on a station circle changes its fill and keeps its white stroke; `format_text` with only `color` recolours a number; `update_opacity` hides and shows. A slot's five frames are matched to `Slot` by position, top to bottom, which is the order the master was drawn in.
 
 The run never: adds a page, deletes a page, reorders a page, deletes an element, draws an element, moves or resizes a frame, or renumbers a slot. Canva's connector can add a page but cannot duplicate one, and where an added page lands is undocumented, so a missing page is a stop and a hand rebuild, never a mid run repair.
 
