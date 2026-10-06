@@ -313,15 +313,26 @@ function IS9WD_weekNumber(weekStart, termCal) {
   return Math.floor(days / 7) + 1;
 }
 
-// The Canva OVERDUE window is deadline before week start, which is v1's definition and
-// is not the human one in 5.3. A deadline that is not a date lands in W1 so the slot
-// still has a station color to paint; both conditions are blocking flags anyway.
-function IS9WD_windowFor(deadline, weekStart, weekEnd) {
+// The Canva OVERDUE window is a deadline before the later of week start and today.
+// Ethan ruled on 2026-10-06 that a carousel run on any day shows every item past its
+// deadline as overdue, which is the human meaning in 5.3. On Sunday today is before the
+// week start, so the cutoff is still the week start and a Sunday run reads exactly as
+// v1's did. today is optional: without it the cutoff is the week start alone. A
+// deadline that is not a date lands in W1 so the slot still has a station color to
+// paint; both conditions are blocking flags anyway.
+function IS9WD_overdueCutoff_(weekStart, today) {
+  var ws = IS9WD_day_(weekStart);
+  if (ws === null) return null;
+  var t = today === undefined || today === null ? null : IS9WD_day_(today);
+  return t !== null && t > ws ? t : ws;
+}
+
+function IS9WD_windowFor(deadline, weekStart, weekEnd, today) {
   var d = IS9WD_day_(deadline);
   var ws = IS9WD_day_(weekStart);
   var we = IS9WD_day_(weekEnd);
   if (d === null || ws === null || we === null) return 'W1';
-  if (d < ws) return 'OVERDUE';
+  if (d < IS9WD_overdueCutoff_(weekStart, today)) return 'OVERDUE';
   if (d <= ws + 1) return 'W1';
   if (d <= we) return 'W2';
   return 'W3';
@@ -386,17 +397,17 @@ function IS9WD_tagline(weekNo, rangeText, count) {
     IS9WD_txt_(rangeText) + '  |  ' + n + ' TASK' + (n === 1 ? '' : 'S');
 }
 
-function IS9WD_deadlineText(deadline, weekStart) {
+function IS9WD_deadlineText(deadline, weekStart, today) {
   var d = IS9WD_toDate_(deadline);
   if (!d) return '';
-  var ws = IS9WD_day_(weekStart);
-  if (ws === null) return '!ERR';
-  return (IS9WD_day_(d) < ws ? 'Overdue: ' : 'Due ') + IS9WD_ddd_(d);
+  var cut = IS9WD_overdueCutoff_(weekStart, today);
+  if (cut === null) return '!ERR';
+  return (IS9WD_day_(d) < cut ? 'Overdue: ' : 'Due ') + IS9WD_ddd_(d);
 }
 
 // items is the committee's active titled items. A committee whose items all carry
 // unusable deadlines reads `Next due: date missing` rather than nothing.
-function IS9WD_nextDueText(items, weekStart) {
+function IS9WD_nextDueText(items, weekStart, today) {
   var list = items && typeof items.length === 'number' ? items : [];
   if (list.length === 0) return 'No deliverables this week';
   var earliest = null;
@@ -411,9 +422,9 @@ function IS9WD_nextDueText(items, weekStart) {
     }
   }
   if (earliest === null) return 'Next due: date missing';
-  var ws = IS9WD_day_(weekStart);
-  if (ws === null) return '!ERR';
-  return (earliest < ws ? 'Overdue: ' : 'Next due ') + IS9WD_ddd_(at);
+  var cut = IS9WD_overdueCutoff_(weekStart, today);
+  if (cut === null) return '!ERR';
+  return (earliest < cut ? 'Overdue: ' : 'Next due ') + IS9WD_ddd_(at);
 }
 
 // U+00B7 then two spaces. Both are contract.
@@ -642,7 +653,7 @@ function IS9WD_hexFor_(hex, win) {
 // is a row with Visible FALSE rather than a missing row. No page number is produced
 // here: that is IS9WD_masterPage alone. Item no is the officer relative rank, so page
 // 2's first slot reads 11, which is the run's cross check that the right items landed.
-function IS9WD_slotRows(items, weekStart, weekEnd, hex, slotsPerPage, maxParts) {
+function IS9WD_slotRows(items, weekStart, weekEnd, hex, slotsPerPage, maxParts, today) {
   var sorted = IS9WD_sortActive(items);
   var per = IS9WD_posInt_(slotsPerPage);
   var split = IS9WD_publishSplit(sorted.length, slotsPerPage, maxParts);
@@ -652,26 +663,26 @@ function IS9WD_slotRows(items, weekStart, weekEnd, hex, slotsPerPage, maxParts) 
     for (var s = 1; s <= per; s++) {
       var rank = (p - 1) * per + s;
       var item = rank <= split.published ? sorted[rank - 1] : null;
-      rows.push(IS9WD_slotRow_(item, s, rank, weekStart, weekEnd, hex));
+      rows.push(IS9WD_slotRow_(item, s, rank, weekStart, weekEnd, hex, today));
     }
     pages.push({ part: p, rows: rows });
   }
   return { pages: pages, notPublished: split.notPublished };
 }
 
-function IS9WD_slotRow_(item, slot, rank, weekStart, weekEnd, hex) {
+function IS9WD_slotRow_(item, slot, rank, weekStart, weekEnd, hex, today) {
   var row = {
     slot: IS9WD_two_(slot), visible: false, title: '', deadlineText: '',
     remarkVisible: false, remarkText: '', window: '', stationHex: '',
     numberTextHex: '', flag: '', itemNo: ''
   };
   if (!item) return row;
-  var win = IS9WD_windowFor(item.deadline, weekStart, weekEnd);
+  var win = IS9WD_windowFor(item.deadline, weekStart, weekEnd, today);
   var paint = IS9WD_hexFor_(hex, win);
   var remark = IS9WD_txt_(item.remark);
   row.visible = true;
   row.title = IS9WD_txt_(item.title);
-  row.deadlineText = IS9WD_deadlineText(item.deadline, weekStart);
+  row.deadlineText = IS9WD_deadlineText(item.deadline, weekStart, today);
   row.remarkVisible = !IS9WD_blank_(remark);
   row.remarkText = IS9WD_remarkText(remark);
   row.window = win;

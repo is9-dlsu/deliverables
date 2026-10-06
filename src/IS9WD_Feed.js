@@ -200,11 +200,17 @@ function IS9WD_feedRangeTextFormula_(startExpr, endExpr) {
 var IS9WD_FEED_WEEKNO_EXPR_ =
   'IF(IS9WD_WEEK_NUMBER="","--",TEXT(IS9WD_WEEK_NUMBER,"00"))';
 
+// The OVERDUE cutoff, the later of week start and today. Ethan ruled on 2026-10-06
+// that a carousel run on any day shows every item past its deadline as overdue. On
+// Sunday today is before the week start, so a Sunday run reads exactly as before. The
+// same rule is IS9WD_overdueCutoff_ in Core, which the Node tests pin.
+var IS9WD_FEED_OVERDUE_CUTOFF_ = 'MAX(IS9WD_WEEK_START,IS9WD_EFFECTIVE_TODAY)';
+
 // The officer row's window, which differs from a slot's: an empty committee takes
 // W3 and a committee whose deadlines are all blank takes W1 (6.4).
 function IS9WD_feedOfficerWindowExpr_(countRef, dueRef) {
   return 'IF(' + countRef + '=0,"W3",IF(' + dueRef + '=0,"W1",' +
-    'IF(INT(' + dueRef + ')<IS9WD_WEEK_START,"OVERDUE",' +
+    'IF(INT(' + dueRef + ')<' + IS9WD_FEED_OVERDUE_CUTOFF_ + ',"OVERDUE",' +
     'IF(INT(' + dueRef + ')<=IS9WD_WEEK_START+1,"W1",' +
     'IF(INT(' + dueRef + ')<=IS9WD_WEEK_END,"W2","W3")))))';
 }
@@ -746,7 +752,7 @@ function IS9WD_feedOfficers_(sheet, layout) {
       '=MIN(IS9WD_PUBLISH_MAX,' + uncapped + ')',
       '=IF(' + count + '=0,"No deliverables this week",' +
         'IF(' + due + '=0,"Next due: date missing",' +
-        'IF(INT(' + due + ')<IS9WD_WEEK_START,"Overdue: "&TEXT(' + due + ',"ddd, mmm d"),' +
+        'IF(INT(' + due + ')<' + IS9WD_FEED_OVERDUE_CUTOFF_ + ',"Overdue: "&TEXT(' + due + ',"ddd, mmm d"),' +
         '"Next due "&TEXT(' + due + ',"ddd, mmm d"))))',
       IS9WD_feedHexFormula_(win, 1),
       IS9WD_feedHexFormula_(win, 2),
@@ -921,7 +927,7 @@ function IS9WD_feedSlots_(sheet, layout) {
       IS9WD_two_(slotIndex + 1),
       '=NOT(ISNA(MATCH(' + key + ',IS9WD_DEL_SLOTKEY,0)))',
       IS9WD_feedSlotLookup_('IS9WD_DEL_TITLE', key),
-      '=IF(' + deadline + '="","",IF(INT(' + deadline + ')<IS9WD_WEEK_START,' +
+      '=IF(' + deadline + '="","",IF(INT(' + deadline + ')<' + IS9WD_FEED_OVERDUE_CUTOFF_ + ',' +
         '"Overdue: "&TEXT(' + deadline + ',"ddd, mmm d"),' +
         '"Due "&TEXT(' + deadline + ',"ddd, mmm d")))',
       '=AND(' + visible + ',' + remark + '<>"")',
@@ -929,7 +935,7 @@ function IS9WD_feedSlots_(sheet, layout) {
       // W1 rather than blank when the deadline is unusable, because the contract
       // defines no blank window and the slot still needs a station colour to paint.
       '=IF(NOT(' + visible + '),"",IF(' + deadline + '="","W1",' +
-        'IF(INT(' + deadline + ')<IS9WD_WEEK_START,"OVERDUE",' +
+        'IF(INT(' + deadline + ')<' + IS9WD_FEED_OVERDUE_CUTOFF_ + ',"OVERDUE",' +
         'IF(INT(' + deadline + ')<=IS9WD_WEEK_START+1,"W1",' +
         'IF(INT(' + deadline + ')<=IS9WD_WEEK_END,"W2","W3")))))',
       IS9WD_feedSlotHexFormula_(win, 1),

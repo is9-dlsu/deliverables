@@ -1483,7 +1483,7 @@ var IS9WD_DEFAULTS = {
   // Rows 18 to 21, columns A to D. The two #1C2120 values are Canva data, the
   // number text hex the carousel prints. They are never used to paint a cell.
   WINDOWS: [
-    ['OVERDUE', 'deadline before week start', '#e9ebd4', '#1C2120'],
+    ['OVERDUE', 'deadline before today, or before week start on a Sunday', '#e9ebd4', '#1C2120'],
     ['W1', 'Monday to Tuesday of the week', '#e9ebd4', '#1C2120'],
     ['W2', 'Wednesday to Sunday of the week', '#8a64a9', '#F8FBFD'],
     ['W3', 'after week end', '#085040', '#F8FBFD']
@@ -1924,7 +1924,10 @@ var IS9WD_STATS_TILES = [
   ['T.PACE', 'AGAINST PACE'],
   ['T.READY', 'CANVA'],
   ['T.OVERDUE', 'LATE NOW'],
-  ['T.SOON', 'DUE IN 2 DAYS'],
+  // The count is deadline today or tomorrow and still open, so the caption says exactly
+  // that. "In 2 days" read as the day after tomorrow, and it is NOT the evening email's
+  // window, which is tomorrow plus everything overdue and never today.
+  ['T.SOON', 'DUE TODAY OR TOMORROW'],
   ['T.NOITEMS', 'OFFICERS WITH NOTHING']
 ];
 
@@ -2143,6 +2146,14 @@ var IS9WD_DASH_BANNER = 'IS9 WEEKLY DELIVERABLES  ·  WHAT TO DO RIGHT NOW';
 var IS9WD_DASH_HELP = 'Read only. Nothing here is typed and nothing here is merged. ' +
   'Every number is read from another tab, so this page can never disagree with one.';
 
+// TRUE when the last self test line carries the failure marker. FIND, not SEARCH, because
+// the marker is written in one case by one writer, IS9WD_stSummary_, and only when a check
+// failed. The bare name is right in a value cell; the rule path wraps it in INDIRECT.
+function IS9WD_dashSelfTestFailed_() {
+  var marker = '"' + String(IS9WD_SELFTEST_FAIL_MARKER_).replace(/"/g, '""') + '"';
+  return 'ISNUMBER(FIND(' + marker + ',IS9WD_DIAG_SELFTEST))';
+}
+
 // Six cards, three across, two rows of three. `rows` is [label, formula, kind], and kind
 // drives the number format and the alignment through IS9WD_KIND_FMT_, so no card sets a
 // format by hand.
@@ -2242,10 +2253,15 @@ function IS9WD_dashCards_() {
         // puts the pass and fail counts after it, so in 316 px of run-on room the half that
         // matters was the half that got cut. The column cannot widen: all three card sets
         // share one width table, so widening it costs the tab its no-scroll claim.
+        //
+        // THE VERDICT KEYS ON THE FAILURE MARKER, NOT ON THE WORD. The summary always
+        // carries "N fail", a clean run included ("0 fail"), so SEARCH("fail") read FAILED
+        // on a clean run too. The marker is written only when a check failed, and it is the
+        // same constant 04 | Statistics tests, so the two cannot disagree.
         { label: 'Last self test', formula: '=IF(IS9WD_DIAG_SELFTEST="","not run on this ' +
-            'workbook yet",IF(ISNUMBER(SEARCH("fail",IS9WD_DIAG_SELFTEST)),"FAILED  ","OK  ")' +
+            'workbook yet",IF(' + IS9WD_dashSelfTestFailed_() + ',"FAILED  ","OK  ")' +
             '&IS9WD_DIAG_SELFTEST)', kind: 'text',
-          flag: '=IFERROR(ISNUMBER(SEARCH("fail",IS9WD_DIAG_SELFTEST)),FALSE)' },
+          flag: '=IFERROR(' + IS9WD_dashSelfTestFailed_() + ',FALSE)' },
         { label: 'Overrides set', formula: '=IF(IS9WD_DIAG_OVERRIDES="","none",' +
             'IS9WD_DIAG_OVERRIDES)', kind: 'text' },
         { label: 'Officers\u0027 page address', formula: '=IF(IS9WD_APP_BASE_URL="",' +
@@ -2256,9 +2272,12 @@ function IS9WD_dashCards_() {
           flag: '=IS9WD_ENDPOINT_URL=""' }
       ]
     },
+    // The first four rows are the error scans and nothing else. The three below them are
+    // counts a healthy workbook carries, so the title names flags as their own thing and
+    // the help line scopes "broken" to the four rows it is true of.
     {
-      key: 'D.BROKEN', title: 'BROKEN CELLS AND ROOM',
-      help: 'Above zero is a broken formula, never something you typed.',
+      key: 'D.BROKEN', title: 'BROKEN CELLS, FLAGS AND ROOM',
+      help: 'The first four above zero are broken formulas. Overdue is a flag.',
       rows: [
         { label: 'On the feed', formula: '=' + q('IS9WD_FEED_ERRORS'), kind: 'count',
           flag: '=IFERROR(N(IS9WD_FEED_ERRORS)>0,TRUE)' },
@@ -2268,11 +2287,18 @@ function IS9WD_dashCards_() {
           flag: '=IFERROR(N(IS9WD_OT_ERRORS)>0,TRUE)' },
         { label: 'On the helper tab', formula: '=' + q('IS9WD_VIEWS_ERRORS'),
           kind: 'count', flag: '=IFERROR(N(IS9WD_VIEWS_ERRORS)>0,TRUE)' },
-        { label: 'Flagged task rows', formula: '=' + q('IS9WD_FEED_FLAGGED'),
+        // IS9WD_FEED_FLAGGED counts every row whose Check cell is not blank, and Overdue is
+        // one of those flags, so on a normal week this is mostly late tasks rather than
+        // anything broken. The eight that block Canva are counted on ONLY YOU CAN DO THESE.
+        { label: 'Task rows with a flag', formula: '=' + q('IS9WD_FEED_FLAGGED'),
           kind: 'count' },
         { label: 'Weeks of row room', formula: '=' + q('IS9WD_STATS_ROOM_WEEKS'),
           kind: 'text' },
-        { label: 'Tasks on the carousel', formula: '=' + q('IS9WD_FEED_TOTAL'),
+        // IS9WD_FEED_TOTAL is every open task, on a slide or not. No single named cell holds
+        // the count the slides print, and TOTAL less NOTPUB would be a recomputation that
+        // also misreads a task with an unknown committee, so the label says what the value
+        // is. The slide shortfall is "Tasks with no slide" on the Canva card.
+        { label: 'Open tasks', formula: '=' + q('IS9WD_FEED_TOTAL'),
           kind: 'count' }
       ]
     },

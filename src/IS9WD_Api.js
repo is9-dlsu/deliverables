@@ -1149,6 +1149,10 @@ function IS9WD_revokeToken_(key) {
 // The two identification columns and the revoked flag on `_Engine`, by row position. The
 // TOKEN ITSELF NEVER TOUCHES A CELL: only its first six characters and the date it was issued,
 // which is enough to tell two links apart in a dispute and useless for using one.
+//
+// "ADMIN" is the President's row. IS9WD_rotateToken_ and IS9WD_linkFor_ both accept it as
+// another name for the admin key, and without this a rotation asked for by that name minted
+// a token and matched no row, so the date it was issued was never written anywhere.
 function IS9WD_linkStamp_(key, token, revoked) {
   var e = IS9WD_ENG.DIRECTORY;
   var sheet = IS9WD_sheet_('ENGINE');
@@ -1156,8 +1160,10 @@ function IS9WD_linkStamp_(key, token, revoked) {
   var cfgSheet = IS9WD_sheet_('CONFIG');
   var d = IS9WD_CFG.DIRECTORY;
   var keys = cfgSheet.getRange(d.firstRow, 1, count, 1).getValues();
+  var want = IS9WD_trim_(key).toUpperCase();
+  if (want === 'ADMIN') want = IS9WD_trim_(d.adminKey).toUpperCase();
   for (var r = 0; r < count; r++) {
-    if (IS9WD_trim_(keys[r][0]).toUpperCase() !== IS9WD_trim_(key).toUpperCase()) continue;
+    if (IS9WD_trim_(keys[r][0]).toUpperCase() !== want) continue;
     if (IS9WD_trim_(token) !== '') {
       sheet.getRange(e.firstRow + r, 4).setValue(token.substring(0, 6));
       sheet.getRange(e.firstRow + r, 5).setValue(IS9WD_todayManila_());

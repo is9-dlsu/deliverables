@@ -99,7 +99,7 @@ A **checklist**, decided by Ethan on 2026-09-27. Two statuses, defined in Config
 - **Active** means "status is a known status and is not terminal". Active is the only concept the rest of this spec uses. Counts, what publishes (5.4), the feed, `Overdue`, and all four emails read Active, never a label. Keeping Active is what makes the label set cheap: renaming either label, or adding a third, is one Configuration edit plus one `Build or repair workbook`, with no code change.
 - **In the app a person taps a checkbox on their own item.** Tapping again inside `IS9WD_UNDO_SECONDS`, default 60, unticks it. After that window only Ethan can reopen the item, from the admin link. Ethan can tick or untick anything at any time.
 - **The undo window is enforced on the server**, against the item's stored `Status at` and the server clock (7.5), never in the browser. A reload, a second device or a wrong client clock cannot widen it.
-- **Overdue**, everywhere a human reads it, means deadline before effective today and Active. The Canva `OVERDUE` window means deadline before week start, unchanged from v1. See 5.3.
+- **Overdue**, everywhere a human reads it, means deadline before effective today and Active. The Canva `OVERDUE` window means deadline before the later of week start and effective today, Ethan's ruling of 2026-10-06: a late item prints `Overdue` on any day the feed is read. On a Sunday effective today is before week start, so a Sunday run is unchanged from v1. See 5.3.
 - Status does **not** appear on the carousel, so the section 6 contract is unchanged.
 
 Out of scope: editing Canva, building the master design's 19 pages (a one time hand build under Ethan's approval, 6.3), the EBEXECOM MasterSheet, per-VP Sheet access, a third status, percentages, file uploads as proof.
@@ -569,7 +569,7 @@ Hidden, nine columns, ends on the sign-off store's live last row. It carries the
 
 | Row | Window | Dates | Station hex | Number text hex |
 |---|---|---|---|---|
-| 11 | OVERDUE | deadline before week start | `#e9ebd4` | `#1C2120` |
+| 11 | OVERDUE | deadline before today, or before week start on a Sunday | `#e9ebd4` | `#1C2120` |
 | 12 | W1 | Monday to Tuesday of the week | `#e9ebd4` | `#1C2120` |
 | 13 | W2 | Wednesday to Sunday of the week | `#8a64a9` | `#F8FBFD` |
 | 14 | W3 | after week end | `#085040` | `#F8FBFD` |
@@ -933,7 +933,7 @@ Not proposals. They follow from the decided status field, the decided publish se
 
 ### 6.2 Sort order, simplified
 
-v1's sort is "overdue first (oldest first), then by deadline ascending, then by original row number". Overdue means deadline before week start, so every overdue item already sorts before every non-overdue item under a plain deadline ascending sort. The three-part rule reduces exactly to **deadline ascending, then ID ascending**, which is what `Rank` computes. Identical output, one formula instead of three passes. ID replaces row position for the reason in 5.4.
+v1's sort is "overdue first (oldest first), then by deadline ascending, then by original row number". Overdue means deadline before the later of week start and effective today, so every overdue item already sorts before every non-overdue item under a plain deadline ascending sort. The three-part rule reduces exactly to **deadline ascending, then ID ascending**, which is what `Rank` computes. Identical output, one formula instead of three passes. ID replaces row position for the reason in 5.4.
 
 ### 6.3 Physical layout
 
@@ -1073,8 +1073,8 @@ Named ranges over the visible blocks, so nothing in this section or in `IS9WD_Fe
 - T25 uncapped count: `=COUNTIFS(IS9WD_DEL_COMMITTEE,$R25,IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>")`
 - D Count: `=MIN(IS9WD_PUBLISH_MAX,$T25)`
 - S25 earliest deadline: `=IFERROR(MINIFS(IS9WD_DEL_DEADLINE,IS9WD_DEL_COMMITTEE,$R25,IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0"),0)`
-- E Next due text: `=IF($D25=0,"No deliverables this week",IF($S25=0,"Next due: date missing",IF(INT($S25)<IS9WD_WEEK_START,"Overdue: "&TEXT($S25,"ddd, mmm d"),"Next due "&TEXT($S25,"ddd, mmm d"))))`
-- F Station hex: `=IFERROR(INDEX(IS9WD_HEX,MATCH(IF($D25=0,"W3",IF($S25=0,"W1",IF(INT($S25)<IS9WD_WEEK_START,"OVERDUE",IF(INT($S25)<=IS9WD_WEEK_START+1,"W1",IF(INT($S25)<=IS9WD_WEEK_END,"W2","W3"))))),IS9WD_WINDOW_NAMES,0),1),"!ERR")`. G Number text hex: the same with column 2.
+- E Next due text: `=IF($D25=0,"No deliverables this week",IF($S25=0,"Next due: date missing",IF(INT($S25)<MAX(IS9WD_WEEK_START,IS9WD_EFFECTIVE_TODAY),"Overdue: "&TEXT($S25,"ddd, mmm d"),"Next due "&TEXT($S25,"ddd, mmm d"))))`
+- F Station hex: `=IFERROR(INDEX(IS9WD_HEX,MATCH(IF($D25=0,"W3",IF($S25=0,"W1",IF(INT($S25)<MAX(IS9WD_WEEK_START,IS9WD_EFFECTIVE_TODAY),"OVERDUE",IF(INT($S25)<=IS9WD_WEEK_START+1,"W1",IF(INT($S25)<=IS9WD_WEEK_END,"W2","W3"))))),IS9WD_WINDOW_NAMES,0),1),"!ERR")`. G Number text hex: the same with column 2.
 - H Pages: `=MAX(1,ROUNDUP($D25/IS9WD_SLOTS_PER_PAGE,0))`, the committee's part count this week, 1 or 2. `MAX(1,...)` is what gives an empty committee one page rather than none, and `ROUNDUP` is what gives a committee with exactly ten items one page rather than two (5.4).
 - I Not published: `=MAX(0,$T25-$D25)`
 - V25 check: `=IF($R25="!ERR","No committee for carousel order "&$U25,IF($H25>IS9WD_MAX_PARTS,"Pages needed exceeds the maximum parts","OK"))`
@@ -1122,10 +1122,10 @@ Note the asymmetry, which is v1's and is kept on purpose: the VP line uppercases
 | E Title | `=IFERROR(INDEX(IS9WD_DEL_TITLE,MATCH($B77&"-"&$C77,IS9WD_DEL_SLOTKEY,0)),"")` |
 | R helper | `=IFERROR(INDEX(IS9WD_DEL_DEADLINE,MATCH($B77&"-"&$C77,IS9WD_DEL_SLOTKEY,0)),"")` |
 | S helper | `=IFERROR(INDEX(IS9WD_DEL_REMARK,MATCH($B77&"-"&$C77,IS9WD_DEL_SLOTKEY,0)),"")` |
-| F Deadline text | `=IF($R77="","",IF(INT($R77)<IS9WD_WEEK_START,"Overdue: "&TEXT($R77,"ddd, mmm d"),"Due "&TEXT($R77,"ddd, mmm d")))` |
+| F Deadline text | `=IF($R77="","",IF(INT($R77)<MAX(IS9WD_WEEK_START,IS9WD_EFFECTIVE_TODAY),"Overdue: "&TEXT($R77,"ddd, mmm d"),"Due "&TEXT($R77,"ddd, mmm d")))` |
 | G Remark visible | `=AND($D77,$S77<>"")` |
 | H Remark text | `=IF($S77="","","·  "&$S77)` with U+00B7 then two spaces |
-| I Window | `=IF(NOT($D77),"",IF($R77="","W1",IF(INT($R77)<IS9WD_WEEK_START,"OVERDUE",IF(INT($R77)<=IS9WD_WEEK_START+1,"W1",IF(INT($R77)<=IS9WD_WEEK_END,"W2","W3")))))` |
+| I Window | `=IF(NOT($D77),"",IF($R77="","W1",IF(INT($R77)<MAX(IS9WD_WEEK_START,IS9WD_EFFECTIVE_TODAY),"OVERDUE",IF(INT($R77)<=IS9WD_WEEK_START+1,"W1",IF(INT($R77)<=IS9WD_WEEK_END,"W2","W3")))))` |
 | J, K hex | `=IF($I77="","",IFERROR(INDEX(IS9WD_HEX,MATCH($I77,IS9WD_WINDOW_NAMES,0),1),"!ERR"))`, and column 2 |
 | L Flag | `=IFERROR(INDEX(IS9WD_DEL_CHECK,MATCH($B77&"-"&$C77,IS9WD_DEL_SLOTKEY,0)),"")` |
 | M Item no | `=IF(NOT($D77),"",IFERROR(TEXT(INDEX(IS9WD_DEL_RANK,MATCH($B77&"-"&$C77,IS9WD_DEL_SLOTKEY,0)),"00"),"!ERR"))` |
@@ -1290,7 +1290,7 @@ Three cells per tile in three rows: the number at 22 point bold in `#085040`, th
 | 4 | AGAINST PACE | `IS9WD_STATS_PACE` | behind the elapsed fraction of the week by more than `IS9WD_STATS_PACE_SLACK` | A naked completion percentage is 0% on Monday morning by construction, which is a vanity number. Against elapsed time it becomes ahead or behind, which is actionable. This is the one measure that was rescued rather than killed. |
 | 5 | CANVA | `IS9WD_STATS_READY` | reads anything but `READY` | `READY` or `NOT READY` rather than the feed's own sentence, because a tile is read from across a desk. The note names the gate that holds it. |
 | 6 | LATE NOW | `IS9WD_STATS_OVERDUE_NOW` | above 0 | The chase list's size. It reads the `Check` column rather than restating the rule, because a second definition of overdue can drift from the flag Ethan sees on the data tab. |
-| 7 | DUE IN 2 DAYS | `IS9WD_STATS_DUE_SOON` | never | Exactly what the daily digest emails out, so it says what landed in thirteen inboxes this morning. A busy Wednesday is not a fault. |
+| 7 | DUE TODAY OR TOMORROW | `IS9WD_STATS_DUE_SOON` | never | Active items due today or tomorrow. Close to the evening digest but not the same count: the digest sends tomorrow's items and the late ones, and the late ones are tile 6. A busy Wednesday is not a fault. |
 | 8 | OFFICERS WITH NOTHING | `IS9WD_STATS_NO_ITEMS` | above 0 | **The most actionable number on the tab**, because it is Ethan's own omission and nobody else's: he enters every item, so an officer with nothing has nothing to tick and gets no Monday email. |
 
 **A flagged tile takes bold `#724485` text and no fill**, which is this tab's one departure from the workbook's usual flag treatment. A cream filled tile reads as a box rather than as a number, and the whole point of a tile is the number. Each tile's rule is scoped to that tile's own three cells across its own span, so a flag on one tile cannot decorate the tile beside it. It is recorded as a ruling in Appendix C.
@@ -1368,7 +1368,7 @@ Fourteen rows in **hierarchy order** (4B.9), because hierarchy order is the orde
 
 **Identity comes from one spilling sort on `_Views`, and column A is a plain pointer at it**, so display formatting never fights the sort. Then one broadcast formula per column: `COUNTIFS`, `SUMIFS`, `MINIFS`, `MAXIFS` and `SUMIF` all take an array criterion under `ARRAYFORMULA`, which is what makes a fourteen row block cost one formula per column instead of fourteen lookups per column.
 
-**`Avg days` measures creation to the last status change**, using the identity that a sum of differences equals a difference of sums when the filter is identical, which is what lets `SUMIFS` stand in for an `AVERAGEIFS` over a computed range. It is a **behaviour signal rather than a performance measure**: an average near 0 means the officer ticks the moment Ethan enters the item, which is a data quality smell worth seeing. **It is the first column to cut if recalculation bites.**
+**`Avg days` measures creation to the last status change**, using the identity that a sum of differences equals a difference of sums when the filter is identical, which is what lets `SUMIFS` stand in for an `AVERAGEIFS` over a computed range. Only a row with a `Created at` stamp counts, and only an add from an officer's page stamps one, so a row Ethan typed is not in it. It is a **behaviour signal rather than a performance measure**: an average near 0 means the officer ticks the moment Ethan enters the item, which is a data quality smell worth seeing. **It is the first column to cut if recalculation bites.**
 
 Conditional formatting: `Attention` other than `OK`, `Overdue` above 0, `Worst late` at or above `IS9WD_STATS_LATE_DAYS`, `Silent` at or above `IS9WD_STATS_SILENT_DAYS` or reading `never`, `Rate` behind pace, and `On time` below `IS9WD_STATS_ONTIME_TARGET` all take the flag treatment. A `Rate` of exactly 1 and a non-zero `No slide` take the accent, because neither is a fault.
 
@@ -1653,7 +1653,7 @@ Four of them are worth a note.
 - **`Automation last run`** flags when the cell holds no timestamp at all or when the timestamp is more than two hours old, because the trigger is hourly (8.1).
 - **`Last self test`** tests the summary line for the phrase the self test writes when something failed. That phrase is declared once, in `IS9WD_Config.js`, and both files read it from there: two copies of it are two strings that drift, and the drift would read as a healthy self test on the row whose job is to say otherwise.
 - **`Master pages required`** is never flagged, and takes the accent instead. A formula cannot know how many pages the Canva master physically holds, so a test against a number in code would be either always true or always false. What it can do is print the number the master must reach and say that raising a capacity number needs a master rebuild before it can be used (6.3).
-- **`Rows used of 2000` and `Weeks of row room left`** are the two that matter most. 10.1's planning figure fills 2,000 rows in about seven weeks at 280 items a week, and these turn that from a paragraph in a document into a number on a screen with weeks on it. The second is `=ROUND(free rows / (items created in the last 28 days / 4),0)` and flags below `IS9WD_STATS_ROOM_WEEKS_WARN`. `IS9WD_STATS_ROOM_WEEKS` is the named range the self test reads.
+- **`Rows used of 2000` and `Weeks of row room left`** are the two that matter most. 10.1's planning figure fills 2,000 rows in about seven weeks at 280 items a week, and these turn that from a paragraph in a document into a number on a screen with weeks on it. The second is `=ROUND(free rows / (rows used / weeks since the first trimester began),0)`, where rows used is every ID on the data tab plus every Retired archive row stamped since that start, and it flags below `IS9WD_STATS_ROOM_WEEKS_WARN`. `IS9WD_STATS_ROOM_WEEKS` is the named range the self test reads.
 
 **Why the whole block is on a hidden tab rather than on the dashboard.** It is the machine reporting on itself: every row of it is useful on the morning something is wrong and none of it is what a president looks at before Sunday. Ethan's instruction was that the dashboard is for viewing KPIs and charts, and eleven rows of plumbing on it is the opposite of that. Nothing was lost: every named range is intact, the self test reads them, and the Sunday brief can print them.
 

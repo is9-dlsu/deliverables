@@ -1406,6 +1406,21 @@ function IS9WD_setupBackfillDirectory_(sheet, engineSheet, say) {
 // sheets: the Key it reads is the one on 00 | Configuration, because that is the column
 // the private links are named after, and the prefix and the date it writes are the code's
 // own and sit with the rest of the machinery.
+//
+// THE DATE WAS ONLY EVER WRITTEN AT THE MOMENT OF MINTING, and that is why all fourteen read
+// blank on a workbook whose fourteen links all work. The prefix heals on every build because
+// it is derived from the live token; the date cannot be derived from anything, so when the
+// cell holding it went away it never came back. Two things take it away while the token
+// survives in Script Properties: Reset and rebuild, which deletes `_Engine` and builds it
+// blank, and the layout move of 2026-09-27, which took the column from 00 | Configuration to
+// `_Engine` and migrated nothing. So a live token beside a blank date is now dated here,
+// once, from the Log when the Log still says when it was issued and from today when it does
+// not. A cell that holds a date is never touched, so a second build changes nothing.
+//
+// K10 gets a date and no prefix. It carries no member token, by design (4.8), and the
+// dashboard's `Officers with no link` subtracts one for its blank prefix; but its person holds
+// the admin link, and the old links warning has to be able to say that link is old too.
+// Rotate a link already stamps the K10 row this way when the admin token is rotated.
 function IS9WD_setupEnsureTokens_(sheet, engineSheet, cfg, say) {
   var d = IS9WD_CFG.DIRECTORY;
   var e = IS9WD_ENG.DIRECTORY;
@@ -1420,10 +1435,16 @@ function IS9WD_setupEnsureTokens_(sheet, engineSheet, cfg, say) {
   var minted = 0;
   var prefixTouched = false;
   var issuedTouched = false;
+  var adminAt = -1;
+  var undated = [];
 
   for (var r = 0; r < count; r++) {
     var key = IS9WD_trim_(keys[r][0]).toUpperCase();
-    if (key === '' || key === admin) continue;
+    if (key === '') continue;
+    if (key === admin) {
+      adminAt = r;
+      continue;
+    }
     var propKey = IS9WD_tokenKey_(key);
     var token = IS9WD_trim_(held[propKey]);
     if (token === '') {
@@ -1433,6 +1454,8 @@ function IS9WD_setupEnsureTokens_(sheet, engineSheet, cfg, say) {
       issued[r][0] = today;
       issuedTouched = true;
       say('token issued for ' + key);
+    } else if (IS9WD_blank_(issued[r][0])) {
+      undated.push({ at: r, key: key, prefix: token.substring(0, 6) });
     }
     var prefix = token.substring(0, 6);
     if (IS9WD_trim_(prefixes[r][0]) !== prefix) {
@@ -1442,14 +1465,124 @@ function IS9WD_setupEnsureTokens_(sheet, engineSheet, cfg, say) {
   }
   // Fourteen tokens for fourteen people: K10 holds the admin token instead of a row
   // token, so Show the links can name a link for Ethan on a fresh build.
-  if (IS9WD_blank_(held[IS9WD_PROP.TOKEN_ADMIN])) {
+  var adminToken = IS9WD_trim_(held[IS9WD_PROP.TOKEN_ADMIN]);
+  if (adminToken === '') {
     store.setProperty(IS9WD_PROP.TOKEN_ADMIN, IS9WD_setupNewToken_());
     minted++;
     say('admin token issued');
+    if (adminAt >= 0) {
+      issued[adminAt][0] = today;
+      issuedTouched = true;
+    }
+  } else if (adminAt >= 0 && IS9WD_blank_(issued[adminAt][0])) {
+    undated.push({ at: adminAt, key: admin, prefix: adminToken.substring(0, 6) });
+  }
+  if (undated.length) {
+    IS9WD_setupBackfillIssued_(undated, issued, admin, today, say);
+    issuedTouched = true;
   }
   if (prefixTouched) engineSheet.getRange(e.firstRow, 4, count, 1).setValues(prefixes);
   if (issuedTouched) engineSheet.getRange(e.firstRow, 5, count, 1).setValues(issued);
   return minted;
+}
+
+// Fills the blank dates in `issued` in place, and says which came from where. The Log is
+// read only when a date is missing, which is once per workbook rather than once per build:
+// after this run every live token has a date and the list it is called with is empty.
+// Never a token, never a property: it reads the Log and writes nothing but the array.
+function IS9WD_setupBackfillIssued_(undated, issued, admin, today, say) {
+  var log = IS9WD_setupSheet_('LOG');
+  var rows = [];
+  var last = log ? log.getLastRow() : 0;
+  if (last >= IS9WD_LOG.firstRow) {
+    // At to Detail, the seven columns an issue entry is recognised by.
+    rows = log.getRange(IS9WD_LOG.firstRow, IS9WD_LOG.firstCol,
+      last - IS9WD_LOG.firstRow + 1, 7).getValues();
+  }
+  var found = IS9WD_setupIssuedFromLog_(rows, undated, admin);
+  var fromLog = [];
+  var fromToday = [];
+  for (var i = 0; i < undated.length; i++) {
+    var u = undated[i];
+    var when = found[u.key] || null;
+    issued[u.at][0] = when || today;
+    if (when) {
+      fromLog.push(u.key + ' ' + IS9WD_dateKey_(when));
+    } else {
+      fromToday.push(u.key);
+    }
+  }
+  if (fromLog.length) {
+    say('link issue date filled in from the log for ' + fromLog.length + ': ' +
+      fromLog.join(', '));
+  }
+  if (fromToday.length) {
+    say('link issue date filled in as today for ' + fromToday.length + ' (' +
+      fromToday.join(', ') + '), because the log no longer says when they were issued. ' +
+      'They were issued on or before today, so the old links warning can fire late for ' +
+      'them and never early.');
+  }
+}
+
+// Pure, so Node can test it. `rows` are the Log's At to Detail columns, oldest first, as the
+// tab holds them; `undated` is one { key, prefix } per row that needs a date. The answer maps
+// a key to the midnight of the day its live token was issued, and a key the Log cannot
+// answer for is absent.
+//
+// THE NEWEST ISSUE ENTRY FOR A KEY DECIDES, AND ONLY IF IT ISSUED THE TOKEN HELD NOW. Two
+// writers log an issue. Setup writes "token issued for K03" or "admin token issued" and no
+// prefix, so the newest of those is the live token unless something later replaced it.
+// Rotate a link writes rotateToken against the key with "new link starts" and the first six
+// characters, so its entry can be checked against the live token. When the newest entry is a
+// rotation to some other prefix, the live token came from somewhere the Log does not show,
+// and that key gets no date rather than an older, wrong one.
+function IS9WD_setupIssuedFromLog_(rows, undated, adminKey) {
+  var out = {};
+  var open = {};
+  var left = 0;
+  var admin = IS9WD_trim_(adminKey).toUpperCase();
+  for (var w = 0; w < undated.length; w++) {
+    var k = IS9WD_trim_(undated[w].key).toUpperCase();
+    if (k === '' || open[k]) continue;
+    open[k] = undated[w];
+    left++;
+  }
+  for (var r = (rows || []).length - 1; r >= 0 && left > 0; r--) {
+    var row = rows[r] || [];
+    var source = IS9WD_trim_(row[2]);
+    var action = IS9WD_trim_(row[3]);
+    var detail = IS9WD_trim_(row[6]);
+    var key = '';
+    var prefix = null;
+    if (source === IS9WD_SETUP_SOURCE_) {
+      var minted = /^token issued for (\S+)$/i.exec(detail);
+      if (minted) {
+        key = minted[1].toUpperCase();
+      } else if (/^admin token issued$/i.test(detail)) {
+        key = admin;
+      }
+    } else if (action === 'rotateToken') {
+      key = IS9WD_trim_(row[4]).toUpperCase();
+      if (key === 'ADMIN') key = admin;
+      var started = /new link starts (\S+)/i.exec(detail);
+      prefix = started ? started[1] : '';
+    }
+    if (key === '' || !open[key]) continue;
+    var want = open[key];
+    delete open[key];
+    left--;
+    if (prefix !== null && prefix !== IS9WD_trim_(want.prefix)) continue;
+    var day = IS9WD_setupLogDay_(row[0]);
+    if (day) out[key] = day;
+  }
+  return out;
+}
+
+// The At column holds a real date time once Sheets has parsed the stamp it was given, and
+// the stamp text when it has not; either way only the day is wanted.
+function IS9WD_setupLogDay_(value) {
+  if (IS9WD_isDate_(value)) return IS9WD_midnight_(value);
+  return IS9WD_toDate_(IS9WD_trim_(value).substring(0, 10));
 }
 
 // Two UUIDs stripped of hyphens is 64 hex characters, which is what Core asks for:

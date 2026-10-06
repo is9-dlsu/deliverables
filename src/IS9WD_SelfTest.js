@@ -1990,11 +1990,11 @@ function IS9WD_stStatsTrend_(suite, ctx) {
         'a number yet, which is what an empty data tab looks like.' };
     }
     if (warn !== null && weeks < warn) {
-      return { state: IS9WD_ST.WARN, detail: weeks + ' weeks of room left at the rate ' +
-        'of the last four weeks, under the warning level of ' + warn +
+      return { state: IS9WD_ST.WARN, detail: weeks + ' weeks of room left at the average ' +
+        'rate since the first trimester began, under the warning level of ' + warn +
         '. Retire accomplished items to reclaim rows.' };
     }
-    return weeks + ' weeks of room left at the rate of the last four weeks.';
+    return weeks + ' weeks of room left at the average rate since the first trimester began.';
   });
 }
 

@@ -424,6 +424,39 @@ console.log('\n6. Window classification (4.2, 6.4 slot row I)');
     ['W1', 'W1', 'W1', 'W2', 'W2', 'W2', 'W2', 'W3', 'W3', 'W3']);
 }
 
+console.log('\n6b. Overdue on any day (Ethan, 2026-10-06)');
+{
+  // A carousel run on any day shows every item past its deadline as overdue. On Sunday
+  // today is before the week start, so the cutoff stays the week start and a Sunday
+  // run reads exactly as v1's did.
+  const windowFor = fn('IS9WD_windowFor');
+  const deadlineText = fn('IS9WD_deadlineText');
+  const nextDueText = fn('IS9WD_nextDueText');
+  const start = d(2026, 10, 5), end = d(2026, 10, 11);
+  const sunday = d(2026, 10, 4), tuesday = d(2026, 10, 6);
+
+  check('Tuesday: a Monday deadline is OVERDUE', windowFor(d(2026, 10, 5), start, end, tuesday), 'OVERDUE');
+  check('Tuesday: a Monday deadline prints as overdue',
+    deadlineText(d(2026, 10, 5), start, tuesday), 'Overdue: Mon, Oct 5');
+  check('Tuesday: a deadline of today is not overdue, still W1',
+    [windowFor(tuesday, start, end, tuesday), deadlineText(tuesday, start, tuesday)],
+    ['W1', 'Due Tue, Oct 6']);
+  check('Tuesday: tomorrow is W2', windowFor(d(2026, 10, 7), start, end, tuesday), 'W2');
+  check('Sunday: the cutoff is still the week start',
+    [windowFor(sunday, start, end, sunday), windowFor(start, start, end, sunday),
+      deadlineText(sunday, start, sunday)],
+    ['OVERDUE', 'W1', 'Overdue: Sun, Oct 4']);
+  check('no today given: the week start alone, as before',
+    [windowFor(d(2026, 10, 5), start, end), deadlineText(d(2026, 10, 5), start)],
+    ['W1', 'Due Mon, Oct 5']);
+  check('Tuesday: the officer row reads Overdue for a Monday deadline',
+    nextDueText([{ deadline: d(2026, 10, 9) }, { deadline: d(2026, 10, 5) }], start, tuesday),
+    'Overdue: Mon, Oct 5');
+  check('Tuesday: the officer row reads Next due when nothing is past',
+    nextDueText([{ deadline: d(2026, 10, 9) }, { deadline: tuesday }], start, tuesday),
+    'Next due Tue, Oct 6');
+}
+
 // --- 7. status, sorting, text ---------------------------------------------
 
 console.log('\n7. The derived Active flag, sorting and normalization (1.3, 5.4, 7.5)');

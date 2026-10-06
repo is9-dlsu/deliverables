@@ -24,6 +24,9 @@ const FILES = [
   ['charts.test.js', 'every statistics chart keeps its plot on the canvas'],
   ['tidy.test.js', 'the title and remark tidy, against the real column layout'],
   ['calendar.test.js', 'the calendar plan and diff, against the 2026-09-29 ruling'],
+  ['fix-dashboard.test.js', 'the dashboard formulas, against the 2026-10-06 build fixes'],
+  ['fix-stats.test.js', 'the statistics formulas, against the 2026-10-06 build fixes'],
+  ['fix-tokens.test.js', 'the link issued dates, against the 2026-10-06 build fixes'],
 ];
 
 let failed = 0;

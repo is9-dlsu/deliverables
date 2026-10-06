@@ -375,13 +375,14 @@ function IS9WD_statsTileSpec_() {
     format: IS9WD_FMT.INT, align: IS9WD_ALIGN.LEFT
   };
 
-  // Exactly what the daily email sends out, so it says what landed in thirteen inboxes
-  // this morning. Never flagged: a busy Wednesday is not a fault.
+  // Due today or tomorrow. Close to the evening email but not the same count: that email
+  // sends tomorrow's items and the late ones, and a late one is the LATE NOW tile's.
+  // Never flagged: a busy Wednesday is not a fault.
   spec['T.SOON'] = {
     value: '=COUNTIFS(IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",' +
       'IS9WD_DEL_DEADLINE,">="&IS9WD_EFFECTIVE_TODAY,' +
       'IS9WD_DEL_DEADLINE,"<="&IS9WD_EFFECTIVE_TODAY+1)',
-    note: '="the window the daily email uses"',
+    note: '="the evening email sends tomorrow and the late ones"',
     flag: '=FALSE',
     format: IS9WD_FMT.INT, align: IS9WD_ALIGN.LEFT
   };
@@ -639,11 +640,25 @@ function IS9WD_statsHealthSpec_() {
     format: IS9WD_FMT.TEXT, align: IS9WD_ALIGN.RIGHT
   };
 
+  // The rate is every row this year has used, still on the data tab or retired to the
+  // Archive since the first trimester began, over the weeks since that start. It was the
+  // rows stamped Created at in the last four weeks, and only an add from an officer's page
+  // stamps Created at, so every row Ethan typed was invisible to it: the tab read 816 weeks
+  // against a true figure near 44. An ID is on every row, typed or added, and a retired row
+  // is a row the tab used and gave back. The earliest trimester start rather than the
+  // active one, because the active one is blank between trimesters and would count a
+  // finished trimester's rows over a new trimester's first week. A retired row is counted
+  // by its Status at, so an Archive inherited from an earlier year does not inflate this
+  // one. Both floors stay: never fewer than one week elapsed, never under one row a week.
+  var since = 'MIN(IS9WD_TERM_STARTS)';
+  var used = '(COUNTIF(IS9WD_DEL_ID,"?*")+COUNTIFS(IS9WD_ARC_SOURCE,' +
+    IS9WD_statsQ_(IS9WD_ARCHIVE.SOURCE_RETIRED) + ',IS9WD_ARC_STATUS_AT,">="&' + since + '))';
   spec['H.ROOM'] = {
     value: '=IFERROR(ROUND((ROWS(IS9WD_DEL_ID)-COUNTIF(IS9WD_DEL_ID,"?*"))' +
-      '/MAX(1,COUNTIFS(IS9WD_DEL_CREATED_AT,">="&IS9WD_EFFECTIVE_TODAY-28)/4),0),' +
+      '/MAX(1,' + used + '/MAX(1,(IS9WD_EFFECTIVE_TODAY-' + since + ')/7)),0),' +
       IS9WD_statsErr_() + ')',
-    reading: '="at the rate of the last four weeks. Retire accomplished tasks to reclaim ' +
+    reading: '="at the average weekly rate since the first trimester began, counting every ' +
+      'row on the data tab and every retired row. Retire accomplished tasks to reclaim ' +
       'rows, which is the RETIRE_ACCOMPLISHED job in the schedule below"',
     flag: '=IF(ISNUMBER(' + IS9WD_statsRuleName_('IS9WD_STATS_ROOM_WEEKS') + '),' +
       IS9WD_statsRuleName_('IS9WD_STATS_ROOM_WEEKS') + '<' +
@@ -800,12 +815,16 @@ function IS9WD_viewsMarkers_(sheet, layout) {
 }
 
 // ONE SPILLING SORT plus six broadcast formulas and two columns of single cells. COUNTIFS,
-// SUMIFS and SUMIF take an array criterion under ARRAYFORMULA, which is what makes a fourteen
-// row block cost one formula per column. MINIFS and MAXIFS DO NOT: measured on the live sheet
-// on 2026-09-28, each returned one scalar for all fourteen rows (the self test's broadcast
-// check caught it the first day the sheet held an item), so those two columns are written as
-// fourteen single cells each, the fallback reference 6A.13 names. Each cell reads its own
-// officer through INDEX into the name column, so nothing here is a cell address.
+// COUNTIF and SUMIF take an array criterion under ARRAYFORMULA, which is what makes a fourteen
+// row block cost one formula per column. SUMIFS, MINIFS and MAXIFS DO NOT. MINIFS and MAXIFS
+// were measured on the live sheet on 2026-09-28: each returned one scalar for all fourteen
+// rows (the self test's broadcast check caught it the first day the sheet held an item), so
+// those two columns are written as fourteen single cells each, the fallback reference 6A.13
+// names. SUMIFS was measured on 2026-10-06, when Avg days and the trend's week numbers both
+// turned out to be the first row's answer repeated, so neither uses it any more: a condition
+// SUMIFS carried rides in the summed array as a 0 or 1 mask under SUMIF, or in an MMULT. Each
+// single cell reads its own officer through INDEX into the name column, so nothing here is a
+// cell address.
 //
 // The five offices are ordinary rows here, exactly as 5.4 says they are everywhere except
 // Canva. Hierarchy order rather than carousel order, because hierarchy order is the order
@@ -886,6 +905,13 @@ function IS9WD_viewsRanked_(sheet, layout) {
 // Each trend week's Monday, and that week's own trimester start, looked up through the term
 // calendar rather than through IS9WD_TERM_START, so a week inside a previous trimester
 // numbers against its own trimester instead of against the current one.
+//
+// The lookup is an MMULT: one row per trend Monday, one column per trimester, a 1 where the
+// Monday falls inside that trimester, multiplied by the trimester starts. That is the same
+// sum the SUMIFS it replaces asked for, row by row. The SUMIFS did not broadcast, so all
+// eight rows took the oldest Monday's answer, which is before Term 1, and Weeks 01 to 04
+// all read "--" on 03 | Statistics. N() keeps a blank or a typed word in the calendar out
+// of the arithmetic, exactly as SUMIFS ignored one.
 function IS9WD_viewsTrend_(sheet, layout) {
   var v = layout;
   var rows = v.trendLast - v.trendFirst + 1;
@@ -893,8 +919,9 @@ function IS9WD_viewsTrend_(sheet, layout) {
   sheet.getRange(v.trendFirst, 1).setFormula(
     '=ARRAYFORMULA(IS9WD_WEEK_START-7*SEQUENCE(' + rows + ',1,' + rows + ',-1))');
   sheet.getRange(v.trendFirst, 2).setFormula(
-    '=ARRAYFORMULA(IF(' + monday + '="","",SUMIFS(IS9WD_TERM_STARTS,IS9WD_TERM_STARTS,"<="&' +
-    monday + ',IS9WD_TERM_ENDS,">="&' + monday + ')))');
+    '=ARRAYFORMULA(IF(' + monday + '="","",MMULT(' +
+    '(' + monday + '>=TRANSPOSE(N(IS9WD_TERM_STARTS)))' +
+    '*(' + monday + '<=TRANSPOSE(N(IS9WD_TERM_ENDS))),N(IS9WD_TERM_STARTS))))');
 }
 
 // Label, value, reading, and the flag boolean in column D. One conditional format rule
@@ -1208,6 +1235,10 @@ function IS9WD_statsOfficers_(sheet, layout) {
   var name = 'IS9WD_STATS_OFF_NAME';
   var blank = 'IF(' + name + '="","",';
   var today = 'IS9WD_EFFECTIVE_TODAY';
+  // The rows Avg days is taken over, one 0 or 1 per data row: titled, no longer active, and
+  // stamped at both ends. The same filter the COUNTIFS it replaced carried.
+  var closed = '((IS9WD_DEL_TITLE<>"")*(IS9WD_DEL_ACTIVE=FALSE)' +
+    '*(N(IS9WD_DEL_CREATED_AT)>0)*(N(IS9WD_DEL_STATUS_AT)>0))';
 
   var visible = [
     // A, the officer, read straight off the sort on _Views.
@@ -1269,19 +1300,21 @@ function IS9WD_statsOfficers_(sheet, layout) {
     // suppressed entirely below the minimum rather than printed off one task.
     '=ARRAYFORMULA(' + blank + 'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',' +
       'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0",IS9WD_DEL_DEADLINE,"<"&' + today + ')))',
-    // K, Avg days from creation to the last status change. One broadcast formula on the
-    // identity that a sum of differences equals a difference of sums when the filter is
-    // identical, which is what lets SUMIFS stand in for an AVERAGEIFS over a computed
-    // range. A behaviour signal rather than a performance measure: an average near 0 means
-    // the officer ticks the moment Ethan enters the task, which is a data quality smell
-    // worth seeing. This is the first column to cut if recalculation bites.
-    '=ARRAYFORMULA(' + blank + 'IFERROR((' +
-      'SUMIFS(IS9WD_DEL_STATUS_AT,IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,FALSE,' +
-      'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0")' +
-      '-SUMIFS(IS9WD_DEL_CREATED_AT,IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,FALSE,' +
-      'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0"))' +
-      '/COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,FALSE,' +
-      'IS9WD_DEL_TITLE,"<>",IS9WD_DEL_CREATED_AT,">0",IS9WD_DEL_STATUS_AT,">0"),"")))',
+    // K, Avg days from creation to the last status change. One broadcast formula: a sum of
+    // day differences over a count, both taken by SUMIF over ONE 0 or 1 mask, so the two
+    // halves cannot select different rows. It was two SUMIFS over a COUNTIFS, and SUMIFS
+    // does not broadcast under ARRAYFORMULA: every row divided the President's total by its
+    // own count, so the one officer with a finished item read 1.35 days for an item that
+    // took 2.08, and the rest read blank. SUMIF does broadcast, which is the only reason
+    // the mask lives in the summed array rather than in the criteria. A behaviour signal
+    // rather than a performance measure: an average near 0 means the officer ticks the
+    // moment Ethan enters the task, which is a data quality smell worth seeing. Only a row
+    // added from an officer's page carries Created at, so this averages those rows alone.
+    // This is the first column to cut if recalculation bites.
+    '=ARRAYFORMULA(' + blank + 'IFERROR(' +
+      'SUMIF(IS9WD_DEL_COMMITTEE,' + name + ',' + closed +
+      '*(N(IS9WD_DEL_STATUS_AT)-N(IS9WD_DEL_CREATED_AT)))' +
+      '/SUMIF(IS9WD_DEL_COMMITTEE,' + name + ',' + closed + '),"")))',
     // L, No slide. Read from the feed by carousel ordinal and never recomputed. All
     // fourteen officers publish since 2026-09-28, so the blank branch fires for nobody
     // today. It stays because unticking a row on 01 | Configuration is a supported edit,
@@ -2191,11 +2224,19 @@ function IS9WD_otBlockValues_(sheet, layout, block) {
   // always knows where they are and how far there is to go. Every count in it is an INDEX
   // into a named range on `_Views` rather than a second COUNTIFS, so the tabs cannot
   // disagree, and the counts are the all-tasks window, which the tab's help line says.
+  //
+  // The position is printed only when it says something the office does not. For the five
+  // executive offices the two are the same words, and the heading read PRESIDENT ·
+  // PRESIDENT. LOWER and TRIM on both sides, so a capital or a stray space cannot bring the
+  // repeat back. The office stays, because the self test finds each card by it.
+  var office = 'INDEX(IS9WD_STATS_OFF_NAME,' + ord + ')';
+  var position = 'INDEX(IS9WD_STATS_OFF_POSITION,' + ord + ')';
   sheet.getRange(block.bandRow, block.firstCol).setFormula(
     '=IF(' + ord + '="",' + IS9WD_statsErr_() + ',' +
     'TEXT(' + ord + ',"00")&" of "&TEXT(ROWS(IS9WD_STATS_OFF_NAME),"00")&' + sep + '&' +
-    'UPPER(INDEX(IS9WD_STATS_OFF_NAME,' + ord + '))&' + sep + '&' +
-    'UPPER(INDEX(IS9WD_STATS_OFF_POSITION,' + ord + '))&' + sep + '&' +
+    'UPPER(' + office + ')&' +
+    'IF(LOWER(TRIM(' + position + '))=LOWER(TRIM(' + office + ')),"",' +
+    sep + '&UPPER(' + position + '))&' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_VP,' + ord + ')&' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_ACTIVE_ALL,' + ord + ')&" to do"&' + sep + '&' +
     'INDEX(IS9WD_STATS_OFF_DONE_ALL,' + ord + ')&" done"&' + sep + '&' +
@@ -2638,6 +2679,12 @@ function IS9WD_dashRuleSafe_(formula) {
 // The five job rows, read by INDEX over the schedule block because the schedule has no per
 // column named range. Built at write time rather than declared, so a schedule that grows a
 // row grows this card with it.
+//
+// The flag searches Last status for the bare word "fail", and unlike the self test line,
+// which always carries "0 fail", that cannot fire on a clean run: IS9WD_autoWriteStatus_
+// writes the FAILED: prefix only when a job threw or missed its window, and the one success
+// line that names a failure is a mail batch's ", FAILED for" after a send that did fail,
+// which is a fault worth the flag. No other line a job records contains the word.
 function IS9WD_dashJobRows_(cfg) {
   var out = [];
   var conf = cfg || null;
