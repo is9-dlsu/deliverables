@@ -367,6 +367,8 @@ function IS9WD_weekNoText_(weekNo) {
 
 // DUE SEP 21 TO 22, DUE SEP 23 TO 27, DUE AFTER SEP 27: W1 is the first two days of
 // the week, W2 the rest of it, W3 anything after it.
+// The third legend was DUE AFTER the week end until Ethan ruled on 2026-10-06 that the
+// carousel carries only this week and the overdue ones, so it names the overdue colour.
 function IS9WD_legendLines(weekStart, weekEnd) {
   var ws = IS9WD_toDate_(weekStart);
   var we = IS9WD_toDate_(weekEnd);
@@ -374,8 +376,28 @@ function IS9WD_legendLines(weekStart, weekEnd) {
   return [
     'DUE ' + IS9WD_rangeText(ws, IS9WD_addDays_(ws, 1)),
     'DUE ' + IS9WD_rangeText(IS9WD_addDays_(ws, 2), we),
-    'DUE AFTER ' + IS9WD_upper_(IS9WD_mmmD_(we))
+    'OVERDUE'
   ];
+}
+
+// What reaches a slide: Ethan ruled on 2026-10-06 that the carousel carries only what is
+// due by the end of the week being published, the overdue ones included, and nothing
+// later. A blank deadline stays in, because it is a fault the slide should show rather
+// than hide. No week end means no filter, so a caller without one sees every item.
+function IS9WD_inCarousel_(item, weekEnd) {
+  var we = IS9WD_day_(weekEnd);
+  if (we === null) return true;
+  var d = IS9WD_day_(item ? item.deadline : null);
+  return d === null || d <= we;
+}
+
+function IS9WD_carouselItems_(items, weekEnd) {
+  var out = [];
+  if (!items || typeof items.length !== 'number') return out;
+  for (var i = 0; i < items.length; i++) {
+    if (IS9WD_inCarousel_(items[i], weekEnd)) out.push(items[i]);
+  }
+  return out;
 }
 
 // The committee pages uppercase both halves. The title page's prepared-by position
@@ -407,8 +429,9 @@ function IS9WD_deadlineText(deadline, weekStart, today) {
 
 // items is the committee's active titled items. A committee whose items all carry
 // unusable deadlines reads `Next due: date missing` rather than nothing.
-function IS9WD_nextDueText(items, weekStart, today) {
+function IS9WD_nextDueText(items, weekStart, today, weekEnd) {
   var list = items && typeof items.length === 'number' ? items : [];
+  if (weekEnd !== undefined) list = IS9WD_carouselItems_(list, weekEnd);
   if (list.length === 0) return 'No deliverables this week';
   var earliest = null;
   var at = null;
@@ -654,7 +677,7 @@ function IS9WD_hexFor_(hex, win) {
 // here: that is IS9WD_masterPage alone. Item no is the officer relative rank, so page
 // 2's first slot reads 11, which is the run's cross check that the right items landed.
 function IS9WD_slotRows(items, weekStart, weekEnd, hex, slotsPerPage, maxParts, today) {
-  var sorted = IS9WD_sortActive(items);
+  var sorted = IS9WD_sortActive(IS9WD_carouselItems_(items, weekEnd));
   var per = IS9WD_posInt_(slotsPerPage);
   var split = IS9WD_publishSplit(sorted.length, slotsPerPage, maxParts);
   var pages = [];

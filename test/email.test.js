@@ -302,7 +302,8 @@ console.log('\n4. The Sunday brief');
   check('a clear gate reads OK without a sentence', has(hold, 'In term: OK\n'), true);
   check('unset sign-off sentence', has(hold, 'Sign-off not set for this week'), true);
   check('overrides print when set', [has(hold, 'Today override: Friday, October 2, 2026'), has(hold, 'Week number override: 7')], [true, true]);
-  check('an officer over the page prints both numbers', has(hold, 'Publications: 15 published, 18 active'), true);
+  check('an officer over the page prints both numbers',
+    has(hold, 'Publications: 15 published, 18 due this week or overdue'), true);
   check('the overdue block lists the item', has(hold, 'D-0001  |  Partnerships  |  Late one  |  Friday, September 25, 2026'), true);
   check('a blocking flag says it blocks Canva', has(hold, 'Missing deadline (blocks Canva)'), true);
   check('no trigger is called out', has(hold, 'NO TRIGGER INSTALLED'), true);

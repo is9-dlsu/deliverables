@@ -215,6 +215,15 @@ const SEED = [
 
 // Deadlines ascend, so the derived rank and the supplied one cannot disagree and
 // a case about slot placement stays a case about slot placement.
+// Every deadline on the Monday of the fixture week, so a capacity case stays inside the
+// week a slide carries and the ID alone orders it.
+function seedInWeek(n, committee) {
+  return seedLike(n, committee).map(function (r) {
+    r.deadline = d(2026, 9, 21);
+    return r;
+  });
+}
+
 function seedLike(n, committee) {
   const out = [];
   for (let i = 0; i < n; i++) {
@@ -340,10 +349,10 @@ console.log('\n4. The Week 04 golden strings (SPEC section 4, 13.2)');
     'WEEK --  |  SEP 21 TO 27  |  A.Y. 2026 - 2027');
 
   check('the three legends, fixture week', legendLines(start, end),
-    ['DUE SEP 21 TO 22', 'DUE SEP 23 TO 27', 'DUE AFTER SEP 27']);
+    ['DUE SEP 21 TO 22', 'DUE SEP 23 TO 27', 'OVERDUE']);
   check('the three legends, SPEC section 4 example',
     legendLines(d(2026, 9, 28), d(2026, 10, 4)),
-    ['DUE SEP 28 TO 29', 'DUE SEP 30 TO OCT 4', 'DUE AFTER OCT 4']);
+    ['DUE SEP 28 TO 29', 'DUE SEP 30 TO OCT 4', 'OVERDUE']);
 
   check('VP line uppercases both halves',
     vpLine('Juan Dela Cruz', 'Vice President'), 'JUAN DELA CRUZ  |  VICE PRESIDENT');
@@ -455,6 +464,41 @@ console.log('\n6b. Overdue on any day (Ethan, 2026-10-06)');
   check('Tuesday: the officer row reads Next due when nothing is past',
     nextDueText([{ deadline: d(2026, 10, 9) }, { deadline: tuesday }], start, tuesday),
     'Next due Tue, Oct 6');
+}
+
+console.log('\n6c. A slide carries this week and the overdue ones only (Ethan, 2026-10-06)');
+{
+  const slotRows = fn('IS9WD_slotRows');
+  const nextDueText = fn('IS9WD_nextDueText');
+  const legendLines = fn('IS9WD_legendLines');
+  const start = d(2026, 10, 5), end = d(2026, 10, 11), tuesday = d(2026, 10, 6);
+  const item = function (id, due) {
+    return { id: id, committee: 'Finance', title: 'Task ' + id, deadline: due,
+      remark: '', status: 'Open', active: true };
+  };
+  const mix = [item('D0001', d(2026, 10, 2)), item('D0002', d(2026, 10, 7)),
+    item('D0003', end), item('D0004', d(2026, 10, 12)), item('D0005', d(2026, 10, 20)),
+    item('D0006', null)];
+  const out = slotRows(mix, start, end, HEX, 10, 1, tuesday);
+  const shown = out.pages[0].rows.filter(function (r) { return r.visible === true; });
+  check('overdue, this week and a blank deadline reach the slide, later ones do not',
+    shown.map(function (r) { return r.title; }),
+    ['Task D0006', 'Task D0001', 'Task D0002', 'Task D0003']);
+  check('a task due later is not counted as not published', num(out.notPublished), 0);
+  check('the overdue one carries the OVERDUE window and its hex',
+    [shown[1].window, shown[1].stationHex], ['OVERDUE', '#e9ebd4']);
+  check('a task due on the Sunday itself is in', shown[3].deadlineText, 'Due Sun, Oct 11');
+  check('eleven due this week publish ten and report one',
+    num(slotRows(seedInWeek(11, 'Finance'), start, end, HEX, 10, 1, tuesday).notPublished), 1);
+  check('the officer row ignores a task due after the week',
+    nextDueText([item('D0004', d(2026, 10, 12)), item('D0002', d(2026, 10, 9))],
+      start, tuesday, end), 'Next due Fri, Oct 9');
+  check('an officer with only later tasks has none this week',
+    nextDueText([item('D0004', d(2026, 10, 12))], start, tuesday, end),
+    'No deliverables this week');
+  check('without a week end the officer row reads every task, as before',
+    nextDueText([item('D0004', d(2026, 10, 12))], start, tuesday), 'Next due Mon, Oct 12');
+  check('the third legend names the overdue colour', legendLines(start, end)[2], 'OVERDUE');
 }
 
 // --- 7. status, sorting, text ---------------------------------------------
@@ -706,20 +750,18 @@ console.log('\n12. Slot rows, ten per page whatever the count (6.3, 6.4)');
   check('and it is part 1', num(one.pages[0].part), 1);
   check('rows are exactly slotsPerPage long', one.pages[0].rows.length, 10);
   check('nothing is left unpublished', num(one.notPublished), 0);
-  check('every row is visible',
+  check('the seven due by Sunday are visible and the three due later are not (2026-10-06)',
     one.pages[0].rows.map(function (r) { return r.visible; }),
-    [true, true, true, true, true, true, true, true, true, true]);
-  check('the windows are 01 to 03 W1, 04 to 07 W2, 08 to 10 W3',
-    one.pages[0].rows.map(function (r) { return r.window; }),
-    ['W1', 'W1', 'W1', 'W2', 'W2', 'W2', 'W2', 'W3', 'W3', 'W3']);
+    [true, true, true, true, true, true, true, false, false, false]);
+  check('the windows are 01 to 03 W1 and 04 to 07 W2',
+    one.pages[0].rows.slice(0, 7).map(function (r) { return r.window; }),
+    ['W1', 'W1', 'W1', 'W2', 'W2', 'W2', 'W2']);
   check('the station hexes follow the windows',
-    one.pages[0].rows.map(function (r) { return r.stationHex; }),
-    ['#e9ebd4', '#e9ebd4', '#e9ebd4', '#8a64a9', '#8a64a9', '#8a64a9', '#8a64a9',
-      '#085040', '#085040', '#085040']);
+    one.pages[0].rows.slice(0, 7).map(function (r) { return r.stationHex; }),
+    ['#e9ebd4', '#e9ebd4', '#e9ebd4', '#8a64a9', '#8a64a9', '#8a64a9', '#8a64a9']);
   check('and so do the number text hexes',
-    one.pages[0].rows.map(function (r) { return r.numberTextHex; }),
-    ['#1C2120', '#1C2120', '#1C2120', '#F8FBFD', '#F8FBFD', '#F8FBFD', '#F8FBFD',
-      '#F8FBFD', '#F8FBFD', '#F8FBFD']);
+    one.pages[0].rows.slice(0, 7).map(function (r) { return r.numberTextHex; }),
+    ['#1C2120', '#1C2120', '#1C2120', '#F8FBFD', '#F8FBFD', '#F8FBFD', '#F8FBFD']);
   check('slot 01 carries the seed title and its deadline text',
     [one.pages[0].rows[0].title, one.pages[0].rows[0].deadlineText],
     ['Confirm speaker for Debt Traps Exposed', 'Due Mon, Sep 21']);
@@ -727,9 +769,9 @@ console.log('\n12. Slot rows, ten per page whatever the count (6.3, 6.4)');
     one.pages[0].rows[0].remarkText, '·  Send final name to Publication');
   check('remark visible is true only where there is a remark',
     one.pages[0].rows.map(function (r) { return r.remarkVisible; }),
-    [true, false, false, true, true, false, false, true, false, false]);
-  check('slot 10 is the latest deadline', one.pages[0].rows[9].deadlineText,
-    'Due Fri, Oct 2');
+    [true, false, false, true, true, false, false, false, false, false]);
+  check('slot 07 is the latest deadline on the slide', one.pages[0].rows[6].deadlineText,
+    'Due Sat, Sep 26');
 
   const overdueFirst = slotRows(
     [{ id: 'D0011', committee: 'Publications', title: 'Late one',
@@ -745,7 +787,7 @@ console.log('\n12. Slot rows, ten per page whatever the count (6.3, 6.4)');
     [overdueFirst.pages[0].rows[1].title, overdueFirst.pages[0].rows[1].deadlineText],
     ['', '']);
 
-  const fourteen = slotRows(seedLike(14, 'Publications'), start, end, HEX, 10, 2);
+  const fourteen = slotRows(seedInWeek(14, 'Publications'), start, end, HEX, 10, 2);
   check('fourteen items give two pages', fourteen.pages.length, 2);
   check('page 2 is still ten rows long', fourteen.pages[1].rows.length, 10);
   check('with four visible and six not',
@@ -755,7 +797,7 @@ console.log('\n12. Slot rows, ten per page whatever the count (6.3, 6.4)');
   check('page 2 slot 01 carries item number 11',
     num(fourteen.pages[1].rows[0].itemNo), 11);
 
-  const twentyThree = slotRows(seedLike(23, 'Publications'), start, end, HEX, 10, 2);
+  const twentyThree = slotRows(seedInWeek(23, 'Publications'), start, end, HEX, 10, 2);
   check('23 items publish 20 across two pages', twentyThree.pages.length, 2);
   check('and report 3 not published', num(twentyThree.notPublished), 3);
   check('with every slot on both pages visible',
@@ -1095,11 +1137,11 @@ console.log('\n22. The shipping configuration, read from IS9WD_Config.js (4.6, 4
 
     check('the roster holds fourteen officers', DIR.length, 14);
     check('all fourteen publish', publishing.length, 14);
-    check('fifteen slots to a slide', SLOTS, 15);
+    check('ten slots to a slide (Ethan, 2026-10-06)', SLOTS, 10);
     check('one slide an officer', PARTS, 1);
 
     // The ceiling a reader of 02 | Deliverables is promised.
-    check('so the publishable maximum is fifteen', SLOTS * PARTS, 15);
+    check('so the publishable maximum is ten', SLOTS * PARTS, 10);
 
     const orders = DIR.map(function (r) { return num(r[1]); }).sort(function (a, b) {
       return a - b;
@@ -1135,16 +1177,16 @@ console.log('\n22. The shipping configuration, read from IS9WD_Config.js (4.6, 4
       const r = publishSplit(n, SLOTS, PARTS);
       return [num(r.parts), num(r.published), num(r.notPublished)];
     };
-    check('fifteen items fit exactly', split(15), [1, 15, 0]);
-    check('sixteen shows fifteen and reports one', split(16), [1, 15, 1]);
+    check('ten items fit exactly', split(10), [1, 10, 0]);
+    check('eleven shows ten and reports one', split(11), [1, 10, 1]);
     check('a quiet officer still gets a slide', split(0), [1, 0, 0]);
 
     // Ethan's ruling of 2026-09-28: the tagline prints the count that fit, so a reader
     // who counts the lines on the slide gets the number in the headline.
     const tagline = fn('IS9WD_tagline');
     check('the tagline prints the count that fit, not the count held',
-      tagline(4, 'SEP 28 TO OCT 4', split(16)[1]),
-      'WEEKLY DELIVERABLES  |  WEEK 04  |  SEP 28 TO OCT 4  |  15 TASKS');
+      tagline(4, 'SEP 28 TO OCT 4', split(11)[1]),
+      'WEEKLY DELIVERABLES  |  WEEK 04  |  SEP 28 TO OCT 4  |  10 TASKS');
 
     const pagePlan = fn('IS9WD_pagePlan');
     const all14 = DIR.map(function (r) {

@@ -2039,6 +2039,25 @@ function IS9WD_carouselSettings_(say) {
     touched = true;
     say(names[i] + ': ' + (IS9WD_blank_(had) ? 'blank' : had) + ' becomes ' + wantValue);
   }
+  // Ethan's ruling of 2026-10-06 gave OVERDUE the green W3 used. The pair is his to set,
+  // so only the old shipping pair moves and a colour he chose himself is left alone.
+  var names2 = IS9WD_namedOrNull_('IS9WD_WINDOW_NAMES');
+  var hex = IS9WD_namedOrNull_('IS9WD_HEX');
+  if (names2 && hex) {
+    var nv = names2.getValues();
+    var hv = hex.getValues();
+    var want = IS9WD_DEFAULTS.WINDOWS[0];
+    for (var w = 0; w < nv.length && w < hv.length; w++) {
+      if (IS9WD_trim_(nv[w][0]) !== want[0]) continue;
+      var a = IS9WD_trim_(hv[w][0]).toLowerCase();
+      var b = IS9WD_trim_(hv[w][1]).toLowerCase();
+      if (a !== '#e9ebd4' || b !== '#1c2120') continue;
+      hex.offset(w, 0, 1, 2).setValues([[want[2], want[3]]]);
+      touched = true;
+      say('OVERDUE colours: ' + hv[w][0] + ' and ' + hv[w][1] + ' become ' + want[2] +
+        ' and ' + want[3]);
+    }
+  }
   return touched;
 }
 

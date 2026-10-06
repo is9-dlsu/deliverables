@@ -24,7 +24,7 @@ Take Block A, the plan, the page headers and every slot row **from one read of t
 
 ## The order of reading
 
-Read in this order and stop at the first failure. Every row number below is the shipping layout, fourteen officers at fifteen slots on one page each, and is for orientation only: the key is the address.
+Read in this order and stop at the first failure. Every row number below is the shipping layout, fourteen officers at ten slots on one page each, and is for orientation only: the key is the address.
 
 ### 1. The sentinels
 
@@ -39,8 +39,8 @@ Nine rows, column A reading `SENTINEL`, column B reading exactly:
 | 39 | `IS9WD BLOCK: PLAN` |
 | 56 | `IS9WD BLOCK: PAGES` |
 | 72 | `IS9WD BLOCK: SLOTS` |
-| 284 | `IS9WD BLOCK: FLAGS` |
-| 536 | `IS9WD FEED END` |
+| 214 | `IS9WD BLOCK: FLAGS` |
+| 396 | `IS9WD FEED END` |
 
 All nine, in this order, in one read, or the read is truncated and the run stops. A short read looks exactly like a smaller carousel, and the end sentinel is the only thing that distinguishes them. Column C of each sentinel row carries a one line description of the block below it; it is help for a reader, not data.
 
@@ -99,7 +99,7 @@ A NO stops the run. Nothing in this procedure clears a gate; the Sunday brief al
 
 - `Key` is `B.C01` to `B.C14`. `Page` is the officer's master page, `02` for order 1 through `15` for order 14.
 - `Committee` is uppercase, exactly as the headline prints it: `PRESIDENT`, `EXECUTIVE VICE PRESIDENT FOR EXTERNALS`, `MARKETING AND ADVOCACY`.
-- `Count` is the number of active titled items that fit the slide, at most fifteen. `Not published` is how many did not fit. The two hex values are the colour of that officer's most urgent window, for the station indicator on page 1.
+- `Count` is the number of active titled items due by Sunday or overdue that fit the slide, at most ten. A task due after the week is not on the slide and not in `Count` or `Not published` (Ethan, 2026-10-06). `Not published` is how many did not fit. The two hex values are the colour of that officer's most urgent window, for the station indicator on page 1.
 - `Next due text` is one of `Next due Mon, Sep 28`, `Overdue: Fri, Sep 25` (the earliest overdue date), `No deliverables this week` (count 0) or `Next due: date missing` (every active item undated, which cannot pass the gates).
 - `Pages` is always `1` at the shipping settings. Stop if any row reads otherwise: the master has one page per officer.
 
@@ -119,7 +119,7 @@ Any mismatch means the read was cut inside the plan, and the run stops. At the s
 
 ### 6. The slots
 
-Header on row 73, rows 74 to 283: fifteen rows per officer page, `C.P02.S01` to `C.P15.S15`, in page then slot order. Page `02` is rows 74 to 88 and page `15` is rows 269 to 283. Columns A to M: `Key` `Page` `Slot` `Visible` `Title` `Deadline text` `Remark visible` `Remark text` `Window` `Station hex` `Number text hex` `Flag` `Item no`.
+Header on row 73, rows 74 to 213: ten rows per officer page, `C.P02.S01` to `C.P15.S10`, in page then slot order. Page `02` is rows 74 to 83 and page `15` is rows 204 to 213. Columns A to M: `Key` `Page` `Slot` `Visible` `Title` `Deadline text` `Remark visible` `Remark text` `Window` `Station hex` `Number text hex` `Flag` `Item no`.
 
 - `Visible = TRUE` is an item. `Title`, `Deadline text` and, when `Remark visible` is TRUE, `Remark text` are pasted as they are. `Window` is `OVERDUE`, `W1`, `W2` or `W3`, and the two hex cells are that window's colours.
 - `Visible = FALSE` is an unused frame. Its `Title`, `Deadline text` and `Remark text` are blank, its `Window` is blank, and blank is what gets pasted. The frame stays.
@@ -129,13 +129,13 @@ Header on row 73, rows 74 to 283: fifteen rows per officer page, `C.P02.S01` to 
 
 ### 7. Block D, the flags list
 
-Header on row 285, rows 286 to 535, then `IS9WD FEED END` on row 536. Columns A to G: `Key` `Page` `Committee` `Slot` `Flag` `ID` `Title`, sorted by page then slot. `Key` is `D.` plus the item id, `D.D0007`, or `D.R<row>` for a row that has no id yet. `Page` and `Slot` are blank on a row that has no slot, which is what a `Missing title` row looks like; its `ID` and `Title` identify it.
+Header on row 215, rows 216 to 395, then `IS9WD FEED END` on row 396. Columns A to G: `Key` `Page` `Committee` `Slot` `Flag` `ID` `Title`, sorted by page then slot. `Key` is `D.` plus the item id, `D.D0007`, or `D.R<row>` for a row that has no id yet. `Page` and `Slot` are blank on a row that has no slot, which is what a `Missing title` row looks like; its `ID` and `Title` identify it.
 
 The row count equals `Rows with a flag`. Report every row to Ethan, in the reply, before Canva is opened, even on a YES: on a YES they are all `Overdue`, and he wants to know that too.
 
 ## The fifteen slides
 
-The carousel is 1 title page plus 14 officer pages, always, at every input. Ethan ruled on 2026-09-28: no continuation pages, fifteen slots per slide, every officer on the carousel. Nothing a week can hold makes it longer or shorter than the master.
+The carousel is 1 title page plus 14 officer pages, always, at every input. Ethan ruled on 2026-09-28: no continuation pages, every officer on the carousel. On 2026-10-06 he ruled ten slots per slide, carrying only the overdue items and those due by Sunday. Nothing a week can hold makes it longer or shorter than the master.
 
 | Page | Owner |
 |---|---|
@@ -146,7 +146,7 @@ The carousel is 1 title page plus 14 officer pages, always, at every input. Etha
 
 A page is identified by its owner, and its number is the owner's carousel order plus one. That order is a column on `_Engine`, written once by `Checks > Switch the carousel to all fourteen`, and the self test compares it to the shipping set row by row. It is a claim on a page somebody drew by hand, which is why the run never numbers anything itself: it follows `Page` on the plan row.
 
-An officer holding more than fifteen active items shows fifteen. The rest live in the app, in the Monday email marked `Not on the carousel this week`, and in the Sunday brief, and the feed counts them in `Not published` on the officer row and `Items not published` in Block A. The tagline prints the count that fit, not the count held. An officer with nothing shows a page whose slots are all `Visible = FALSE`, whose officer row reads `No deliverables this week`, and whose tagline ends `0 TASKS`.
+An officer with more than ten items due by Sunday or overdue shows ten. The rest live in the app, in the Monday email marked `Not on the carousel this week`, and in the Sunday brief, and the feed counts them in `Not published` on the officer row and `Items not published` in Block A. The tagline prints the count that fit, not the count held. An officer with nothing shows a page whose slots are all `Visible = FALSE`, whose officer row reads `No deliverables this week`, and whose tagline ends `0 TASKS`.
 
 ## The contract strings
 
@@ -156,7 +156,7 @@ Word for word from SPEC.md section 4, and they do not change without Ethan's app
 Week line       WEEK 04  |  SEP 28 TO OCT 4  |  A.Y. 2026 - 2027
 Legend 1        DUE SEP 28 TO 29
 Legend 2        DUE SEP 30 TO OCT 4
-Legend 3        DUE AFTER OCT 4
+Legend 3        OVERDUE                 since 2026-10-06; was DUE AFTER OCT 4
 Prepared by     JUAN DELA CRUZ          name uppercase
                 Vice President          position as typed
 Checked by      the same pair
@@ -176,7 +176,7 @@ The run edits what is already on a page and nothing else:
 
 - **Text.** The eight strings on page 1, plus the fourteen title page rows (office, next due text, count). On each officer page the headline, the VP line, the tagline, the three legends, and for each visible slot the title, the deadline text and, when `Remark visible` is TRUE, the remark text. That is the whole list.
 - **Colour, on an element that exists.** The two hex columns are the fill for a slot's station element and the colour of its number text, and the officer row's pair is the title page's station indicator for that officer. They are applied to the element already on the page, by its hex value from the feed, never by a hex from memory.
-- **Opacity, on an element that exists.** A `Visible = FALSE` slot has its five elements at 0 and a visible one at 1. A visible slot whose `Remark visible` is FALSE has only its remark at 0. Nothing else on a page ever changes opacity.
+- **Opacity, on an element that exists.** A `Visible = FALSE` slot has its six elements at 0. A visible slot has its circle, number, title, deadline and remark at 1 and its card at 0.1, because the card is a tint and not a panel. A visible slot whose `Remark visible` is FALSE has only its remark at 0. Nothing else on a page ever changes opacity.
 
 The operations that do this, measured on the real master on 2026-10-05 inside an unsaved transaction: `replace_text` keeps the frame's font, size and colour; `recolor_element` on a station circle changes its fill and keeps its white stroke; `format_text` with only `color` recolours a number; `update_opacity` hides and shows. A slot's five frames are matched to `Slot` by position, top to bottom, which is the order the master was drawn in.
 

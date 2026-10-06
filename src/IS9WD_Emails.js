@@ -556,7 +556,7 @@ function IS9WD_briefBlocks_(bc) {
     var over = [];
     for (i = 0; i < bc.overMax.length; i++) {
       over.push(bc.overMax[i].committee + ': ' + bc.overMax[i].published + ' published, ' +
-        bc.overMax[i].active + ' active');
+        bc.overMax[i].active + ' due this week or overdue');
     }
     b.push({ k: 'note', text: 'Over the page limit: ' + over.join('; ') + '.', flag: true });
   }
@@ -770,7 +770,8 @@ function IS9WD_briefContext_(cfg, items) {
     }
     officers.push({ key: e.key, committee: e.committee, active: c.active, overdue: od,
       flagged: c.flagged, notPublished: c.notPublished, email: e.email, revoked: e.revoked === true });
-    if (c.notPublished > 0) overMax.push({ committee: e.committee, published: c.published, active: c.active });
+    if (c.notPublished > 0) overMax.push({ committee: e.committee, published: c.published,
+      active: c.inCarousel === undefined ? c.active : c.inCarousel });
     if (e.email === '') noEmail.push(e.key);
     if (e.revoked === true) revoked.push(e.key);
     var issued = IS9WD_day_(e.tokenIssued);

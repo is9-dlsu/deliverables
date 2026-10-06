@@ -80,7 +80,7 @@ console.log('PAGE ' + ctx.IS9WD_two_(ctx.IS9WD_masterPage(SAMPLE[1], 1, PARTS)) 
 console.log('  ' + ctx.IS9WD_upper_(SAMPLE[2]));
 console.log('  ' + ctx.IS9WD_vpLine('Juan Dela Cruz', 'VICE PRESIDENT'));
 console.log('  ' + ctx.IS9WD_tagline(weekNo, range, items.length));
-console.log('  next due: ' + ctx.IS9WD_nextDueText(items, week.weekStart, today));
+console.log('  next due: ' + ctx.IS9WD_nextDueText(items, week.weekStart, today, week.weekEnd));
 console.log('');
 
 const split = ctx.IS9WD_slotRows(items, week.weekStart, week.weekEnd, HEX, SLOTS, PARTS, today);

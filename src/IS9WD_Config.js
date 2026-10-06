@@ -1107,7 +1107,7 @@ IS9WD_ENG.CAPACITY = {
   rows: [
     {
       row: 35, name: 'IS9WD_SLOTS_PER_PAGE', label: 'Slots per Canva page',
-      owner: IS9WD_OWN.ETHAN, value: 15, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
+      owner: IS9WD_OWN.ETHAN, value: 10, format: IS9WD_FMT.INT, align: IS9WD_ALIGN.RIGHT,
       validate: { kind: IS9WD_V.INT, min: 1, max: 50, help: 'The item frames the master page physically carries.' },
       hint: 'How many task frames one slide physically holds, and therefore the most ' +
         'tasks one officer can show, because each officer has exactly one slide. ' +
@@ -1483,7 +1483,9 @@ var IS9WD_DEFAULTS = {
   // Rows 18 to 21, columns A to D. The two #1C2120 values are Canva data, the
   // number text hex the carousel prints. They are never used to paint a cell.
   WINDOWS: [
-    ['OVERDUE', 'deadline before today, or before week start on a Sunday', '#e9ebd4', '#1C2120'],
+    // Its own colour since 2026-10-06, the green W3 used, because W3 no longer reaches a
+    // slide and an overdue task must not look like one due on Monday.
+    ['OVERDUE', 'deadline before today, or before week start on a Sunday', '#085040', '#F8FBFD'],
     ['W1', 'Monday to Tuesday of the week', '#e9ebd4', '#1C2120'],
     ['W2', 'Wednesday to Sunday of the week', '#8a64a9', '#F8FBFD'],
     ['W3', 'after week end', '#085040', '#F8FBFD']
@@ -1646,8 +1648,9 @@ function IS9WD_itemsHelpText_(publishMax, slotsPerPage, maxParts) {
   }
   var slides = parts === 1 ? 'on their one slide' : 'across ' + parts + ' slides';
   return 'One row per deliverable. Enter as many as the week really holds: nothing is refused. ' +
-    'An officer\'s first ' + max + ' active items reach the carousel, ' + per + ' to a slide ' +
-    slides + '; the rest are tracked, emailed and reported, and the Sunday brief names them. ' +
+    'An officer\'s overdue items and those due by Sunday reach the carousel, the first ' + max +
+    ', ' + per + ' to a slide ' + slides + '; the rest are tracked, emailed and reported, and ' +
+    'the Sunday brief names them. ' +
     'Tick an item off rather than deleting it. Anything active with a past deadline shows as overdue.';
 }
 
@@ -1827,7 +1830,7 @@ function IS9WD_switchDefault_(name) {
 
 var IS9WD_FEED_CACHE_ = null;
 
-// The shipping layout: fourteen publishing rows, fifteen slots, one part.
+// The shipping layout: fourteen publishing rows, ten slots, one part.
 // It is a function rather than a top level constant on purpose. Apps Script
 // evaluates each file in turn, and this file sorts before IS9WD_Core.js, so a
 // constant computed at load time would call a Core helper that does not exist yet

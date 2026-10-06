@@ -389,7 +389,9 @@ function IS9WD_feedBlockBSpec_() {
   spec['B.LEGEND1'] = { formula: '="DUE "&IS9WD_RANGE_W1' };
   spec['B.LEGEND2'] = { formula: '="DUE "&IS9WD_RANGE_W2' };
   spec['B.LEGEND3'] = {
-    formula: '="DUE AFTER "&UPPER(TEXT(IS9WD_WEEK_END,"mmm")&" "&TEXT(IS9WD_WEEK_END,"d"))'
+    // Ethan's ruling of 2026-10-06: a slide carries this week and the overdue ones only,
+    // so the third legend names the overdue colour rather than a window nobody sees.
+    formula: '="OVERDUE"'
   };
 
   // Name uppercased, position as typed. The asymmetry is v1's and is kept on purpose:
@@ -764,9 +766,15 @@ function IS9WD_feedOfficers_(sheet, layout) {
 
     helper.push([
       '=IFERROR(INDEX(IS9WD_DIR_NAME,MATCH(' + ordinal + ',IS9WD_DIR_CAROUSEL,0)),' + err + ')',
+      // Both read only what can reach a slide, Ethan's ruling of 2026-10-06: due by the
+      // week end, overdue included, plus a blank deadline, which Rank also keeps.
       '=IFERROR(MINIFS(IS9WD_DEL_DEADLINE,IS9WD_DEL_COMMITTEE,' + name + ',' +
-        'IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0"),0)',
-      '=COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>")',
+        'IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",IS9WD_DEL_DEADLINE,">0",' +
+        'IS9WD_DEL_DEADLINE,"<"&(N(IS9WD_WEEK_END)+1)),0)',
+      '=COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",' +
+        'IS9WD_DEL_DEADLINE,"<"&(N(IS9WD_WEEK_END)+1))+' +
+        'COUNTIFS(IS9WD_DEL_COMMITTEE,' + name + ',IS9WD_DEL_ACTIVE,TRUE,IS9WD_DEL_TITLE,"<>",' +
+        'IS9WD_DEL_DEADLINE,"")',
       i + 1,
       '=IF(' + name + '=' + err + ',"No committee for carousel order "&' + ordinal + ',' +
         'IF(' + pages + '>IS9WD_MAX_PARTS,"Pages needed exceeds the maximum parts","OK"))'

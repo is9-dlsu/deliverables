@@ -226,8 +226,12 @@ function IS9WD_itemFormulas_() {
       // Deadline ascending then ID ascending. The tie break is the ID and not the
       // row, because one sort of this tab would renumber every same deadline tie
       // and reorder a Canva page with no data change and no flag (5.4). The
-      // leading guard is what keeps a 2,000 row SUMPRODUCT column affordable.
-      formula: '=IF(OR($' + cAct + r + '<>TRUE,$' + cTitle + r + '=""),"",' +
+      // leading guard is what keeps a 2,000 row SUMPRODUCT column affordable. A row
+      // due after the week end has no rank, Ethan's ruling of 2026-10-06 that a slide
+      // carries this week and the overdue ones only; every row ranked ahead of a kept
+      // row is due no later than it, so the sum needs no second guard.
+      formula: '=IF(OR($' + cAct + r + '<>TRUE,$' + cTitle + r + '="",' +
+        'INT(N($' + cDue + r + '))>N(IS9WD_WEEK_END)),"",' +
         '1+SUMPRODUCT((' + sCom + '=$' + cCom + r + ')*(' + sAct + '=TRUE)*(' + sTitle + '<>"")*' +
         '((INT(N(' + sDue + '))<INT(N($' + cDue + r + ')))' +
         '+((INT(N(' + sDue + '))=INT(N($' + cDue + r + ')))*(' + sId + '<$' + cId + r + ')))))'
@@ -854,7 +858,10 @@ function IS9WD_itemCounts_(items, cfg) {
   for (var i = 0; i < dir.length; i++) {
     var entry = dir[i];
     var mine = IS9WD_activeItemsFor_(items, entry.committee);
-    var split = IS9WD_publishSplit(mine.length, c.switches.slotsPerPage, c.switches.maxParts);
+    // A slide carries this week and the overdue ones only (2026-10-06), so the split is
+    // over those, and a task due later is not unpublished, it is not due yet.
+    var shown = IS9WD_carouselItems_(mine, c.weeks ? c.weeks.weekEnd : null);
+    var split = IS9WD_publishSplit(shown.length, c.switches.slotsPerPage, c.switches.maxParts);
     var flagged = 0;
     var all = IS9WD_itemsFor_(items, entry.committee);
     for (var j = 0; j < all.length; j++) {
@@ -862,7 +869,7 @@ function IS9WD_itemCounts_(items, cfg) {
     }
     out[entry.key] = {
       key: entry.key, committee: entry.committee, publishes: entry.publishes,
-      active: mine.length, rows: all.length, flagged: flagged,
+      active: mine.length, inCarousel: shown.length, rows: all.length, flagged: flagged,
       parts: entry.publishes ? split.parts : 0,
       published: entry.publishes ? split.published : 0,
       notPublished: entry.publishes ? split.notPublished : 0
